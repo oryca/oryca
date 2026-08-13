@@ -89,6 +89,21 @@ func (f *fakeUserProvider) totalCalls() int {
 	return total
 }
 
+// waitPackageID waits for the cached entry to carry the expected package.
+// The provider signals done before the cache stores the result, so waiting on that
+// signal alone can read the old value on a slow machine.
+func waitPackageID(t *testing.T, c *UserFreshnessCache, userID, want string) {
+	t.Helper()
+	deadline := time.Now().Add(2 * time.Second)
+	for time.Now().Before(deadline) {
+		if got, err := c.Get(userID); err == nil && got != nil && got.PackageID == want {
+			return
+		}
+		time.Sleep(time.Millisecond)
+	}
+	t.Fatalf("timed out waiting for %s to become %s", userID, want)
+}
+
 // waitDone drains n signals from the done channel (or fails the test after a timeout).
 func waitDone(t *testing.T, f *fakeUserProvider, n int) {
 	t.Helper()
@@ -175,11 +190,7 @@ func TestUserFreshnessCache_Get_ExpiredServesStaleAndRefreshesInBackground(t *te
 	require.NotNil(t, got)
 	assert.Equal(t, "pkg-old", got.PackageID) // stale-while-revalidate
 
-	waitDone(t, provider, 1)
-
-	got2, _ := c.Get("u1")
-	require.NotNil(t, got2)
-	assert.Equal(t, "pkg-new", got2.PackageID)
+	waitPackageID(t, c, "u1", "pkg-new")
 }
 
 func TestUserFreshnessCache_Get_BurstOfDistinctMissesBoundedByConcurrency(t *testing.T) {
