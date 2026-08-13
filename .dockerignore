@@ -1,0 +1,32 @@
+# The build context is the repository root (one Go module), so everything that is
+# not needed to compile a Go binary is excluded here — otherwise the portal's
+# node_modules alone would dominate the context upload on every build.
+
+.git
+.gitignore
+.env
+*.env
+!.env.example
+
+portal/node_modules
+portal/.next
+portal/out
+portal/dist
+
+docs
+tools
+README.md
+LICENSE
+docker-compose.yml
+*.md
+
+# test and coverage output
+**/*_test.go
+coverage.out
+cover.out
+
+# local artefacts
+tmp
+*.log
+*.key
+*.pem

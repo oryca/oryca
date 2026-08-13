@@ -1,0 +1,37 @@
+# Initial values for the single Configuration document.
+#
+# Seeded ONCE, on the first boot against an empty database. After that the
+# database is the source of truth: edit these settings through the portal or the
+# API and they will survive restarts — this file is never re-applied.
+
+# Shown on the registration form. Markdown.
+terms: |
+  ## Terms of Service
+
+  This ORYCA Community Edition instance is operated by its administrator, not by
+  the ORYCA project. Replace this text with your own terms before opening
+  registration to anyone outside your team.
+
+privacyPolicy: |
+  ## Privacy Policy
+
+  This instance stores the account details you provide and a log of the API
+  requests made with your credentials. Replace this text with your own privacy
+  policy before opening registration to anyone outside your team.
+
+token:
+  # Session access token lifetime, in seconds (1 hour).
+  accessTokenExpired: 3600
+  # Refresh token lifetime, in seconds (30 days).
+  refreshTokenExpired: 2592000
+  # Concurrent sessions allowed per user. 0 = unlimited.
+  maxSessions: 5
+
+register:
+  # Self-registration. Turn this off to make the instance invite-only — an admin
+  # then creates every account.
+  enabled: true
+  # Package assigned to users who sign themselves up — must match an alias in
+  # packages.yaml. Empty means they get no package, and therefore no rate limit
+  # of their own until an admin assigns one.
+  defaultPackageAlias: free

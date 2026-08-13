@@ -1,0 +1,24 @@
+# Local configuration — never commit real values
+.env
+*.env
+!.env.example
+
+# Key material
+*.key
+*.key.pub
+*.pem
+
+# Go build output
+goapp
+*.out
+tmp/
+
+# Node / Next.js
+node_modules/
+.next/
+out/
+
+# Editor and OS noise
+.DS_Store
+.idea/
+.vscode/
