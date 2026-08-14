@@ -75,13 +75,18 @@ jobs:
         with:
           fetch-depth: 0
 
+      # actions/checkout leaves the tag as a lightweight ref, and reading the body
+      # off one of those silently gives you the commit message instead. Fetch the
+      # real tag object first.
+      - run: git fetch --force --tags origin "refs/tags/${GITHUB_REF_NAME}:refs/tags/${GITHUB_REF_NAME}"
+
       # The tag message is the release notes: it is written when the release is
       # cut, by whoever knows what changed.
       - id: notes
         run: |
           {
             echo 'body<<TAG_MESSAGE_EOF'
-            git tag -l --format='%(contents:body)' "${GITHUB_REF_NAME}"
+            git tag -l --format='%(contents)' "${GITHUB_REF_NAME}"
             echo
             echo '## Images'
             echo
