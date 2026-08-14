@@ -1,24 +1,125 @@
-# Run the published images instead of building from source. No Go or Node needed.
+# Run the published images. Nothing to build, so no Go and no Node needed.
 #
-#   docker compose -f docker-compose.yml -f docker-compose.images.yml up -d
+#   cp .env.example .env
+#   docker compose -f docker-compose.images.yml up -d
 #
-# Everything else — ports, environment, volumes — comes from docker-compose.yml,
-# so there is one place to change it.
+# Pin a release with ORYCA_VERSION=0.1.2, or leave it for latest.
 #
-# The portal image carries the default local addresses, since Next.js writes them
-# into its bundle while building. Serving the stack from a domain of your own
-# means building the portal yourself: leave this file out and use the plain
-# `docker compose up`.
+# This mirrors docker-compose.yml with the builds swapped for images. Keep the
+# two in step when you change ports, environment or volumes.
+#
+# The portal image carries the default local addresses, because Next.js writes
+# them into its bundle while building. Serving the stack from a domain of your
+# own means building the portal: use docker-compose.yml instead.
 
+name: oryca
 services:
+  mongo:
+    image: mongo:7
+    restart: unless-stopped
+    volumes:
+    - mongo-data:/data/db
+    healthcheck:
+      test:
+      - CMD
+      - mongosh
+      - --quiet
+      - --eval
+      - db.adminCommand('ping')
+      interval: 10s
+      timeout: 5s
+      retries: 12
+      start_period: 20s
+  redis:
+    image: redis:7-alpine
+    restart: unless-stopped
+    command:
+    - redis-server
+    - --appendonly
+    - 'yes'
+    volumes:
+    - redis-data:/data
+    healthcheck:
+      test:
+      - CMD
+      - redis-cli
+      - ping
+      interval: 10s
+      timeout: 5s
+      retries: 12
   control-plane:
     image: ghcr.io/oryca/oryca-control-plane:${ORYCA_VERSION:-latest}
-    build: !reset null
-
+    restart: unless-stopped
+    depends_on:
+      mongo:
+        condition: service_healthy
+      redis:
+        condition: service_healthy
+    ports:
+    - ${ORYCA_CONTROL_PLANE_PORT:-9001}:9001
+    volumes:
+    - control-plane-keys:/data
+    environment:
+      ORYCA_API_HOST: http://localhost
+      ORYCA_API_PORT: 9001
+      ORYCA_API_DB_URL: mongodb://mongo:27017
+      ORYCA_API_DB_NAME: oryca
+      ORYCA_API_REDIS_ADDRESS: redis:6379
+      ORYCA_API_REDIS_DB: 0
+      ORYCA_API_ALLOW_ORIGIN: '*'
+      ORYCA_API_JWT_PRIVATE_KEY: /data/auth-private.key
+      ORYCA_API_JWT_PUBLIC_KEY: /data/auth-public.key
+      ORYCA_INTERNAL_SECRET: ${ORYCA_INTERNAL_SECRET:?set ORYCA_INTERNAL_SECRET in .env}
+      ORYCA_API_ROOT_EMAIL: ${ORYCA_API_ROOT_EMAIL:-admin@localhost}
+      ORYCA_API_ROOT_PASSWORD: ${ORYCA_API_ROOT_PASSWORD:-}
+      ORYCA_API_LOG_RETENTION_DAYS: ${ORYCA_API_LOG_RETENTION_DAYS:-14}
+      LOG_FORMAT: console
+    healthcheck:
+      test:
+      - CMD
+      - curl
+      - -fsS
+      - http://localhost:9001/control-plane/api/v1/health
+      interval: 15s
+      timeout: 5s
+      retries: 10
+      start_period: 30s
   gateway:
     image: ghcr.io/oryca/oryca-gateway:${ORYCA_VERSION:-latest}
-    build: !reset null
-
+    restart: unless-stopped
+    depends_on:
+      redis:
+        condition: service_healthy
+      control-plane:
+        condition: service_started
+    ports:
+    - ${ORYCA_GATEWAY_PORT:-9002}:9002
+    environment:
+      ORYCA_GW_HOST: 0.0.0.0
+      ORYCA_GW_PORT: 9002
+      ORYCA_GW_REDIS_ADDRESS: redis:6379
+      ORYCA_GW_REDIS_DB: 0
+      ORYCA_GW_ALLOW_ORIGIN: '*'
+      ORYCA_GW_CP_BASE_URL: http://control-plane:9001/control-plane/api/v1
+      ORYCA_GW_JWKS_URL: http://control-plane:9001/control-plane/api/v1/.well-known/jwks.json
+      ORYCA_GW_INTERNAL_SECRET: ${ORYCA_INTERNAL_SECRET:?set ORYCA_INTERNAL_SECRET in .env}
+      LOG_FORMAT: console
+    healthcheck:
+      test:
+      - CMD
+      - curl
+      - -fsS
+      - http://localhost:9002/gateway/api/health
+      interval: 15s
+      timeout: 5s
+      retries: 10
+      start_period: 20s
   portal:
     image: ghcr.io/oryca/oryca-portal:${ORYCA_VERSION:-latest}
-    build: !reset null
+    restart: unless-stopped
+    ports:
+    - ${ORYCA_PORTAL_PORT:-3000}:3000
+volumes:
+  mongo-data: null
+  redis-data: null
+  control-plane-keys: null
