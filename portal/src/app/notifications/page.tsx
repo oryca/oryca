@@ -2,7 +2,7 @@
 
 import React, { useEffect, useState } from 'react';
 import { useQuery, useMutation, useQueryClient } from '@tanstack/react-query';
-import { api, NEXT_PUBLIC_API_URL } from '@/lib/api';
+import { api, API_URL } from '@/lib/api';
 import NavigationShell from '@/components/NavigationShell';
 import {
   Bell,
@@ -82,7 +82,7 @@ export default function NotificationsPage() {
         if (!isActive) return;
 
         // Step 2: Open EventSource
-        const sseUrl = `${NEXT_PUBLIC_API_URL}/notifications/stream?ticket=${ticket}`;
+        const sseUrl = `${API_URL}/notifications/stream?ticket=${ticket}`;
         eventSource = new EventSource(sseUrl);
 
         eventSource.onopen = () => {

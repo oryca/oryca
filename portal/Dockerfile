@@ -21,14 +21,6 @@ COPY . .
 # Uncomment the following line in case you want to disable telemetry during the build.
 ENV NEXT_TELEMETRY_DISABLED=1
 
-# Next.js writes these into the page bundle while building, so they are build
-# arguments, not settings you can change later by restarting the container.
-# Point them at wherever the two services will answer in your deployment.
-ARG NEXT_PUBLIC_API_URL=http://localhost:9001/control-plane/api/v1
-ARG NEXT_PUBLIC_GATEWAY_URL=http://localhost:9002/gateway/api
-ENV NEXT_PUBLIC_API_URL=$NEXT_PUBLIC_API_URL
-ENV NEXT_PUBLIC_GATEWAY_URL=$NEXT_PUBLIC_GATEWAY_URL
-
 RUN npm run build
 
 # Production image, copy all the files and run next

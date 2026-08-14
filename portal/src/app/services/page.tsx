@@ -2,7 +2,7 @@
 
 import React, { useState, useEffect } from 'react';
 import { useQuery, useMutation, useQueryClient } from '@tanstack/react-query';
-import { api, NEXT_PUBLIC_GATEWAY_URL } from '@/lib/api';
+import { api, GATEWAY_URL } from '@/lib/api';
 import { useAuth } from '@/app/providers';
 import NavigationShell from '@/components/NavigationShell';
 import axios from 'axios';
@@ -209,7 +209,7 @@ export default function ServicesAndKeysPage() {
     const cleanPath = selectedPath.replace(/^\//, '');
     
     // Add query params if any
-    let url = `${NEXT_PUBLIC_GATEWAY_URL}/resources/${basePath}/${cleanPath}`;
+    let url = `${GATEWAY_URL}/resources/${basePath}/${cleanPath}`;
     if (customParams) {
       url += `?${customParams}`;
     }
@@ -244,7 +244,7 @@ export default function ServicesAndKeysPage() {
     if (!selectedService) return '';
     const basePath = selectedService.basePath.replace(/^\//, '');
     const cleanPath = selectedPath.replace(/^\//, '');
-    let url = `${NEXT_PUBLIC_GATEWAY_URL}/resources/${basePath}/${cleanPath}`;
+    let url = `${GATEWAY_URL}/resources/${basePath}/${cleanPath}`;
     if (customParams) {
       url += `?${customParams}`;
     }
@@ -408,7 +408,7 @@ export default function ServicesAndKeysPage() {
                             To reach this service through the gateway, call:
                           </p>
                           <pre className="p-3 bg-graphite text-graphite-ink rounded-control font-mono text-[11px] overflow-x-auto">
-                            GET {NEXT_PUBLIC_GATEWAY_URL}/resources/{selectedService.basePath.replace(/^\//, '')}/&lt;path&gt;
+                            GET {GATEWAY_URL}/resources/{selectedService.basePath.replace(/^\//, '')}/&lt;path&gt;
                           </pre>
                           <p className="text-muted">
                             Remember to supply your active key in the <code className="bg-paper-3 px-1 py-0.5 rounded">X-API-Key</code> header.

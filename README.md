@@ -2,7 +2,7 @@
 
 [![CI](https://github.com/oryca/oryca/actions/workflows/ci.yml/badge.svg)](https://github.com/oryca/oryca/actions/workflows/ci.yml)
 [![Release](https://img.shields.io/github/v/release/oryca/oryca?sort=semver)](https://github.com/oryca/oryca/releases)
-[![Go Report Card](https://goreportcard.com/badge/github.com/oryca/oryca)](https://goreportcard.com/report/github.com/oryca/oryca)
+[![Go](https://img.shields.io/github/go-mod/go-version/oryca/oryca)](go.mod)
 [![License](https://img.shields.io/github/license/oryca/oryca)](LICENSE)
 
 **An open-source API gateway for geospatial services.**
@@ -24,8 +24,8 @@ You need Docker. Nothing else, no Go and no Node.
 
 ### 1. Get the stack running
 ```sh
-curl -o docker-compose.yml https://raw.githubusercontent.com/oryca/oryca/main/docker-compose.images.yml
-curl -o .env https://raw.githubusercontent.com/oryca/oryca/main/.env.example
+curl -fsSL -o docker-compose.yml https://raw.githubusercontent.com/oryca/oryca/main/docker-compose.images.yml
+curl -fsSL -o .env https://raw.githubusercontent.com/oryca/oryca/main/.env.example
 docker compose up -d
 ```
 
@@ -113,9 +113,9 @@ Each service you register records the version its own upstream implements, which
 
 Starting data (settings, email templates, the first package) is YAML in `control-plane/seed/`. It loads once, against an empty database. After that the database wins: change things in the portal and a restart will not undo your work. Administrator credentials are deliberately not in those files, they come from `ORYCA_API_ROOT_EMAIL` and `ORYCA_API_ROOT_PASSWORD`.
 
-**Two settings behave differently.** `ORYCA_PORTAL_API_URL` and `ORYCA_PORTAL_GATEWAY_URL` are the addresses the portal calls **from the visitor's browser**, so your users have to be able to reach them. Next.js writes them into the page bundle while the image is built, so serving the stack from your own domain means building the portal yourself:
+One pair is easy to get wrong. `ORYCA_PORTAL_API_URL` and `ORYCA_PORTAL_GATEWAY_URL` are the addresses the portal calls **from the visitor's browser**, so they have to be reachable by your users — a container name like `http://control-plane:9001` will not work. Serving the stack from your own domain means setting both, then:
 ```sh
-docker compose build portal && docker compose up -d
+docker compose up -d portal
 ```
 
 ---

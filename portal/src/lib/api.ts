@@ -1,10 +1,22 @@
 import axios from 'axios';
 
-export const NEXT_PUBLIC_API_URL =
-  process.env.NEXT_PUBLIC_API_URL || 'http://localhost:9001/control-plane/api/v1';
+// ที่อยู่ที่ browser ใช้เรียก backend — layout.tsx ฉีดเข้ามาตอนเสิร์ฟหน้า ไม่ใช่ตอน build
+// image เดียวจึงใช้ได้ทุก domain แค่เปลี่ยน env แล้ว restart
+declare global {
+  interface Window {
+    __ORYCA_CONFIG__?: { apiUrl?: string; gatewayUrl?: string };
+  }
+}
 
-export const NEXT_PUBLIC_GATEWAY_URL =
-  process.env.NEXT_PUBLIC_GATEWAY_URL || 'http://localhost:9002/gateway/api';
+export const API_URL =
+  (typeof window !== 'undefined' && window.__ORYCA_CONFIG__?.apiUrl) ||
+  process.env.NEXT_PUBLIC_API_URL ||
+  'http://localhost:9001/control-plane/api/v1';
+
+export const GATEWAY_URL =
+  (typeof window !== 'undefined' && window.__ORYCA_CONFIG__?.gatewayUrl) ||
+  process.env.NEXT_PUBLIC_GATEWAY_URL ||
+  'http://localhost:9002/gateway/api';
 
 export interface UserSession {
   id: string;
@@ -26,7 +38,7 @@ export interface AuthResponse {
 }
 
 export const api = axios.create({
-  baseURL: NEXT_PUBLIC_API_URL,
+  baseURL: API_URL,
   headers: {
     'Content-Type': 'application/json',
   },
@@ -123,7 +135,7 @@ api.interceptors.response.use(
       isRefreshing = true;
 
       try {
-        const res = await axios.post<AuthResponse>(`${NEXT_PUBLIC_API_URL}/auth/token`, {
+        const res = await axios.post<AuthResponse>(`${API_URL}/auth/token`, {
           refreshToken,
         });
 
