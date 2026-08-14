@@ -1,9 +1,9 @@
 # ORYCA
 
 [![CI](https://github.com/oryca/oryca/actions/workflows/ci.yml/badge.svg)](https://github.com/oryca/oryca/actions/workflows/ci.yml)
-[![Release](https://img.shields.io/github/v/release/oryca/oryca?sort=semver)](https://github.com/oryca/oryca/releases)
-[![Go](https://img.shields.io/github/go-mod/go-version/oryca/oryca)](go.mod)
-[![License](https://img.shields.io/github/license/oryca/oryca)](LICENSE)
+[![Release](https://img.shields.io/github/v/release/oryca/oryca?sort=semver&cacheSeconds=300)](https://github.com/oryca/oryca/releases)
+[![Go](https://img.shields.io/github/go-mod/go-version/oryca/oryca?cacheSeconds=300)](go.mod)
+[![License](https://img.shields.io/github/license/oryca/oryca?cacheSeconds=300)](LICENSE)
 
 **An open-source API gateway, at home with geospatial APIs.**
 
