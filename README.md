@@ -121,7 +121,7 @@ Each service you register records the version its own upstream implements, which
 
 ## Configuration
 
-`.env` at the root configures the whole stack, and every value has a working default. The one to change before anything is reachable from a network you do not control is **`ORYCA_INTERNAL_SECRET`**, which the two Go services share. Rotating it? Put the old value in `ORYCA_INTERNAL_SECRET_PREV` first, and the control plane accepts both until you remove it.
+`.env` at the root configures the whole stack, and every value has a working default. [The configuration reference](docs/configuration.md) lists all of them. The one to change before anything is reachable from a network you do not control is **`ORYCA_INTERNAL_SECRET`**, which the two Go services share. Rotating it? Put the old value in `ORYCA_INTERNAL_SECRET_PREV` first, and the control plane accepts both until you remove it.
 
 Running the binaries yourself, without compose? Then `ORYCA_API_REDIS_DB` and `ORYCA_GW_REDIS_DB` have to match, and their built-in defaults do not (0 and 7). Pub/sub ignores the database number, so a mismatch looks like it works until routes stop arriving. The compose files pin both to 0 for you.
 
@@ -143,6 +143,7 @@ docker compose up -d portal
 - [`tools/`](tools): `smoke-test.sh`, which checks a running stack end to end.
 - [`docs/`](docs): how to use it, and how the pieces agree with each other.
   - [`getting-started.md`](docs/getting-started.md): publish your first API, from upstream to a working key.
+  - [`configuration.md`](docs/configuration.md): every environment variable, and what is not one.
   - [`response-transforms.md`](docs/response-transforms.md): rewriting a response on its way back, and the presets that do it for you.
   - [`sync-contract.md`](docs/sync-contract.md): what the gateway and the control plane promise each other.
 
@@ -176,7 +177,7 @@ With the stack up, `tools/smoke-test.sh` walks the whole path a person takes: si
 
 ## Contributing
 
-Issues and questions are welcome, see [CONTRIBUTING.md](CONTRIBUTING.md). Found a security problem? [SECURITY.md](SECURITY.md).
+Issues and questions are welcome, see [CONTRIBUTING.md](CONTRIBUTING.md) and our [Code of Conduct](CODE_OF_CONDUCT.md). Found a security problem? [SECURITY.md](SECURITY.md).
 
 ## License
 

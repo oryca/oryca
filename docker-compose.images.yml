@@ -100,7 +100,6 @@ services:
       ORYCA_GW_REDIS_DB: 0
       ORYCA_GW_ALLOW_ORIGIN: '*'
       ORYCA_GW_CP_BASE_URL: http://control-plane:9001/control-plane/api/v1
-      ORYCA_GW_JWKS_URL: http://control-plane:9001/control-plane/api/v1/.well-known/jwks.json
       ORYCA_GW_INTERNAL_SECRET: ${ORYCA_INTERNAL_SECRET:?set ORYCA_INTERNAL_SECRET in .env}
       LOG_FORMAT: console
     healthcheck:
