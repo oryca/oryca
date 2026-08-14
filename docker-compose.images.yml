@@ -1,0 +1,24 @@
+# Run the published images instead of building from source. No Go or Node needed.
+#
+#   docker compose -f docker-compose.yml -f docker-compose.images.yml up -d
+#
+# Everything else — ports, environment, volumes — comes from docker-compose.yml,
+# so there is one place to change it.
+#
+# The portal image carries the default local addresses, since Next.js writes them
+# into its bundle while building. Serving the stack from a domain of your own
+# means building the portal yourself: leave this file out and use the plain
+# `docker compose up`.
+
+services:
+  control-plane:
+    image: ghcr.io/oryca/oryca-control-plane:${ORYCA_VERSION:-latest}
+    build: !reset null
+
+  gateway:
+    image: ghcr.io/oryca/oryca-gateway:${ORYCA_VERSION:-latest}
+    build: !reset null
+
+  portal:
+    image: ghcr.io/oryca/oryca-portal:${ORYCA_VERSION:-latest}
+    build: !reset null

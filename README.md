@@ -45,6 +45,14 @@ docker compose up
 
 That starts MongoDB, Redis, the control plane, the gateway, and the portal.
 
+It builds the three services from source, which needs nothing installed but
+Docker and takes a few minutes the first time. To start from published images
+instead:
+
+```sh
+docker compose -f docker-compose.yml -f docker-compose.images.yml up -d
+```
+
 An admin account is created on first start. If you left
 `ORYCA_API_ROOT_PASSWORD` empty, the password is generated and printed once:
 

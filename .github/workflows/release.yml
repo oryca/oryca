@@ -21,9 +21,17 @@ jobs:
       matrix:
         include:
           - image: oryca-gateway
+            context: .
             dockerfile: gateway/Dockerfile
           - image: oryca-control-plane
+            context: .
             dockerfile: control-plane/Dockerfile
+          # The portal's addresses are written into its bundle at build time, so a
+          # published image can only carry the local defaults. Anyone serving it
+          # from a domain of their own builds it themselves.
+          - image: oryca-portal
+            context: ./portal
+            dockerfile: ./portal/Dockerfile
     steps:
       - uses: actions/checkout@v5
 
@@ -48,7 +56,7 @@ jobs:
       # The binaries are static (cgo off), so arm64 cross-builds without emulation.
       - uses: docker/build-push-action@v6
         with:
-          context: .
+          context: ${{ matrix.context }}
           file: ${{ matrix.dockerfile }}
           platforms: linux/amd64,linux/arm64
           push: true
