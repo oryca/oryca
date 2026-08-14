@@ -48,9 +48,15 @@ docker compose logs control-plane | grep -A2 "ROOT ACCOUNT"
 ```
 
 ### 3. Open it
-- **Developer Portal:** [http://localhost:3000](http://localhost:3000), log in as `admin@localhost`
-- **Control Plane API:** [http://localhost:9001/control-plane/api/v1/health](http://localhost:9001/control-plane/api/v1/health)
-- **Gateway:** [http://localhost:9002/gateway/api/health](http://localhost:9002/gateway/api/health)
+The portal is at **[localhost:3000](http://localhost:3000)**. Log in as `admin@localhost`
+with the password from the step above.
+
+The two services answer on 9001 and 9002. You do not need to visit them, but this
+is how to check they are up:
+```sh
+curl localhost:9001/control-plane/api/v1/health
+curl localhost:9002/gateway/api/health
+```
 
 ### 4. Put an API behind it
 [Publish your first API](docs/getting-started.md) walks through the four pieces

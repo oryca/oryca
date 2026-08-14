@@ -111,7 +111,7 @@ Conditions allow you to enable a rule only if the matched elements satisfy a fil
 Use `notEquals` for the opposite (skip the elements listed, act on the rest). Both take a list, and the spelling matters: an unknown key is ignored, which reads as a rule that fires on everything.
 
 > [!WARNING]
-> Conditions are a gate, not a filter. Every condition on a rule has to pass on the element being examined; a rule with no matching element simply does nothing, and never reports an error.
+> Conditions are a gate, not a filter. Every condition on a rule has to pass on the element being examined; a rule that matches nothing does nothing, and never reports an error.
 
 ---
 
