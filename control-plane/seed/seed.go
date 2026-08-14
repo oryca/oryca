@@ -60,7 +60,7 @@ type UserStore interface {
 	Insert(ctx context.Context, doc *model.User) error
 }
 
-// Stores คือ dependency ทั้งหมดของ seeder — repository ฝั่ง caller ใส่ให้ตรง interface ได้เลย
+// Stores คือ dependency ทั้งหมดของ seeder. Repository ฝั่ง caller ใส่ให้ตรง interface ได้เลย
 type Stores struct {
 	Config        ConfigStore
 	EmailTemplate EmailTemplateStore
@@ -71,7 +71,7 @@ type Stores struct {
 // Options tunes where the YAML comes from and who the first administrator is.
 type Options struct {
 	// Dir reads the YAML from a directory instead of the copy built into the
-	// binary — set ORYCA_API_SEED_DIR to edit seed data without rebuilding.
+	// binary. Set ORYCA_API_SEED_DIR to edit seed data without rebuilding.
 	Dir string
 	// RootEmail/RootPassword create the first root account. An empty password
 	// means "generate one and print it once"; an empty email skips root seeding
@@ -304,7 +304,7 @@ func seedPackages(ctx context.Context, store PackageStore, dir string, log Logge
 // --- root user ---
 
 // seedRootUser creates the first administrator. The password comes from the
-// environment or, when that is empty, is generated and printed once — a fresh
+// environment or, when that is empty, is generated and printed once. A fresh
 // clone must never boot with a password that is published in this repository.
 func seedRootUser(ctx context.Context, store UserStore, opts Options, log Logger) {
 	if store == nil || opts.RootEmail == "" {

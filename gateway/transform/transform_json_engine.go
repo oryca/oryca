@@ -200,7 +200,7 @@ func (e *Engine) replaceValues(expr jp.Expr, data *interface{}, rule model.Trans
 					}
 				}
 			} else {
-				// no field named — every string field
+				// no field named. Every string field
 				for key, value := range v {
 					if strValue, ok := value.(string); ok {
 						newValue := e.performStringReplace(strValue, rule, vars)
@@ -223,7 +223,7 @@ func (e *Engine) replaceValues(expr jp.Expr, data *interface{}, rule model.Trans
 func (e *Engine) performStringReplace(original string, rule model.TransformRule, vars map[string]string) string {
 	result := original
 
-	// regex wins when set — the compiled regex is cached, as the same rule runs on every request
+	// regex wins when set. The compiled regex is cached, as the same rule runs on every request
 	if rule.Params.Regex != "" {
 		replaceValue := e.replaceTemplateVars(rule.Params.Replace, vars)
 		re, err := cachedRegexp(rule.Params.Regex)

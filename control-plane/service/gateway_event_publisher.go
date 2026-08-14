@@ -11,12 +11,12 @@ import (
 	"github.com/redis/go-redis/v9"
 )
 
-// Sync event type constants — wire contract shared with oryca-gateway/sync/event.go.
+// Sync event type constants. Wire contract shared with oryca-gateway/sync/event.go.
 // Keep both sides in sync when changing.
 const (
 	SyncEventTypeReloadServices = "reload_services"
 	SyncEventTypeApiKey         = "apikey"
-	// SyncEventTypeUser carries a full model.UserFreshnessCache payload — single-user
+	// SyncEventTypeUser carries a full model.UserFreshnessCache payload. Single-user
 	// authorization-field changes (Update/Create/Verify/Delete).
 	SyncEventTypeUser = "user"
 	// SyncEventTypeUserInvalidate carries a model.UserIDsPayload (ids only, no data) —
@@ -70,7 +70,7 @@ func NewGatewayEventPublisher(client *redis.Client, channel string) *GatewayEven
 // Publish marshals payload, wraps it in the sync-event envelope (with a UnixMilli
 // version the gateway uses to drop out-of-order deliveries), and queues it for async
 // delivery. eventType must be one of the SyncEventType* constants. payload may be nil
-// for thin-signal events (e.g. SyncEventTypeReloadServices) that carry no data — the
+// for thin-signal events (e.g. SyncEventTypeReloadServices) that carry no data. The
 // gateway re-pulls the real thing itself via its existing HTTP+ETag path.
 func (p *GatewayEventPublisher) Publish(eventType string, payload any) {
 	if p.client == nil || p.channel == "" {
@@ -98,7 +98,7 @@ func (p *GatewayEventPublisher) Publish(eventType string, payload any) {
 	}
 }
 
-// publishLoop เป็น goroutine เดียวที่ยิงเข้า Redis — fire-and-forget ไม่รอ subscriber
+// publishLoop เป็น goroutine เดียวที่ยิงเข้า Redis. Fire-and-forget ไม่รอ subscriber
 func (p *GatewayEventPublisher) publishLoop() {
 	defer p.wg.Done()
 	for {
@@ -119,12 +119,12 @@ func (p *GatewayEventPublisher) publishLoop() {
 }
 
 func (p *GatewayEventPublisher) publish(body []byte) {
-	// ctx มี timeout ของตัวเอง ไม่ผูกกับ request ที่ยิงมา — publish เป็น background งานเดียว
+	// ctx มี timeout ของตัวเอง ไม่ผูกกับ request ที่ยิงมา. Publish เป็น background งานเดียว
 	ctx, cancel := context.WithTimeout(context.Background(), gatewayEventPublishTTL)
 	defer cancel()
 
 	if err := p.client.Publish(ctx, p.channel, body).Err(); err != nil {
-		// event หายไปเงียบๆ — HTTP polling ฝั่ง gateway คุมอยู่แล้ว
+		// event หายไปเงียบๆ. HTTP polling ฝั่ง gateway คุมอยู่แล้ว
 		logger.Error("gateway_event_publisher: publish failed: " + err.Error())
 	}
 }

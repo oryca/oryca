@@ -46,7 +46,7 @@ type apiKeyNotifier interface {
 }
 
 // apiKeyGatewayPublisher is the narrow slice of GatewayEventPublisher this service
-// needs — real-time sync event push to the gateway fanout exchange.
+// needs. Real-time sync event push to the gateway fanout exchange.
 type apiKeyGatewayPublisher interface {
 	Publish(eventType string, payload any)
 }
@@ -65,7 +65,7 @@ func NewApiKeyService(repo apiKeyRepo, cache apiKeyCache, userRepo apiKeyUserFin
 
 // publishApiKeyEvent sends the gateway-facing shape of ak (same as GetApiKeys' internal
 // endpoint payload, minus batching) as a full-payload real-time sync event. Best-effort:
-// GatewayEventPublisher.Publish never blocks or returns an error — HTTP polling on the
+// GatewayEventPublisher.Publish never blocks or returns an error. HTTP polling on the
 // gateway side still catches this within its own interval either way.
 func (s *ApiKeyService) publishApiKeyEvent(ak *model.ApiKey, owner *model.User) {
 	if s.publisher == nil {
@@ -148,7 +148,7 @@ func (s *ApiKeyService) resolveOwnerFilter(ctx context.Context, rawValues []stri
 	hasFilter := len(includeRaw) > 0 || len(excludeRaw) > 0
 
 	if !hasFilter {
-		// no ownerBy given — root and admin see everything, a user only their own
+		// no ownerBy given. Root and admin see everything, a user only their own
 		if !s.canViewOtherKeys(ctx, ctxUser) {
 			ownerIDs = []bson.ObjectID{ctxUser.ID}
 		}
@@ -315,7 +315,7 @@ func (s *ApiKeyService) Update(ctx context.Context, id bson.ObjectID, body *mode
 	_ = s.cache.Set(ctx, updated, owner)
 	s.publishApiKeyEvent(updated, owner)
 
-	// commit, then notify — never the other way round
+	// commit, then notify. Never the other way round
 	if wasSuspended && updated.OwnerBy != nil && s.notifier != nil {
 		runNotifyBackground(ctx, 30*time.Second, func(bgCtx context.Context) {
 			s.notifyApiKeySuspended(bgCtx, updated, body.Reason, ctxUser.ID)

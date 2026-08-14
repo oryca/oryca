@@ -43,7 +43,7 @@ type ResourcePath struct {
 	Source      *ResourcePathSourceInput `json:"source,omitempty" bson:"-"`
 }
 
-// ResourcePathWithSource is the aggregate result — source is embedded by $lookup
+// ResourcePathWithSource is the aggregate result. Source is embedded by $lookup
 type ResourcePathWithSource struct {
 	Path        string         `json:"path" bson:"path"`
 	Methods     []string       `json:"methods" bson:"methods"`
@@ -58,7 +58,7 @@ type InvalidResourcePath struct {
 	SourceAlias string `json:"sourceAlias"`
 }
 
-// GatewayServiceWithSource is returned by aggregate queries — resourcePaths include embedded source
+// GatewayServiceWithSource is returned by aggregate queries. ResourcePaths include embedded source
 type GatewayServiceWithSource struct {
 	ID            bson.ObjectID             `json:"id" bson:"_id,omitempty"`
 	Name          string                    `json:"name" bson:"name"`

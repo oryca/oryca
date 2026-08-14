@@ -16,7 +16,7 @@ const apiKeyCacheTTL = 2 * time.Hour
 
 func apiKeyRedisKey(rawKey string) string { return "apikey:" + hashApiKey(rawKey) }
 
-// apiKeySyncBatchSize — chunk ละ 500 กัน pipeline ใหญ่เกินจนบล็อก Redis
+// apiKeySyncBatchSize. Chunk ละ 500 กัน pipeline ใหญ่เกินจนบล็อก Redis
 const apiKeySyncBatchSize = 500
 
 // SetApiKeysBatch เขียน api-key หลายตัวผ่าน Redis pipeline เป็น chunk แทนการยิงทีละตัว

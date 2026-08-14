@@ -160,7 +160,7 @@ func (s *AuthService) Register(ctx context.Context, body *model.RegisterRequest)
 		Role:        "user", // force role on self-register
 	}
 
-	// package ตั้งต้นของคนสมัครเอง — หาไม่เจอก็ปล่อยว่าง (admin ผูกให้ทีหลังได้) ไม่ block การสมัคร
+	// package ตั้งต้นของคนสมัครเอง. หาไม่เจอก็ปล่อยว่าง (admin ผูกให้ทีหลังได้) ไม่ block การสมัคร
 	if alias := cfg.Register.DefaultPackageAlias; alias != "" && s.packageRepo != nil {
 		if pkg, err := s.packageRepo.FindByAlias(ctx, alias); err == nil && pkg != nil {
 			createBody.PackageID = &pkg.ID

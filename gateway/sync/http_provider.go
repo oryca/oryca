@@ -18,7 +18,7 @@ import (
 
 const headerInternalKey = "X-Internal-Key"
 
-// ErrUserNotFound is returned by GetUser when control-plane has no such user — distinct
+// ErrUserNotFound is returned by GetUser when control-plane has no such user. Distinct
 // from a network/transport error so callers can (if they ever want to) treat the two
 // differently, though the current cache policy fails open on both alike.
 var ErrUserNotFound = errors.New("sync: user not found")
@@ -83,7 +83,7 @@ func NewHTTPSyncProvider(cfg HTTPSyncConfig) *HTTPSyncProvider {
 	}
 }
 
-// doRequest executes a single HTTP GET — timeout จัดการโดย httpClient
+// doRequest executes a single HTTP GET. Timeout จัดการโดย httpClient
 func (p *HTTPSyncProvider) doRequest(ctx context.Context, path string, dest interface{}) (bool, error) {
 	req, err := http.NewRequestWithContext(ctx, http.MethodGet, p.baseURL+path, nil)
 	if err != nil {
@@ -118,7 +118,7 @@ func (p *HTTPSyncProvider) doRequest(ctx context.Context, path string, dest inte
 	return true, nil
 }
 
-// getWithRetry — ลำดับถูกต้องตาม Resilience Pipeline:
+// getWithRetry. ลำดับถูกต้องตาม Resilience Pipeline:
 // Circuit Breaker (outer) → Retry (inner) → Timeout (httpClient)
 func (p *HTTPSyncProvider) getWithRetry(ctx context.Context, path string, dest interface{}) (bool, error) {
 	type result struct{ changed bool }
@@ -198,7 +198,7 @@ func (p *HTTPSyncProvider) GetTransformConfigs(ctx context.Context) ([]*Transfor
 }
 
 // GetUser fetches one user's freshness snapshot for a cache miss. Unlike the polling
-// methods above, this runs synchronously in the request path — a single fast attempt
+// methods above, this runs synchronously in the request path. A single fast attempt
 // through its own circuit breaker, no retry-with-backoff delay sequence, and no ETag
 // caching (a one-shot per-userID lookup gains nothing from it and would otherwise grow
 // lastETag unboundedly across every user ever looked up).

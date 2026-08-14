@@ -17,7 +17,7 @@ import (
 	"github.com/oryca/oryca/gateway/service"
 )
 
-// TestWriteStreamedBody — prefix + ส่วนที่ stream ต้องถึง client ครบและนับ bytes ถูก
+// TestWriteStreamedBody. Prefix + ส่วนที่ stream ต้องถึง client ครบและนับ bytes ถูก
 func TestWriteStreamedBody(t *testing.T) {
 	e := echo.New()
 	rec := httptest.NewRecorder()
@@ -37,7 +37,7 @@ func TestWriteStreamedBody(t *testing.T) {
 	}
 }
 
-// TestWriteStreamedBodyNoPrefix — stream mode ล้วน (ไม่มี prefix)
+// TestWriteStreamedBodyNoPrefix. Stream mode ล้วน (ไม่มี prefix)
 func TestWriteStreamedBodyNoPrefix(t *testing.T) {
 	e := echo.New()
 	rec := httptest.NewRecorder()
@@ -49,7 +49,7 @@ func TestWriteStreamedBodyNoPrefix(t *testing.T) {
 	}
 }
 
-// TestClaimStream — มีผู้จองสำเร็จได้คนเดียวแม้แย่งกันหลาย goroutine
+// TestClaimStream. มีผู้จองสำเร็จได้คนเดียวแม้แย่งกันหลาย goroutine
 func TestClaimStream(t *testing.T) {
 	ur := upstreamResult{claimed: new(int32)}
 	const workers = 16
@@ -75,7 +75,7 @@ func TestClaimStream(t *testing.T) {
 	}
 }
 
-// TestClaimStreamNil — result ที่ไม่มี claimed ต้องไม่ panic และคืน false
+// TestClaimStreamNil. Result ที่ไม่มี claimed ต้องไม่ panic และคืน false
 func TestClaimStreamNil(t *testing.T) {
 	ur := upstreamResult{}
 	if ur.claimStream() {
@@ -96,7 +96,7 @@ func newTestProxyHandler() *Handler {
 	return &Handler{proxySvc: svc}
 }
 
-// TestFetchFromUpstreamModes — buffered / oversize→prefix+stream / pure stream
+// TestFetchFromUpstreamModes. Buffered / oversize→prefix+stream / pure stream
 func TestFetchFromUpstreamModes(t *testing.T) {
 	payload := strings.Repeat("x", 1000)
 	up := httptest.NewServer(http.HandlerFunc(func(w http.ResponseWriter, r *http.Request) {
@@ -109,13 +109,13 @@ func TestFetchFromUpstreamModes(t *testing.T) {
 	req := httptest.NewRequest("GET", "/", nil)
 	src := &model.Source{}
 
-	// buffered: limit ใหญ่กว่า body — ได้ทั้งก้อน ไม่มี stream
+	// buffered: limit ใหญ่กว่า body. ได้ทั้งก้อน ไม่มี stream
 	ur := h.fetchFromUpstream(req, up.URL, "127.0.0.1", "rid", src, 10_000)
 	if ur.err != nil || ur.stream != nil || len(ur.body) != 1000 {
 		t.Fatalf("buffered mode: err=%v stream=%v len=%d", ur.err, ur.stream != nil, len(ur.body))
 	}
 
-	// oversize: limit เล็กกว่า body — ได้ prefix + stream ที่เหลือ รวมแล้วครบ
+	// oversize: limit เล็กกว่า body. ได้ prefix + stream ที่เหลือ รวมแล้วครบ
 	ur = h.fetchFromUpstream(req, up.URL, "127.0.0.1", "rid", src, 100)
 	if ur.err != nil || ur.stream == nil {
 		t.Fatalf("oversize mode: err=%v stream=%v", ur.err, ur.stream != nil)
@@ -129,7 +129,7 @@ func TestFetchFromUpstreamModes(t *testing.T) {
 		t.Errorf("oversize total: prefix=%d rest=%d want 1000", len(ur.body), len(rest))
 	}
 
-	// pure stream: maxBuffer 0 — ไม่ buffer เลย
+	// pure stream: maxBuffer 0. ไม่ buffer เลย
 	ur = h.fetchFromUpstream(req, up.URL, "127.0.0.1", "rid", src, 0)
 	if ur.err != nil || ur.stream == nil || len(ur.body) != 0 {
 		t.Fatalf("stream mode: err=%v stream=%v prefix=%d", ur.err, ur.stream != nil, len(ur.body))
@@ -142,7 +142,7 @@ func TestFetchFromUpstreamModes(t *testing.T) {
 	}
 }
 
-// TestFetchFromUpstreamRangePassthrough — Range header ต้องถึง upstream และได้ 206 + chunk ที่ถูกต้อง
+// TestFetchFromUpstreamRangePassthrough. Range header ต้องถึง upstream และได้ 206 + chunk ที่ถูกต้อง
 // (เคส PMTiles: stream mode + Range ต้องไม่เพี้ยน)
 func TestFetchFromUpstreamRangePassthrough(t *testing.T) {
 	payload := "0123456789ABCDEF"
@@ -176,7 +176,7 @@ func TestFetchFromUpstreamRangePassthrough(t *testing.T) {
 	}
 }
 
-// TestIsCacheableSize — เพดาน 5MB: เท่าพอดี cache ได้, เกิน 1 byte ไม่ได้
+// TestIsCacheableSize. เพดาน 5MB: เท่าพอดี cache ได้, เกิน 1 byte ไม่ได้
 func TestIsCacheableSize(t *testing.T) {
 	if !cache.IsCacheableSize(cache.MaxCacheableBodyBytes) {
 		t.Error("exactly 5MB must be cacheable")

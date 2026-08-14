@@ -18,7 +18,7 @@ type TrieNode struct {
 	// A wildcard suffix (a path ending in /*) anchored at this node. Always kept apart from the
 	// isEnd/service/resource fields above, because an exact match that ends here ("/items") and a
 	// wildcard that starts here ("/items/*") are different resources. Sharing the fields would let
-	// whichever was inserted second overwrite the other — this was a real bug, where one resource's
+	// whichever was inserted second overwrite the other. This was a real bug, where one resource's
 	// destination was overwritten by another whose path segments overlapped.
 	hasWildcard      bool
 	wildcardService  *model.GatewayService
@@ -69,7 +69,7 @@ func (pt *PathTrie) insertResource(svc *model.GatewayService, res *model.Resourc
 		if seg == "" {
 			continue
 		}
-		// wildcard suffix — mark this node as a wildcard anchor, separately from any exact match on
+		// wildcard suffix. Mark this node as a wildcard anchor, separately from any exact match on
 		// the same node (another resource may end exactly here), then stop
 		if seg == "*" {
 			current.hasWildcard = true
@@ -159,7 +159,7 @@ func (pt *PathTrie) search(node *TrieNode, segments []string, idx int, params ma
 		}
 		// No exact resource on this node, but if a wildcard is anchored here (a resource declared as
 		// plain "/*", with no other path of its own) then a bare path matching the parent of "*"
-		// should match too. Exact still wins — that was checked above — so this is only a fallback
+		// should match too. Exact still wins. That was checked above. So this is only a fallback
 		// for when no exact match competes on the same node.
 		if node.hasWildcard {
 			paramsCopy := copyParams(params)

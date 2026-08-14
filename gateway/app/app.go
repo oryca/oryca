@@ -1,8 +1,8 @@
 // Package app wires the gateway together and runs it.
 //
 // It lives here rather than in package main so that the whole server can be
-// embedded in another program — a distribution that adds its own handlers, or a
-// test that needs the real thing — while cmd/oryca-gateway stays a three-line
+// embedded in another program. A distribution that adds its own handlers, or a
+// test that needs the real thing. While cmd/oryca-gateway stays a three-line
 // entry point.
 package app
 
@@ -37,7 +37,7 @@ func Run() {
 	cfg := config.Load()
 	logger.Init("oryca-gateway")
 
-	// Redis — gateway's own DB (config, api-keys)
+	// Redis. Gateway's own DB (config, api-keys)
 	redisClient, err := redisconn.Connect(redisconn.Options{
 		Addr:         cfg.RedisAddress,
 		Password:     cfg.RedisPassword,
@@ -54,7 +54,7 @@ func Run() {
 	}
 	logger.Info("Redis connected: " + cfg.RedisAddress + " db=" + strconv.Itoa(cfg.RedisDB))
 
-	// Redis แยกสำหรับ UpstreamCache (response cache) — คนละ client จาก redisClient ข้างบนโดย
+	// Redis แยกสำหรับ UpstreamCache (response cache). คนละ client จาก redisClient ข้างบนโดย
 	// เจตนา แม้ตอนนี้ CacheRedis* จะ fallback มาชี้ instance/DB เดียวกันเสมอ (ยังไม่มี instance
 	// แยกจริง) พอมี instance ที่สองแค่ตั้ง ORYCA_GW_CACHE_REDIS_ADDRESS ก็ย้ายได้ทันทีไม่ต้องแก้โค้ด
 	cacheRedisClient, err := redisconn.Connect(redisconn.Options{
@@ -76,14 +76,14 @@ func Run() {
 	c := cache.New(redisClient)
 	bgCtx, bgCancel := context.WithCancel(context.Background())
 
-	// SyncProvider — pulls services/sources/api-keys/JWKS from control-plane
+	// SyncProvider. Pulls services/sources/api-keys/JWKS from control-plane
 	provider := gwsync.NewHTTPSyncProvider(gwsync.HTTPSyncConfig{
 		BaseURL:        cfg.CPBaseURL,
 		InternalSecret: cfg.InternalSecret,
 		Timeout:        10 * time.Second,
 	})
 
-	// Trie — load warm-start data from Redis, then sync from provider
+	// Trie. Load warm-start data from Redis, then sync from provider
 	ht := trie.NewHybrid(c, provider)
 	if err := ht.Load(bgCtx); err != nil {
 		logger.Error("failed to load trie from cache: " + err.Error())
@@ -96,19 +96,19 @@ func Run() {
 	// a pure regression). See cache.UserFreshnessCache's doc comment.
 	userFreshnessCache := cache.NewUserFreshnessCache(provider, time.Duration(cfg.UserCacheTTL)*time.Second, cfg.UserCacheRefreshConcurrency)
 
-	// Api-key polling — separate interval. Also piggybacks each key's Owner snapshot
-	// into userFreshnessCache for free — no extra control-plane calls — since this bulk
+	// Api-key polling. Separate interval. Also piggybacks each key's Owner snapshot
+	// into userFreshnessCache for free. No extra control-plane calls. Since this bulk
 	// pull already carries packageId/enabled/verified/expiredAt per owner.
 	startApiKeyPolling(bgCtx, provider, c, userFreshnessCache, time.Duration(cfg.ApiKeyPollInterval)*time.Second)
 
-	// Real-time invalidation — soft dependency: an unreachable Redis or an empty channel
+	// Real-time invalidation. Soft dependency: an unreachable Redis or an empty channel
 	// just means the gateway stays on HTTP polling alone (see service.SyncEventService).
 	if cfg.SyncChannel != "" {
 		listener := gwsync.NewRedisListener(redisClient, cfg.SyncChannel)
 		service.NewSyncEventService(ht, c, userFreshnessCache).Start(bgCtx, listener)
 	}
 
-	// Auth service — fetch JWKS via provider (uses X-Internal-Key internally)
+	// Auth service. Fetch JWKS via provider (uses X-Internal-Key internally)
 	authSvc := service.NewAuthService(provider, c, userFreshnessCache)
 	if err := authSvc.FetchJWKS(bgCtx); err != nil {
 		logger.Error("failed to fetch JWKS: " + err.Error())
@@ -136,7 +136,7 @@ func Run() {
 		KeepAlive:             cfg.UpstreamKeepAlive,
 	}, cb)
 
-	// สร้าง publisher adapter — ตอนนี้ใช้ Redis Stream, เปลี่ยนเป็น Kafka ได้โดยไม่แตะ handler
+	// สร้าง publisher adapter. ตอนนี้ใช้ Redis Stream, เปลี่ยนเป็น Kafka ได้โดยไม่แตะ handler
 	pub := event.NewRedisStreamPublisher(redisClient)
 	upstreamCache := cache.NewUpstreamCache(cacheRedisClient, cfg.CacheDefaultTTL).WithMemory(cfg.CacheMemoryMB)
 	h := handler.New(ht, proxySvc, authSvc, pub, cfg.PublicURL).WithRateLimiter(c).WithUpstreamCache(upstreamCache)
@@ -165,10 +165,10 @@ func Run() {
 	e.Use(middleware.Recover())
 	e.Use(middleware.BodyLimit(cfg.MaxRequestBody))
 	// เปิดแค่ 2 header ที่ตรวจแล้วว่าไม่กระทบ upstream ในระบบเลย (Content-Type ทุกตัวที่เช็ค
-	// ตรงกับเนื้อหาจริง 100%) — เจตนาไม่เปิด XSSProtection/XFrameOptions/HSTS/CSP: มี resource
+	// ตรงกับเนื้อหาจริง 100%). เจตนาไม่เปิด XSSProtection/XFrameOptions/HSTS/CSP: มี resource
 	// เป็น static HTML ปนอยู่ (X-Frame-Options DENY จะพัง iframe embedding ถ้ามีคนใช้อยู่) และ
 	// ยังไม่ยืนยัน TLS termination topology ชัดเจน (HSTS ตั้งผิดที่ทำให้ client ต่อ HTTP ไม่ได้อีก
-	// เลยจนกว่า max-age หมด แก้คืนยาก) — ควรตั้งที่ ingress/LB แทนถ้าต้องการ
+	// เลยจนกว่า max-age หมด แก้คืนยาก). ควรตั้งที่ ingress/LB แทนถ้าต้องการ
 	e.Use(middleware.SecureWithConfig(middleware.SecureConfig{
 		ContentTypeNosniff: "nosniff",
 		ReferrerPolicy:     "strict-origin-when-cross-origin",
@@ -204,7 +204,7 @@ func Run() {
 		logger.Error("echo shutdown error: " + err.Error())
 	}
 
-	// Echo หยุดรับ request ใหม่แล้ว — รอ log/usage event ที่ค้างใน async publish queue ให้จบ
+	// Echo หยุดรับ request ใหม่แล้ว. รอ log/usage event ที่ค้างใน async publish queue ให้จบ
 	// ก่อนปิด Redis จริง ไม่งั้น event ที่ยัง publish ไม่เสร็จตอน SIGTERM จะหายไปเงียบๆ
 	drainCtx, drainCancel := context.WithTimeout(context.Background(), 10*time.Second)
 	h.DrainAsyncPublish(drainCtx)
@@ -247,7 +247,7 @@ func syncApiKeys(ctx context.Context, provider gwsync.SyncProvider, c *cache.Cac
 	}
 	fetchMs := time.Since(fetchStart).Milliseconds()
 
-	// batch ผ่าน Redis pipeline แทนยิงทีละตัว — ที่ 60k+ keys การยิงทีละคนช้าเกินรอบ polling
+	// batch ผ่าน Redis pipeline แทนยิงทีละตัว. ที่ 60k+ keys การยิงทีละคนช้าเกินรอบ polling
 	writeStart := time.Now()
 	failed, err := c.SetApiKeysBatch(ctx, keys)
 	writeMs := time.Since(writeStart).Milliseconds()
@@ -259,7 +259,7 @@ func syncApiKeys(ctx context.Context, provider gwsync.SyncProvider, c *cache.Cac
 	}
 
 	// Free pre-warm: this bulk pull already carries each key's Owner (packageId/
-	// enabled/verified/expiredAt), so feed it into userFreshnessCache too — no extra
+	// enabled/verified/expiredAt), so feed it into userFreshnessCache too. No extra
 	// control-plane calls, covers anyone with an api-key ahead of their first request.
 	for _, key := range keys {
 		if key.Owner != nil {

@@ -25,7 +25,7 @@ const (
 	readCount = 100
 	readBlock = 2 * time.Second
 
-	// flushSize/flushInterval — เขียนเมื่อครบจำนวนหรือครบเวลา แล้วแต่อะไรถึงก่อน
+	// flushSize/flushInterval. เขียนเมื่อครบจำนวนหรือครบเวลา แล้วแต่อะไรถึงก่อน
 	flushSize     = 100
 	flushInterval = time.Second
 
@@ -35,7 +35,7 @@ const (
 	writeTimeout    = 10 * time.Second
 )
 
-// LogStore is the sink the consumer writes to — narrow on purpose so a future
+// LogStore is the sink the consumer writes to. Narrow on purpose so a future
 // sink (OpenSearch, ClickHouse, …) can replace it without touching the gateway
 // or this consumer's Redis handling.
 type LogStore interface {
@@ -64,7 +64,7 @@ func NewLogConsumer(client *redis.Client, store LogStore, name string) *LogConsu
 
 // Start creates the consumer group if missing and runs the read and reclaim
 // loops in the background. ctx becomes those loops' lifetime, so it must outlive
-// the consumer — cancelling it stops consuming; Stop is the intended way to end.
+// the consumer. Cancelling it stops consuming; Stop is the intended way to end.
 func (c *LogConsumer) Start(ctx context.Context) error {
 	if err := c.client.XGroupCreateMkStream(ctx, streamUsageLog, consumerGroup, "0").Err(); err != nil &&
 		!strings.Contains(err.Error(), "BUSYGROUP") {
@@ -109,7 +109,7 @@ func (c *LogConsumer) stopping() bool {
 }
 
 // readLoop blocks on XREADGROUP and flushes whenever the batch is full or the
-// flush interval elapses — so a trickle of traffic still lands within a second.
+// flush interval elapses. So a trickle of traffic still lands within a second.
 func (c *LogConsumer) readLoop(ctx context.Context) {
 	batch := make([]*model.AccessLog, 0, flushSize)
 	ids := make([]string, 0, flushSize)
@@ -137,7 +137,7 @@ func (c *LogConsumer) readLoop(ctx context.Context) {
 		}).Result()
 		if err != nil {
 			if errors.Is(err, redis.Nil) || ctx.Err() != nil {
-				// ไม่มีข้อความในรอบ block นี้ — flush ของค้างแล้ววนต่อ
+				// ไม่มีข้อความในรอบ block นี้. Flush ของค้างแล้ววนต่อ
 				c.flush(ctx, &batch, &ids)
 				continue
 			}
@@ -224,7 +224,7 @@ func (c *LogConsumer) flush(ctx context.Context, batch *[]*model.AccessLog, ids 
 		return
 	}
 
-	// ctx ของตัวเอง — shutdown ที่ cancel ctx แม่ต้องไม่ทำให้ batch สุดท้ายหาย
+	// ctx ของตัวเอง. Shutdown ที่ cancel ctx แม่ต้องไม่ทำให้ batch สุดท้ายหาย
 	writeCtx, cancel := context.WithTimeout(context.WithoutCancel(ctx), writeTimeout)
 	defer cancel()
 
@@ -237,7 +237,7 @@ func (c *LogConsumer) flush(ctx context.Context, batch *[]*model.AccessLog, ids 
 		}
 	}
 	if err := c.client.XAck(writeCtx, streamUsageLog, consumerGroup, *ids...).Err(); err != nil {
-		// เขียนลง Mongo ไปแล้วแต่ ack ไม่ผ่าน — reclaim จะหยิบมาใหม่ อาจได้ log ซ้ำ
+		// เขียนลง Mongo ไปแล้วแต่ ack ไม่ผ่าน. Reclaim จะหยิบมาใหม่ อาจได้ log ซ้ำ
 		// ยอมรับได้เพราะ dashboard เป็นสถิติรวม ไม่ได้ใช้ตัดสินใจแบบ exactly-once
 		logger.Error("log consumer: ack failed: " + err.Error())
 	}
@@ -266,7 +266,7 @@ type streamLog struct {
 }
 
 // decodeMessage turns one stream entry into a document, or nil if it is not
-// something we can store — the caller still acks those so they do not pile up.
+// something we can store. The caller still acks those so they do not pile up.
 func decodeMessage(msg redis.XMessage) *model.AccessLog {
 	raw, ok := msg.Values["log"].(string)
 	if !ok {

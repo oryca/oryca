@@ -48,7 +48,7 @@ func (s *GatewaySourceService) List(ctx context.Context, params url.Values) ([]*
 	return s.repo.FindAll(ctx, params)
 }
 
-// ListAllActive returns every non-deleted source with no pagination cap — used for boot-time
+// ListAllActive returns every non-deleted source with no pagination cap. Used for boot-time
 // Redis resync where a partial page would silently leave some sources unsynced.
 func (s *GatewaySourceService) ListAllActive(ctx context.Context) ([]*model.GatewaySource, error) {
 	return s.repo.FindAllActive(ctx)

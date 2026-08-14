@@ -60,7 +60,7 @@ func TestFindBestMatch_ExactBeatsWildcard(t *testing.T) {
 	}
 }
 
-// TestFindBestMatch_ExactAndWildcardShareParentSegment — regression test: "/items" กับ
+// TestFindBestMatch_ExactAndWildcardShareParentSegment. Regression test: "/items" กับ
 // "/items/*" ต้องผ่าน node "items" เดียวกันเสมอ (ต่างจาก TestFindBestMatch_ExactBeatsWildcard
 // ที่ exact/wildcard อยู่คนละ node กันเลย) เคยเป็นบั๊กจริง: insertResource เขียน exact-match
 // ทับ wildcard (หรือกลับกัน) ที่ node เดียวกัน ตัวที่ insert ทีหลังชนะเสมอไม่ว่าจะถูกหรือผิด —

@@ -149,7 +149,7 @@ func IsCacheableRequest(method string) bool {
 }
 
 // MaxCacheableBodyBytes caps the body size of one Redis entry. A large blob blocks Redis, which
-// takes auth and rate limiting down with it, since they share the instance — so anything larger is
+// takes auth and rate limiting down with it, since they share the instance. So anything larger is
 // passed through instead. 10MB covers a mid-sized geo response; beyond that would want a gzip cache
 // backed by object storage.
 const MaxCacheableBodyBytes = 10 << 20 // 10MB
@@ -188,7 +188,7 @@ func (c *UpstreamCache) IsCacheableResponse(statusCode int, headers http.Header)
 	if strings.Contains(cc, "no-store") || strings.Contains(cc, "private") {
 		return false
 	}
-	// no tiles and no images — a URL unique per z/x/y means far too many Redis entries
+	// no tiles and no images. A URL unique per z/x/y means far too many Redis entries
 	if isImageOrTileContentType(headers.Get(contentTypeHeader)) {
 		return false
 	}
@@ -276,7 +276,7 @@ func (c *UpstreamCache) saveL0(key string, entry *UpstreamCacheEntry, age int) {
 	c.mem.set(key, l0, time.Duration(entry.TTLSec-age)*time.Second)
 }
 
-// headersToStripOnStore are headers the gateway sets itself, or that leak internals — not worth
+// headersToStripOnStore are headers the gateway sets itself, or that leak internals. Not worth
 // keeping in the entry
 var headersToStripOnStore = []string{"Age", "Date", "Via", "Server", "Vary"}
 

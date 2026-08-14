@@ -39,7 +39,7 @@ type gwServicePayload struct {
 
 // buildRateLimitMap turns the package-to-service links into the packageIDs list and the rate limit
 // map the gateway expects. packageLimits carries each package's own limit, used for any path that
-// does not set one of its own — set it once on the package, override it where a path needs
+// does not set one of its own. Set it once on the package, override it where a path needs
 // something different.
 func buildRateLimitMap(links []*model.PackageSvcLink, packageLimits map[string]*model.PackageRateLimit) ([]string, map[string]map[string]*gwRateLimitPayload) {
 	packageIDs := make([]string, 0, len(links))

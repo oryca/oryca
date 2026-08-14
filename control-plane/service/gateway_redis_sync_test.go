@@ -202,5 +202,5 @@ func TestGatewayRedisSync_Publish_SkipsPublisherWhenNil(t *testing.T) {
 	g, _ := newTestRedisSync(t, nil)
 	err := g.SyncService(context.Background(), testGatewayService(bson.NewObjectID()))
 	require.NoError(t, err)
-	// no publisher set — nothing to assert beyond "did not panic and Redis write succeeded"
+	// no publisher set. Nothing to assert beyond "did not panic and Redis write succeeded"
 }

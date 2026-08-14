@@ -47,7 +47,7 @@ type Config struct {
 	RootEmail    string
 	RootPassword string
 
-	// LogRetentionDays คือ TTL ของ collection access_logs — เปลี่ยนค่าแล้ว bootstrap collMod ให้เอง
+	// LogRetentionDays คือ TTL ของ collection access_logs. เปลี่ยนค่าแล้ว bootstrap collMod ให้เอง
 	LogRetentionDays  int
 	LogConsumerEnable bool
 }
@@ -105,7 +105,7 @@ func getEnv(key, defaultVal string) string {
 	return defaultVal
 }
 
-// getEnvInt อ่าน env เป็น int — ว่างหรือแปลงไม่ได้ใช้ค่า default
+// getEnvInt อ่าน env เป็น int. ว่างหรือแปลงไม่ได้ใช้ค่า default
 func getEnvInt(key string, defaultVal int) int {
 	val := os.Getenv(key)
 	if val == "" {

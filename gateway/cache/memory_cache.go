@@ -7,7 +7,7 @@ import (
 	"time"
 )
 
-// memoryCache คือ L0 ของ upstream cache — LRU ใน RAM ต่อ pod จำกัดด้วยขนาดรวม (bytes)
+// memoryCache คือ L0 ของ upstream cache. LRU ใน RAM ต่อ pod จำกัดด้วยขนาดรวม (bytes)
 // hit ที่นี่ไม่แตะ Redis/S3 เลย; entry หมดอายุตาม TTL เดียวกับชั้นล่างเสมอ ไม่ stale เกินของเดิม
 type memoryCache struct {
 	mu       sync.Mutex
@@ -32,7 +32,7 @@ func newMemoryCache(maxBytes int64) *memoryCache {
 	}
 }
 
-// get คืน (entry copy, age วินาที, hit) — copy Headers เสมอเพราะ caller mutate ได้ (strip hop-by-hop)
+// get คืน (entry copy, age วินาที, hit). Copy Headers เสมอเพราะ caller mutate ได้ (strip hop-by-hop)
 func (m *memoryCache) get(key string) (*UpstreamCacheEntry, int, bool) {
 	m.mu.Lock()
 	defer m.mu.Unlock()
@@ -60,7 +60,7 @@ func (m *memoryCache) get(key string) (*UpstreamCacheEntry, int, bool) {
 	return &cp, age, true
 }
 
-// set เก็บ entry ด้วยอายุที่เหลือ remaining — ของใหญ่เกินครึ่ง cap ไม่เก็บ (กันก้อนเดียวไล่ของร้อนทั้งหมดออก)
+// set เก็บ entry ด้วยอายุที่เหลือ remaining. ของใหญ่เกินครึ่ง cap ไม่เก็บ (กันก้อนเดียวไล่ของร้อนทั้งหมดออก)
 func (m *memoryCache) set(key string, entry UpstreamCacheEntry, remaining time.Duration) {
 	if remaining <= 0 {
 		return

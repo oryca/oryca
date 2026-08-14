@@ -27,7 +27,7 @@ func NewDistributedLock(client *redis.Client) *DistributedLock {
 	return &DistributedLock{client: client}
 }
 
-// Acquire จับ lock — คืน (token, true) ถ้าจับได้, ("", false) ถ้ามี pod อื่นถืออยู่
+// Acquire จับ lock. คืน (token, true) ถ้าจับได้, ("", false) ถ้ามี pod อื่นถืออยู่
 // ttl ต้องยาวพอครอบเวลา job ทั้งหมด (ถ้าหลุดก่อน job จบ pod อื่นอาจเริ่มทับได้)
 func (l *DistributedLock) Acquire(ctx context.Context, key string, ttl time.Duration) (string, bool, error) {
 	token := uuid.NewString()

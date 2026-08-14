@@ -91,7 +91,7 @@ func Setup(e *echo.Echo, infra Infra, svcs Services, internalCfg InternalConfig,
 	v1.GET("/", healthHandler.Check)
 	v1.GET("/health", healthHandler.Check)
 
-	// JWKS — register both paths: with and without /control-plane prefix (depends on ingress strip-prefix config)
+	// JWKS. Register both paths: with and without /control-plane prefix (depends on ingress strip-prefix config)
 	jwksHandler := func(c echo.Context) error {
 		keyPath := os.Getenv("ORYCA_API_JWT_PUBLIC_KEY")
 		pemBytes, err := os.ReadFile(keyPath)
@@ -130,7 +130,7 @@ func Setup(e *echo.Echo, infra Infra, svcs Services, internalCfg InternalConfig,
 	internalMW := middleware.InternalKeyMiddleware(internalCfg.Secret, internalCfg.SecretPrev)
 	v1.GET("/.well-known/jwks.json", jwksHandler, internalMW)
 
-	// Internal — X-Internal-Key
+	// Internal. X-Internal-Key
 	internalHandler := handler.NewInternalHandler(handler.InternalHandlerConfig{
 		ServiceRepo:    internalCfg.ServiceRepo,
 		SourceRepo:     internalCfg.SourceRepo,
@@ -149,7 +149,7 @@ func Setup(e *echo.Echo, infra Infra, svcs Services, internalCfg InternalConfig,
 	internal.POST("/resolve-names", internalHandler.ResolveNames)
 	internal.GET("/users/:id", internalHandler.GetUser)
 
-	// Auth — public
+	// Auth. Public
 	authHandler := handler.NewAuthHandler(handler.AuthHandlerDeps{
 		AuthSvc:        svcs.Auth,
 		SetPasswordSvc: svcs.SetPassword,
@@ -169,7 +169,7 @@ func Setup(e *echo.Echo, infra Infra, svcs Services, internalCfg InternalConfig,
 
 	auth.POST("/logout", authHandler.Logout, jwtMW.Authenticate)
 
-	// Account — GET profile also allows API key auth
+	// Account. GET profile also allows API key auth
 	accountHandler := handler.NewAccountHandler(svcs.Account)
 	v1.GET("/account"+routeProfile, accountHandler.GetProfile, middleware.AllowJWTOrApiKey(jwtMW, apiKeyMW))
 	account := v1.Group("/account", jwtMW.Authenticate)
@@ -181,7 +181,7 @@ func Setup(e *echo.Echo, infra Infra, svcs Services, internalCfg InternalConfig,
 	account.DELETE("/sessions/:sessionId", accountHandler.DeleteSession)
 	account.DELETE("/sessions", accountHandler.DeleteAllSessions)
 
-	// Configuration — GET public (optional auth), PATCH root only
+	// Configuration. GET public (optional auth), PATCH root only
 	configurationHandler := handler.NewConfigurationHandler(svcs.Config)
 	v1.GET("/configuration", configurationHandler.GetConfiguration, jwtMW.OptionalAuthenticate)
 
@@ -210,7 +210,7 @@ func Setup(e *echo.Echo, infra Infra, svcs Services, internalCfg InternalConfig,
 	users.PUT(routeUserID, userHandler.UpdateUser)
 	users.DELETE(routeUserID, userHandler.DeleteUser)
 	users.DELETE("", userHandler.BulkDeleteUsers)
-	// API Keys — GET by ID also allows API key auth
+	// API Keys. GET by ID also allows API key auth
 	apiKeyHandler := handler.NewApiKeyHandler(svcs.ApiKey, svcs.User)
 	apiKeys := v1.Group("/api-keys", jwtMW.Authenticate)
 	apiKeys.GET("", apiKeyHandler.GetApiKeys)
@@ -220,10 +220,10 @@ func Setup(e *echo.Echo, infra Infra, svcs Services, internalCfg InternalConfig,
 	apiKeys.DELETE(routeApiKeyID, apiKeyHandler.DeleteApiKey)
 	apiKeys.DELETE("", apiKeyHandler.BulkDeleteApiKeys)
 
-	// GET by ID — allow both JWT and API key auth
+	// GET by ID. Allow both JWT and API key auth
 	v1.GET("/api-keys"+routeApiKeyID, apiKeyHandler.GetApiKey, middleware.AllowJWTOrApiKey(jwtMW, apiKeyMW))
 
-	// Notifications — Stream ใช้ one-time ticket แทน JWT header (EventSource แนบ custom header ไม่ได้)
+	// Notifications. Stream ใช้ one-time ticket แทน JWT header (EventSource แนบ custom header ไม่ได้)
 	notificationHandler := handler.NewNotificationHandler(svcs.Notification)
 	notifications := v1.Group("/notifications", jwtMW.Authenticate)
 	notifications.GET("", notificationHandler.GetNotifications)
@@ -233,10 +233,10 @@ func Setup(e *echo.Echo, infra Infra, svcs Services, internalCfg InternalConfig,
 	notifications.DELETE(routeNotificationID, notificationHandler.DeleteNotification)
 	notifications.POST("/stream-ticket", notificationHandler.IssueStreamTicket)
 
-	// Stream — auth ผ่าน ticket query param เท่านั้น ไม่ผ่าน jwtMW
+	// Stream. Auth ผ่าน ticket query param เท่านั้น ไม่ผ่าน jwtMW
 	v1.GET("/notifications/stream", notificationHandler.Stream)
 
-	// Dashboard — every signed-in user sees their own traffic; root/admin see everything
+	// Dashboard. Every signed-in user sees their own traffic; root/admin see everything
 	dashboardHandler := handler.NewDashboardHandler(svcs.Dashboard)
 	dashboard := v1.Group("/dashboard", jwtMW.Authenticate)
 	dashboard.GET("/stats", dashboardHandler.GetStats)
@@ -266,7 +266,7 @@ func Setup(e *echo.Echo, infra Infra, svcs Services, internalCfg InternalConfig,
 	services.PUT(routeServiceID+"/spec", gatewaySpecHandler.UpsertSpec)
 	services.DELETE(routeServiceID+"/spec", gatewaySpecHandler.DeleteSpec)
 
-	// GET /spec/openapi — allow both JWT and API key (future: called by data-plane)
+	// GET /spec/openapi. Allow both JWT and API key (future: called by data-plane)
 	v1.GET(routeServicesBase+routeServiceID+"/spec/openapi", gatewaySpecHandler.GetOpenAPI, middleware.AllowJWTOrApiKey(jwtMW, apiKeyMW))
 
 	// Packages

@@ -20,7 +20,7 @@ type userFreshnessEntry struct {
 }
 
 // UserFreshnessCache is a per-pod, in-memory, fetch-on-demand cache of a user's
-// packageId/enabled/verified/expiredAt — deliberately not a full-preload structure like
+// packageId/enabled/verified/expiredAt. Deliberately not a full-preload structure like
 // trie.HybridTrie: at 60k+ users, and given the JWT-only baseline previously did zero
 // lookups per request, preloading everything would be a pure regression for no benefit.
 //
@@ -77,7 +77,7 @@ func (c *UserFreshnessCache) Get(userID string) (*gwsync.ApiKeyOwnerPayload, err
 }
 
 // scheduleRefresh launches a bounded, deduped background fetch for userID. Safe to call
-// far more often than the concurrency limit allows — excess callers either join an
+// far more often than the concurrency limit allows. Excess callers either join an
 // in-flight singleflight call for the same id, or queue on refreshSem.
 func (c *UserFreshnessCache) scheduleRefresh(userID string) {
 	logger.Go("user cache: refresh", func() {
@@ -96,7 +96,7 @@ func (c *UserFreshnessCache) scheduleRefresh(userID string) {
 	})
 }
 
-// Set writes a fresh entry directly from a real-time push event — no network round trip.
+// Set writes a fresh entry directly from a real-time push event. No network round trip.
 func (c *UserFreshnessCache) Set(userID string, user *gwsync.ApiKeyOwnerPayload) {
 	c.mu.Lock()
 	c.entries[userID] = &userFreshnessEntry{user: user, expiresAt: time.Now().Add(c.ttl)}

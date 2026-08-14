@@ -420,7 +420,7 @@ func (h *InternalHandler) GetTransformConfigs(c echo.Context) error {
 	return respondWithETag(c, data)
 }
 
-// GetUser returns the gateway-facing freshness snapshot for a single user — the
+// GetUser returns the gateway-facing freshness snapshot for a single user. The
 // on-demand lookup backing oryca-gateway's per-pod user cache. Deliberately a
 // single-ID lookup, not a bulk list: the gateway fetches lazily per-user on cache
 // miss, so this never needs to build a payload covering every user.

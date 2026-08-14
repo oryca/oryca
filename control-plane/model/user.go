@@ -127,7 +127,7 @@ type UserProfile struct {
 }
 
 // UserFreshnessCache is the gateway-facing snapshot of the authorization-relevant
-// fields that must never go stale — used by both the GET /internal/users/:id
+// fields that must never go stale. Used by both the GET /internal/users/:id
 // on-demand lookup and the SyncEventTypeUser real-time event. Role stays
 // out of scope here: it's baked into the JWT at login like PackageID always was,
 // but only PackageID/Enabled/Verified/ExpiredAt are the ones gateway must re-check.
@@ -140,7 +140,7 @@ type UserFreshnessCache struct {
 }
 
 // UserIDsPayload is the thin bulk-invalidation payload for AssignUsers/RemoveUsers/
-// BulkDelete — carries only affected ids, never full user data, since those operations
+// BulkDelete. Carries only affected ids, never full user data, since those operations
 // touch many users in one Mongo call and a full payload per user would reproduce the
 // event-storm bug already fixed for reload_services.
 type UserIDsPayload struct {

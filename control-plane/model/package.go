@@ -85,7 +85,7 @@ type PackageUpdate struct {
 	Properties  map[string]interface{} `json:"properties"`
 }
 
-// PackageSvcLink is stored in package_services collection — links a package to a gateway service with per-path policies
+// PackageSvcLink is stored in package_services collection. Links a package to a gateway service with per-path policies
 type PackageSvcLink struct {
 	ID        bson.ObjectID  `json:"id" bson:"_id,omitempty"`
 	PackageID bson.ObjectID  `json:"packageId" bson:"packageId"`

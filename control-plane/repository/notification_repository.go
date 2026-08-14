@@ -56,7 +56,7 @@ func IsDuplicateKeyError(err error) bool {
 }
 
 // buildFilter สร้าง filter มาตรฐานเดียวกับ repo อื่น (ผ่าน tool.GenerateFilterBson รองรับทุก field,
-// wildcard, exclude, multi-value) — userId เป็น base filter เสมอ กัน query param override เห็นของคนอื่น
+// wildcard, exclude, multi-value). UserId เป็น base filter เสมอ กัน query param override เห็นของคนอื่น
 func (r *NotificationRepository) buildFilter(userID bson.ObjectID, params url.Values) (bson.M, error) {
 	filter := bson.M{"userId": userID}
 
@@ -123,7 +123,7 @@ func (r *NotificationRepository) CountUnread(ctx context.Context, userID bson.Ob
 	return r.db.Collection(collectionNotification).CountDocuments(ctx, bson.M{"userId": userID, "read": false})
 }
 
-// MarkAsRead — กรองคู่ userId เสมอ กัน IDOR
+// MarkAsRead. กรองคู่ userId เสมอ กัน IDOR
 func (r *NotificationRepository) MarkAsRead(ctx context.Context, id bson.ObjectID, userID bson.ObjectID) error {
 	now := tool.NowUTC()
 	res, err := r.db.Collection(collectionNotification).UpdateOne(
@@ -150,7 +150,7 @@ func (r *NotificationRepository) MarkAllAsRead(ctx context.Context, userID bson.
 	return err
 }
 
-// Delete — กรองคู่ userId เสมอ กัน IDOR
+// Delete. กรองคู่ userId เสมอ กัน IDOR
 func (r *NotificationRepository) Delete(ctx context.Context, id bson.ObjectID, userID bson.ObjectID) error {
 	res, err := r.db.Collection(collectionNotification).DeleteOne(ctx, bson.M{"_id": id, "userId": userID})
 	if err != nil {

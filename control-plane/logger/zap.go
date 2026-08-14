@@ -24,17 +24,17 @@ func Init(serviceName string) {
 
 	base := []zap.Field{zap.String("hostname", hostname), zap.String("service", serviceName)}
 
-	// console logger — compact one-liner หรือ JSON ขึ้นกับ LOG_FORMAT
+	// console logger. Compact one-liner หรือ JSON ขึ้นกับ LOG_FORMAT
 	consoleCore := zapcore.NewCore(buildConsoleEncoder(isJSON), stdout, zap.NewAtomicLevelAt(zap.DebugLevel))
 	globalLogger = zap.New(consoleCore, zap.AddCaller(), zap.AddCallerSkip(1), zap.AddStacktrace(zapcore.ErrorLevel))
 
-	// structured logger — เขียน JSON ลง stdout (คนละ encoder กับ console) ให้ collector
+	// structured logger. เขียน JSON ลง stdout (คนละ encoder กับ console) ให้ collector
 	// ข้างนอกเก็บต่อได้; access log แบบอ่านง่ายยังออกทาง globalLogger เหมือนเดิม
 	if isJSON {
 		structCore := zapcore.NewCore(buildJSONEncoder(), stdout, zap.NewAtomicLevelAt(zap.InfoLevel))
 		structLogger = zap.New(structCore, zap.AddCaller(), zap.AddCallerSkip(1)).With(base...)
 	} else {
-		// console mode — console logger พิมพ์ครบอยู่แล้ว ไม่ต้องซ้ำ
+		// console mode. Console logger พิมพ์ครบอยู่แล้ว ไม่ต้องซ้ำ
 		structLogger = zap.NewNop()
 	}
 }
@@ -124,7 +124,7 @@ func RequestLog(status int, fields ...zap.Field) {
 }
 
 // EventLog writes a structured domain/audit event (เช่น token issued, session terminated) ไป pipeline
-// เดียวกับ RequestLog (JSON) — ใช้ field "event" แยกจาก HTTP access log เพื่อทำ analytics ต่อได้
+// เดียวกับ RequestLog (JSON). ใช้ field "event" แยกจาก HTTP access log เพื่อทำ analytics ต่อได้
 func EventLog(event string, fields ...zap.Field) {
 	if structLogger == nil {
 		return

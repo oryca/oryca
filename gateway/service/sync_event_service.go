@@ -12,7 +12,7 @@ import (
 )
 
 // SyncEventService applies real-time sync events pushed via an EventListener onto the
-// gateway's cache/trie. HTTP polling elsewhere is untouched — this only shortens the
+// gateway's cache/trie. HTTP polling elsewhere is untouched. This only shortens the
 // gap between a change on control-plane and the gateway picking it up; if the listener
 // never delivers anything (Redis unreachable), polling alone still catches everything
 // within its own interval.
@@ -46,7 +46,7 @@ func (s *SyncEventService) Start(ctx context.Context, listener gwsync.EventListe
 func (s *SyncEventService) Apply(ctx context.Context, ev gwsync.Event) {
 	switch ev.Type {
 	case gwsync.EventTypeReloadServices:
-		// thin signal — ดึงจริงผ่าน HTTP GET+ETag เดิม, dedup ผ่าน singleflight อยู่แล้วใน DoSync
+		// thin signal. ดึงจริงผ่าน HTTP GET+ETag เดิม, dedup ผ่าน singleflight อยู่แล้วใน DoSync
 		s.trie.DoSync(ctx)
 	case gwsync.EventTypeApiKey:
 		s.applyApiKey(ctx, ev)
@@ -73,7 +73,7 @@ func (s *SyncEventService) applyApiKey(ctx context.Context, ev gwsync.Event) {
 	}
 }
 
-// applyUser writes a full single-user freshness snapshot straight into the cache — no
+// applyUser writes a full single-user freshness snapshot straight into the cache. No
 // network round trip. Version-guarded like applyApiKey/applyBalance since this carries
 // real data that could otherwise overwrite a newer value with an older, out-of-order one.
 func (s *SyncEventService) applyUser(ev gwsync.Event) {
@@ -92,12 +92,12 @@ func (s *SyncEventService) applyUser(ev gwsync.Event) {
 	logger.Info("sync: event user: applied id=" + u.ID + " packageId=" + u.PackageID)
 }
 
-// applyUserInvalidate evicts and eagerly re-fetches exactly the affected ids — deliberately
+// applyUserInvalidate evicts and eagerly re-fetches exactly the affected ids. Deliberately
 // not lazy: this event comes from bulk operations (AssignUsers/RemoveUsers/BulkDelete)
 // whose affected-user count is bounded by one admin action, not by request volume, so
 // eager refresh here is safe and is what makes a package change take effect on a user's
 // very next request without needing to wait for a cache miss to trigger it. No version
-// guard — eviction+refetch is idempotent, a duplicate delivery just costs one extra fetch.
+// guard. Eviction+refetch is idempotent, a duplicate delivery just costs one extra fetch.
 func (s *SyncEventService) applyUserInvalidate(ev gwsync.Event) {
 	if s.userCache == nil {
 		return
@@ -112,7 +112,7 @@ func (s *SyncEventService) applyUserInvalidate(ev gwsync.Event) {
 }
 
 // eventVersionGuard drops out-of-order event deliveries per entity (in-memory,
-// per-pod — each pod only needs to protect its own cache writes).
+// per-pod. Each pod only needs to protect its own cache writes).
 type eventVersionGuard struct {
 	mu   sync.Mutex
 	seen map[string]int64

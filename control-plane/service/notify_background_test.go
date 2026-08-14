@@ -27,7 +27,7 @@ func TestWaitForBackgroundNotifications_WaitsForCompletion(t *testing.T) {
 	assert.True(t, finished.Load(), "expected background work to complete before Wait returns")
 }
 
-// TestWaitForBackgroundNotifications_ManyConcurrent จำลองโหลดสูง — หลาย goroutine พร้อมกัน
+// TestWaitForBackgroundNotifications_ManyConcurrent จำลองโหลดสูง. หลาย goroutine พร้อมกัน
 // ต้องรอครบทุกตัวจริงๆ ไม่ใช่แค่ตัวแรก/ตัวสุดท้าย
 func TestWaitForBackgroundNotifications_ManyConcurrent(t *testing.T) {
 	const n = 200
@@ -48,10 +48,10 @@ func TestWaitForBackgroundNotifications_ManyConcurrent(t *testing.T) {
 
 // TestWaitGroupWithDeadline_RespectsDeadline verifies the core wait-with-timeout logic gives up
 // once its own ctx deadline passes, instead of blocking forever on a slow/stuck goroutine
-// (important for graceful shutdown — must not hang the process past the orchestrator's grace period).
+// (important for graceful shutdown. Must not hang the process past the orchestrator's grace period).
 //
 // ใช้ *sync.WaitGroup ของตัวเอง (ไม่ใช่ notifyWG ตัว global) เพราะ test นี้ตั้งใจให้ timeout ก่อนงานจริง
-// จะเสร็จ ซึ่งจะทิ้ง monitor goroutine ค้างไว้พักหนึ่ง — ถ้าใช้ WaitGroup ร่วมกับ test อื่นจะไปชนกับ
+// จะเสร็จ ซึ่งจะทิ้ง monitor goroutine ค้างไว้พักหนึ่ง. ถ้าใช้ WaitGroup ร่วมกับ test อื่นจะไปชนกับ
 // Add() ของ test ถัดไปได้ (sync.WaitGroup ไม่รองรับการ reuse ข้าม "wave" ที่ยัง wait ค้างอยู่)
 func TestWaitGroupWithDeadline_RespectsDeadline(t *testing.T) {
 	var wg sync.WaitGroup

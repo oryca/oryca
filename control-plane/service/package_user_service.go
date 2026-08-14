@@ -45,7 +45,7 @@ func NewPackageUserService(userRepo packageUserRepo, packageRepo packageFinder, 
 }
 
 // publishUserInvalidate fires exactly one thin invalidate event per bulk call, carrying
-// the affected ids — never one event per user, which would reproduce the event-storm
+// the affected ids. Never one event per user, which would reproduce the event-storm
 // bug already fixed for reload_services (a groupID can expand to hundreds of users in
 // one BulkSetPackageID/BulkUnsetPackageID call).
 func (s *PackageUserService) publishUserInvalidate(ids []bson.ObjectID) {

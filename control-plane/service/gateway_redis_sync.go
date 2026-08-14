@@ -59,9 +59,9 @@ type gatewaySourcePayload struct {
 	Body        string                  `json:"body,omitempty"`
 }
 
-// gatewaySyncPublisher is the narrow slice of GatewayEventPublisher this needs — the
+// gatewaySyncPublisher is the narrow slice of GatewayEventPublisher this needs. The
 // real-time reload_services thin signal, alongside the existing Redis Pub/Sub publish
-// below (which the gateway has never subscribed to — see g.publish).
+// below (which the gateway has never subscribed to. See g.publish).
 type gatewaySyncPublisher interface {
 	Publish(eventType string, payload any)
 }
@@ -133,7 +133,7 @@ func (g *GatewayRedisSync) SyncService(ctx context.Context, svc *model.GatewaySe
 	return g.writeServicePayload(ctx, buildServicePayload(svc, nil))
 }
 
-// SyncServicePackageIDs writes the service's package links straight from svc — it does not
+// SyncServicePackageIDs writes the service's package links straight from svc. It does not
 // read back an existing Redis entry first, so it works even if this service was never synced
 // at boot (e.g. missed by pagination) or Redis was flushed since.
 func (g *GatewayRedisSync) SyncServicePackageIDs(ctx context.Context, svc *model.GatewayService, packageIDs []string) error {
@@ -213,7 +213,7 @@ func (g *GatewayRedisSync) publish(ctx context.Context, msg syncMessage) error {
 	if err != nil {
 		return err
 	}
-	// thin signal — no payload, gateway re-pulls services/sources itself via its
+	// thin signal. No payload, gateway re-pulls services/sources itself via its
 	// existing HTTP+ETag path (see oryca-gateway's SyncEventService.Apply)
 	if g.publisher != nil {
 		g.publisher.Publish(SyncEventTypeReloadServices, nil)

@@ -89,7 +89,7 @@ type ProxyLogFields struct {
 	UpstreamMs     int64
 	CacheStatus    string // "HIT" | "MISS" | "BYPASS"
 
-	// step-level timing breakdown ฝั่ง gateway เอง (ms) — ไม่รวม UpstreamMs
+	// step-level timing breakdown ฝั่ง gateway เอง (ms). ไม่รวม UpstreamMs
 	// ไม่ถูก serialize ลง log แต่เก็บไว้ให้ profile ตอน debug ผ่าน console ได้
 	AuthMs         int64
 	RateLimitMs    int64

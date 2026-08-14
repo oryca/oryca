@@ -7,7 +7,7 @@ import (
 	"github.com/oryca/oryca/gateway/cache"
 )
 
-// rateLimiter interface ที่ test ใช้ — เหมือนกับที่ handler จะเรียก
+// rateLimiter interface ที่ test ใช้. เหมือนกับที่ handler จะเรียก
 type rateLimiter interface {
 	Allow(userID, packageID, serviceID, resourcePath, memberHint string, tiers []cache.RateLimitTier) (allowed bool, limit int, remaining int, retryAfterSec int, resetSec int)
 }
@@ -199,7 +199,7 @@ func TestAllow_ResetSec_AccurateOnDeny(t *testing.T) {
 	rl.Allow("u1", "pkg1", "svc1", "/data", "", tiers)
 
 	_, _, _, retryAfter, resetSec := rl.Allow("u1", "pkg1", "svc1", "/data", "", tiers)
-	// resetSec ต้องอยู่ใน [1, 10] — ไม่ใช่ worst-case เต็ม window
+	// resetSec ต้องอยู่ใน [1, 10]. ไม่ใช่ worst-case เต็ม window
 	if resetSec < 1 || resetSec > 10 {
 		t.Errorf("resetSec should be in [1,10] got %d", resetSec)
 	}

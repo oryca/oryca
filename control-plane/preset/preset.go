@@ -97,7 +97,7 @@ func (p Preset) Rewrite(sourceURLs []string) []model.TransformRule {
 
 // upstreamRoots drops any address that sits under another one in the list.
 //
-// A service usually points at several addresses under the same server — the
+// A service usually points at several addresses under the same server. The
 // landing page, /collections, and so on. Rewriting each of them separately would
 // map https://host/api/collections onto the gateway root and lose the path.
 // Rewriting the shortest one is enough: everything below it keeps its tail.

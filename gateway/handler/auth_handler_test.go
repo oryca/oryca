@@ -23,7 +23,7 @@ func testEnabledUser(packageID string) *model.User {
 }
 
 // TestCheckUserStatus_PackageAccess covers the fail-closed policy: a service must be
-// linked to at least one package to be callable — an empty PackageIDs list denies
+// linked to at least one package to be callable. An empty PackageIDs list denies
 // everyone rather than allowing everyone. Regression guard for the PACKAGE_ACCESS_DENIED
 // bypass found in production (services with zero package links were reachable by any
 // authenticated user regardless of their actual package).

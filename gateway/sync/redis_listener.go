@@ -53,7 +53,7 @@ func (l *RedisListener) consumeLoop(ctx context.Context) {
 		if ctx.Err() != nil {
 			return
 		}
-		// channel ปิดโดยไม่ได้ shutdown — รอสั้นๆ แล้ว subscribe ใหม่ กัน busy loop
+		// channel ปิดโดยไม่ได้ shutdown. รอสั้นๆ แล้ว subscribe ใหม่ กัน busy loop
 		logger.Error("sync: redis listener: subscription closed, resubscribing")
 		select {
 		case <-ctx.Done():
@@ -72,7 +72,7 @@ func (l *RedisListener) handleMessage(body []byte) {
 	select {
 	case l.events <- ev:
 	default:
-		// applier ตามไม่ทัน — ข้าม event นี้ TTL polling จะ sync ให้เองในรอบถัดไป (ดู main.go)
+		// applier ตามไม่ทัน. ข้าม event นี้ TTL polling จะ sync ให้เองในรอบถัดไป (ดู main.go)
 		logger.Error("sync: redis listener: event channel full, dropping event type=" + string(ev.Type))
 	}
 }

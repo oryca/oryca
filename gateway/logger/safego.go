@@ -7,7 +7,7 @@ import (
 )
 
 // Go runs fn in a new goroutine, recovering any panic so it can't crash the whole
-// process — a single bad request/job must not take every other goroutine down with it.
+// process. A single bad request/job must not take every other goroutine down with it.
 func Go(name string, fn func()) {
 	go func() {
 		defer recoverOnce(name)
@@ -17,7 +17,7 @@ func Go(name string, fn func()) {
 
 // GoLoop runs fn in a new goroutine expected to loop until some external signal (e.g. a
 // cancelled context) makes it return normally. If fn panics, it's recovered, logged, and
-// restarted after a short backoff instead of silently dying on the first panic — a bug
+// restarted after a short backoff instead of silently dying on the first panic. A bug
 // triggered by one bad sync cycle shouldn't permanently stop that sync going forward.
 func GoLoop(name string, fn func()) {
 	go func() {

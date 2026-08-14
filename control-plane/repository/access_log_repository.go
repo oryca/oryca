@@ -34,7 +34,7 @@ func NewAccessLogRepository(db *mongo.Database) *AccessLogRepository {
 
 // EnsureIndexes creates the query indexes and the TTL index that expires old
 // logs. Mongo refuses to change expireAfterSeconds through CreateOne, so a
-// changed retention is applied with collMod instead — otherwise editing the env
+// changed retention is applied with collMod instead. Otherwise editing the env
 // var would silently keep the old retention forever.
 func (r *AccessLogRepository) EnsureIndexes(ctx context.Context, retention time.Duration) error {
 	coll := r.db.Collection(collectionAccessLog)
@@ -94,7 +94,7 @@ func (r *AccessLogRepository) InsertMany(ctx context.Context, docs []*model.Acce
 }
 
 // buildFilter turns a query into a Mongo filter. Callers must have already
-// applied scoping to q.UserID — this function trusts what it is given.
+// applied scoping to q.UserID. This function trusts what it is given.
 func buildAccessLogFilter(q model.AccessLogQuery) bson.M {
 	timeFilter := bson.M{}
 	if !q.From.IsZero() {

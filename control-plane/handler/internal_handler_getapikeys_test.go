@@ -14,7 +14,7 @@ import (
 )
 
 // stubInternalApiKeyRepo/stubInternalUserRepo let the test assert exactly how many
-// times each repo method is called — the whole point of the fix being tested is
+// times each repo method is called. The whole point of the fix being tested is
 // that owners are fetched in one FindByIDs call instead of one FindByID per key.
 type stubInternalApiKeyRepo struct {
 	keys []*model.ApiKey
@@ -79,7 +79,7 @@ func TestGetApiKeys_BatchesOwnerLookup(t *testing.T) {
 	ownerB := bson.NewObjectID()
 	pkgA := bson.NewObjectID()
 
-	// three keys, two share the same owner — dedup should mean FindByIDs is
+	// three keys, two share the same owner. Dedup should mean FindByIDs is
 	// called with exactly 2 unique ids, not 3.
 	keys := []*model.ApiKey{
 		{ID: bson.NewObjectID(), ApiKey: "key-1", OwnerBy: &ownerA},

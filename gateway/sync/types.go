@@ -46,7 +46,7 @@ type SourcePayload struct {
 }
 
 // ApiKeyOwnerPayload is also reused as the gateway-facing user-freshness snapshot
-// (GET /internal/users/:id response) — control-plane's model.UserFreshnessCache is a
+// (GET /internal/users/:id response). Control-plane's model.UserFreshnessCache is a
 // subset of these same fields (no Role), which unmarshal cleanly as zero values here
 // since auth overlay only reads PackageID/Verified/Enabled/ExpiredAt.
 type ApiKeyOwnerPayload struct {
@@ -58,8 +58,8 @@ type ApiKeyOwnerPayload struct {
 	ExpiredAt *time.Time `json:"expiredAt,omitempty"`
 }
 
-// UserInvalidatePayload is the thin bulk-invalidation signal for EventTypeUserInvalidate
-// — ids only, no data, mirroring control-plane's model.UserIDsPayload.
+// UserInvalidatePayload is the thin bulk-invalidation signal for EventTypeUserInvalidate.
+// Ids only, no data, mirroring control-plane's model.UserIDsPayload.
 type UserInvalidatePayload struct {
 	UserIDs []string `json:"userIds"`
 }

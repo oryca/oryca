@@ -19,7 +19,7 @@ func NewRedisStreamPublisher(client *redis.Client) Publisher {
 }
 
 // PublishLog ส่ง structured log JSON ลง stream:usage-log
-// MaxLen 500_000 เพราะรับทุก request — ปรับตาม memory Redis
+// MaxLen 500_000 เพราะรับทุก request. ปรับตาม memory Redis
 func (p *RedisStreamPublisher) PublishLog(ctx context.Context, body []byte) error {
 	return p.client.XAdd(ctx, &redis.XAddArgs{
 		Stream: streamUsageLog,

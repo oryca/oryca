@@ -13,7 +13,7 @@ import (
 	"github.com/stretchr/testify/require"
 )
 
-// fakeUserProvider implements gwsync.SyncProvider — only GetUser is exercised by these
+// fakeUserProvider implements gwsync.SyncProvider. Only GetUser is exercised by these
 // tests. Tracks per-userID call counts and concurrent-in-flight count, and signals a
 // channel after each call completes so tests can wait for background work deterministically
 // instead of sleeping and hoping.
@@ -240,7 +240,7 @@ func TestUserFreshnessCache_InvalidateAndRefresh_EagerlyRefetches(t *testing.T) 
 
 	c.InvalidateAndRefresh([]string{"u1", "u2"})
 
-	// immediately after invalidate, entries are gone — Get would fail open if called now
+	// immediately after invalidate, entries are gone. Get would fail open if called now
 	waitDone(t, provider, 2)
 
 	// The provider signals done before the cache stores what it fetched, so wait
@@ -260,7 +260,7 @@ func TestUserFreshnessCache_NegativeCaching_ErrorsCachedTemporarily(t *testing.T
 	c.Get("client-id-not-a-user") // triggers first fetch attempt
 	waitDone(t, provider, 1)
 
-	// repeated Get calls within TTL must not trigger another provider call — the
+	// repeated Get calls within TTL must not trigger another provider call. The
 	// failure itself is cached (protects against a permanently-404 user id
 	// hammering control-plane on every request).
 	for i := 0; i < 5; i++ {

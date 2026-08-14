@@ -254,7 +254,7 @@ func (s *UserService) Delete(ctx context.Context, id bson.ObjectID, forever bool
 		return deleteErr
 	}
 
-	// Synthesize the payload rather than refetching — a deleted user is filtered out of
+	// Synthesize the payload rather than refetching. A deleted user is filtered out of
 	// FindByID entirely, and SoftDelete never touches the enabled field, so a refetch
 	// would give the gateway stale "still enabled" data. This is what actually revokes
 	// gateway access on delete.
@@ -283,7 +283,7 @@ func (s *UserService) BulkDelete(ctx context.Context, body *model.UserBulkDelete
 		return deleteErr
 	}
 
-	// One thin invalidate event per call, never one per user — a group-driven bulk
+	// One thin invalidate event per call, never one per user. A group-driven bulk
 	// delete can touch hundreds of ids in a single Mongo call, and publishing per-id
 	// here would reproduce the event-storm bug already fixed for reload_services.
 	if s.publisher != nil {

@@ -57,13 +57,13 @@ func TestGetServices_304NotModified(t *testing.T) {
 	p := newTestProvider(srv)
 	ctx := context.Background()
 
-	// first call — gets data
+	// first call. Gets data
 	r1, err := p.GetServices(ctx)
 	if err != nil || len(r1) != 1 {
 		t.Fatalf("first call failed: %v %v", r1, err)
 	}
 
-	// second call — 304, nil returned
+	// second call. 304, nil returned
 	r2, err := p.GetServices(ctx)
 	if err != nil {
 		t.Fatalf("second call error: %v", err)
@@ -89,7 +89,7 @@ func TestGetServices_UnauthorizedNoRetry(t *testing.T) {
 	if err == nil {
 		t.Fatal("expected error on 401")
 	}
-	// 401 is not a transient error — retry should still happen (3 attempts) since it's not circuit-open
+	// 401 is not a transient error. Retry should still happen (3 attempts) since it's not circuit-open
 	if calls > 3 {
 		t.Errorf("expected at most 3 calls, got %d", calls)
 	}

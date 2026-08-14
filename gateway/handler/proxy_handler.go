@@ -83,9 +83,9 @@ type Handler struct {
 	upstreamCache *cache.UpstreamCache // nil = upstream caching disabled
 	sf            singleflight.Group
 
-	// asyncPublishCh — queue of publish work that must never block the request path
+	// asyncPublishCh. Queue of publish work that must never block the request path
 	asyncPublishCh chan func()
-	// pendingPublish counts queued work — shutdown must drain it before closing Redis, or events vanish
+	// pendingPublish counts queued work. Shutdown must drain it before closing Redis, or events vanish
 	pendingPublish sync.WaitGroup
 }
 
@@ -110,7 +110,7 @@ func (h *Handler) runAsyncPublishWorker() {
 	}
 }
 
-// runPublishJob recovers a panic per-job instead of per-worker — one bad job must not
+// runPublishJob recovers a panic per-job instead of per-worker. One bad job must not
 // kill the whole worker (and, unrecovered, the whole process) or leave pendingPublish
 // permanently off by one.
 func runPublishJob(job func()) {
@@ -122,7 +122,7 @@ func runPublishJob(job func()) {
 	job()
 }
 
-// enqueueAsyncPublish queues work without blocking — a full queue drops and logs instead of holding the request
+// enqueueAsyncPublish queues work without blocking. A full queue drops and logs instead of holding the request
 func (h *Handler) enqueueAsyncPublish(job func()) {
 	h.pendingPublish.Add(1)
 	wrapped := func() {
@@ -152,7 +152,7 @@ func (h *Handler) DrainAsyncPublish(ctx context.Context) {
 	}
 }
 
-// WithRateLimiter injects a RateLimiter into the Handler (optional — nil disables rate limiting)
+// WithRateLimiter injects a RateLimiter into the Handler (optional. Nil disables rate limiting)
 func (h *Handler) WithRateLimiter(rl RateLimiter) *Handler {
 	h.rateLimiter = rl
 	return h
@@ -168,7 +168,7 @@ func (h *Handler) Proxy(c echo.Context) error {
 	req := c.Request()
 	handlerStart := timeNow()
 
-	// log fields — filled in along the way, flushed in the defer
+	// log fields. Filled in along the way, flushed in the defer
 	var (
 		requestID      string
 		userID         string
@@ -182,7 +182,7 @@ func (h *Handler) Proxy(c echo.Context) error {
 		upstreamMs     int64
 		cacheStatus    = "BYPASS" // BYPASS=not eligible for cache, MISS=eligible but no hit, HIT=served from cache
 
-		// step-level timing — shows where the duration went once upstream is subtracted
+		// step-level timing. Shows where the duration went once upstream is subtracted
 		authMs         int64
 		rateLimitMs    int64
 		cacheCheckMs   int64
@@ -221,7 +221,7 @@ func (h *Handler) Proxy(c echo.Context) error {
 		}
 		logger.ProxyLog(logFields)
 
-		// publish to stream:usage-log — async, because retry-sleep must not land in the TotalMs already computed
+		// publish to stream:usage-log. Async, because retry-sleep must not land in the TotalMs already computed
 		if logJSON, err := logger.BuildProxyLogJSON(logFields); err == nil {
 			h.enqueueAsyncPublish(func() {
 				h.publishWithRetry("publish usage-log failed", func(ctx context.Context) error {
@@ -231,7 +231,7 @@ func (h *Handler) Proxy(c echo.Context) error {
 		}
 	}()
 
-	// Step 1: Trie lookup — strip /gateway/api/resources prefix
+	// trie lookup. Strip /gateway/api/resources prefix
 	triePath := strings.TrimPrefix(req.URL.Path, resourcesBasePath)
 	if triePath == "" {
 		triePath = "/"
@@ -250,7 +250,6 @@ func (h *Handler) Proxy(c echo.Context) error {
 	resource := match.Resource
 	serviceID = svc.ID
 
-	// Step 2: Service validation
 	if !svc.Enabled {
 		statusCode = http.StatusServiceUnavailable
 		return c.JSON(statusCode, model.Exception{
@@ -269,7 +268,7 @@ func (h *Handler) Proxy(c echo.Context) error {
 		})
 	}
 
-	// Step 3-6: Auth + user validation (skipped when the service is public)
+	// auth + user validation (skipped when the service is public)
 	authStart := timeNow()
 	var user *model.User
 	if !svc.IsPublic {
@@ -289,7 +288,7 @@ func (h *Handler) Proxy(c echo.Context) error {
 	}
 	apiKeyID, _ = c.Get("apiKeyId").(string)
 
-	// Request ID — needed before the rate limit, as the unique member in the sliding window
+	// Request ID. Needed before the rate limit, as the unique member in the sliding window
 	requestID = req.Header.Get(headerRequestID)
 	requestID = strings.Map(func(r rune) rune {
 		if r == '\r' || r == '\n' {
@@ -302,7 +301,7 @@ func (h *Handler) Proxy(c echo.Context) error {
 	}
 	c.Response().Header().Set(headerRequestID, requestID)
 
-	// Step 6.5: Rate limit check — authenticated users use packageID tier; public services use "public" tier keyed by IP
+	// rate limit check. Authenticated users use packageID tier; public services use "public" tier keyed by IP
 	rateLimitStart := timeNow()
 	if h.rateLimiter != nil {
 		var rateLimitID, rateLimitPackage string
@@ -339,7 +338,6 @@ func (h *Handler) Proxy(c echo.Context) error {
 	}
 	rateLimitMs = timeNow().Sub(rateLimitStart).Milliseconds()
 
-	// Step 7: Source resolution
 	source, ok := h.hybridTrie.GetSource(resource.SourceAlias)
 	if !ok || source == nil {
 		statusCode = http.StatusServiceUnavailable
@@ -350,7 +348,7 @@ func (h *Handler) Proxy(c echo.Context) error {
 		})
 	}
 
-	// Static source — return the body straight from config, no proxying
+	// Static source. Return the body straight from config, no proxying
 	if source.Type == "static" {
 		if source.Body == "" {
 			statusCode = http.StatusServiceUnavailable
@@ -372,10 +370,10 @@ func (h *Handler) Proxy(c echo.Context) error {
 
 	upstreamURL = service.BuildUpstreamURL(source, resource, match.PathParams, match.Remaining, req.URL.RawQuery)
 
-	// Step 7.5: Upstream cache check (GET/HEAD only) — cacheKey is reused by singleflight at Step 8
+	// upstream cache check (GET/HEAD only). CacheKey is reused by singleflight at Step 8
 	cd := parseCacheDirective(req.Header.Get(headerCacheControl))
 	var cacheKey string
-	// Range requests bypass cache and singleflight — the key ignores Range, so it would coalesce the
+	// Range requests bypass cache and singleflight. The key ignores Range, so it would coalesce the
 	// wrong span (the PMTiles case)
 	if h.upstreamCache != nil && cache.IsCacheableRequest(req.Method) && req.Header.Get("Range") == "" {
 		cacheKey = cache.UpstreamCacheKey(req.Method, upstreamURL)
@@ -389,13 +387,13 @@ func (h *Handler) Proxy(c echo.Context) error {
 			if hit {
 				// client max-age directive: an entry older than the client accepts counts as a miss
 				if cd.maxAge < 0 || entryAge <= cd.maxAge {
-					// how much freshness is left — RFC 9111 §5.1 — used by both the 304 and the normal branch
+					// how much freshness is left. RFC 9111 §5.1. Used by both the 304 and the normal branch
 					remaining := entry.TTLSec - entryAge
 					if remaining < 0 {
 						remaining = 0
 					}
 
-					// answer 304 first — the client receives not one byte of the body (RFC 9110 §15.4.5)
+					// answer 304 first. The client receives not one byte of the body (RFC 9110 §15.4.5)
 					if req.Header.Get(headerIfNoneMatch) != "" && req.Header.Get(headerIfNoneMatch) == entry.ETag {
 						statusCode = http.StatusNotModified
 						upstreamStatus = entry.StatusCode
@@ -440,7 +438,7 @@ func (h *Handler) Proxy(c echo.Context) error {
 						}
 					}
 
-					// gzip only on the way out — the cache always holds it raw; responseSize = bytes before compression
+					// gzip only on the way out. The cache always holds it raw; responseSize = bytes before compression
 					if shouldGzipResponse(req, c.Response().Header(), entry.StatusCode, int64(len(hitBody))) {
 						prepareGzipHeaders(c.Response().Header())
 						c.Response().WriteHeader(entry.StatusCode)
@@ -458,7 +456,7 @@ func (h *Handler) Proxy(c echo.Context) error {
 		}
 	}
 
-	// Step 8: Proxy via circuit breaker — singleflight can only coalesce when cacheKey != "" (GET/HEAD)
+	// proxy via circuit breaker. Singleflight can only coalesce when cacheKey != "" (GET/HEAD)
 	// look the transform config up once, for both the buffer-mode decision and the apply
 	tcfg := h.hybridTrie.FindTransformConfig(svc.ID, resource.Path, req.Method)
 
@@ -469,7 +467,7 @@ func (h *Handler) Proxy(c echo.Context) error {
 			return h.fetchFromUpstream(req, upstreamURL, clientIP, requestID, source, maxBufferedUpstreamBytes), nil
 		})
 		ur = v.(upstreamResult)
-		// a stream has one reader — a follower that missed the claim refetches as a plain stream (large
+		// a stream has one reader. A follower that missed the claim refetches as a plain stream (large
 		// bodies, which are rare)
 		if ur.stream != nil && !ur.claimStream() {
 			ur = h.fetchFromUpstream(req, upstreamURL, clientIP, requestID, source, 0)
@@ -478,17 +476,17 @@ func (h *Handler) Proxy(c echo.Context) error {
 			}
 		}
 	} else if tcfg != nil {
-		// a transform needs the whole body — buffer it, with a ceiling
+		// a transform needs the whole body. Buffer it, with a ceiling
 		ur = h.fetchFromUpstream(req, upstreamURL, clientIP, requestID, source, maxBufferedUpstreamBytes)
 		ur.claimStream()
 	} else {
-		// no cache and no transform — stream straight through, memory flat whatever the response size
+		// no cache and no transform. Stream straight through, memory flat whatever the response size
 		ur = h.fetchFromUpstream(req, upstreamURL, clientIP, requestID, source, 0)
 		ur.claimStream()
 	}
 	upstreamMs = ur.ms
 	bodyReadMs = ur.readMs
-	// singleflightMs = this step minus upstreamMs/bodyReadMs — what is left is sf.Do/CB overhead, or a
+	// singleflightMs = this step minus upstreamMs/bodyReadMs. What is left is sf.Do/CB overhead, or a
 	// follower waiting on the leader
 	singleflightMs = timeNow().Sub(proxyCallStart).Milliseconds() - upstreamMs - bodyReadMs
 	if singleflightMs < 0 {
@@ -512,12 +510,12 @@ func (h *Handler) Proxy(c echo.Context) error {
 		})
 	}
 
-	// Step 9: Process and write response — postUpstreamMs covers transform + cache.Set up to WriteHeader
+	// process and write response. PostUpstreamMs covers transform + cache.Set up to WriteHeader
 	postUpstreamStart := timeNow()
 	statusCode = ur.statusCode
 	upstreamStatus = ur.statusCode
 
-	// ur.headers is shared through singleflight — do not mutate it (the strip happened in fetchFromUpstream)
+	// ur.headers is shared through singleflight. Do not mutate it (the strip happened in fetchFromUpstream)
 	for k, vv := range ur.headers {
 		for _, v := range vv {
 			copyUpstreamHeader(c.Response().Header(), k, v)
@@ -527,7 +525,7 @@ func (h *Handler) Proxy(c echo.Context) error {
 	c.Response().Header().Set("X-Upstream-Latency-Ms", strconv.FormatInt(upstreamMs, 10))
 	c.Response().Header().Set(headerXCache, "MISS")
 
-	// only transform a fully buffered text body — stream mode and binary always skip
+	// only transform a fully buffered text body. Stream mode and binary always skip
 	rawBody := ur.body
 	if ur.stream == nil && ur.statusCode >= 200 && ur.statusCode < 300 {
 		if tcfg != nil && transformableCT(ur.headers.Get("Content-Type")) {
@@ -541,7 +539,7 @@ func (h *Handler) Proxy(c echo.Context) error {
 				for k, v := range result.Headers {
 					c.Response().Header().Set(k, v)
 				}
-				// body size changed after transform — drop upstream Content-Length so nginx doesn't see mismatch
+				// body size changed after transform. Drop upstream Content-Length so nginx doesn't see mismatch
 				c.Response().Header().Del("Content-Length")
 				rawBody = result.Body
 			} else if err != nil {
@@ -550,7 +548,7 @@ func (h *Handler) Proxy(c echo.Context) error {
 		}
 	}
 
-	// store in the cache — stream mode, or a body over the ceiling, is not stored (one large blob
+	// store in the cache. Stream mode, or a body over the ceiling, is not stored (one large blob
 	// blocks all of Redis)
 	// varyBlocksCache: the upstream really does content negotiation (a Vary beyond Accept-Encoding),
 	// so store nothing rather than risk serving the wrong variant to another client
@@ -571,7 +569,7 @@ func (h *Handler) Proxy(c echo.Context) error {
 		if setErr := h.upstreamCache.Set(req.Context(), cacheKey, entry, ttl); setErr != nil {
 			logger.Info("upstream cache set failed: " + setErr.Error())
 		} else {
-			// stored — tell the client this entry is fresh from origin, and how long it stays cacheable
+			// stored. Tell the client this entry is fresh from origin, and how long it stays cacheable
 			c.Response().Header().Set("Age", "0")
 			if c.Response().Header().Get(headerCacheControl) == "" {
 				c.Response().Header().Set(headerCacheControl, publicCacheControl(int(ttl.Seconds())))
@@ -580,7 +578,7 @@ func (h *Handler) Proxy(c echo.Context) error {
 	}
 	postUpstreamMs = timeNow().Sub(postUpstreamStart).Milliseconds()
 
-	// gzip only for text content types the client accepts — n always comes back as bytes before
+	// gzip only for text content types the client accepts. N always comes back as bytes before
 	// compression (the log uses it)
 	bodyLen := int64(len(rawBody))
 	if ur.stream != nil {
@@ -594,7 +592,7 @@ func (h *Handler) Proxy(c echo.Context) error {
 	var n int64
 	switch {
 	case ur.stream != nil:
-		// write the buffered prefix (if any), then stream the rest — memory stays flat
+		// write the buffered prefix (if any), then stream the rest. Memory stays flat
 		n = writeStreamedBody(c, rawBody, ur.stream, useGzip)
 	case useGzip:
 		n = writeGzip(c, rawBody)
@@ -651,7 +649,7 @@ func (h *Handler) resolvedOrigin(req *http.Request) string {
 	return service.ResolvedProto(req) + "://" + service.ResolvedHost(req)
 }
 
-// applyTransform runs the transform engine over rawBody — returns nil when there is no config, or nothing matches
+// applyTransform runs the transform engine over rawBody. Returns nil when there is no config, or nothing matches
 func (h *Handler) applyTransform(rawBody []byte, req *http.Request, svcID, basePath, resourcePath, method string) (body []byte, headers map[string]string) {
 	tcfg := h.hybridTrie.FindTransformConfig(svcID, resourcePath, method)
 	if tcfg == nil {
@@ -673,7 +671,7 @@ func (h *Handler) applyTransform(rawBody []byte, req *http.Request, svcID, baseP
 	return result.Body, result.Headers
 }
 
-// maxBufferedUpstreamBytes is the RAM ceiling for buffering to cache or transform — past it, stream
+// maxBufferedUpstreamBytes is the RAM ceiling for buffering to cache or transform. Past it, stream
 // straight to the client instead
 const maxBufferedUpstreamBytes = 32 << 20 // 32MB
 
@@ -681,7 +679,7 @@ type upstreamResult struct {
 	statusCode int
 	headers    http.Header
 	body       []byte // the whole body, or the prefix when stream != nil
-	// stream != nil — must not be cached or transformed, and has a single reader (claimStream first)
+	// stream != nil. Must not be cached or transformed, and has a single reader (claimStream first)
 	stream  io.ReadCloser
 	claimed *int32
 	ms      int64
@@ -693,7 +691,7 @@ type upstreamResult struct {
 	varyBlocksCache bool
 }
 
-// claimStream claims the stream atomically — singleflight shares the result, but a stream can only
+// claimStream claims the stream atomically. Singleflight shares the result, but a stream can only
 // be read once
 func (r *upstreamResult) claimStream() bool {
 	return r.claimed != nil && atomicCASInt32(r.claimed)
@@ -706,7 +704,7 @@ func atomicCASInt32(p *int32) bool {
 // varyBlocksCache reports whether the upstream's Vary header names anything beyond Accept-Encoding.
 // Accept-Encoding does not matter, because the gateway gzips per request itself (the cache always
 // holds the body raw). Any other Vary (Accept, Accept-Language) means the upstream really does
-// negotiate content, and our cache key does not vary by request header at all — caching on would
+// negotiate content, and our cache key does not vary by request header at all. Caching on would
 // serve the wrong variant to a client that sent different headers, so we decline to cache.
 func varyBlocksCache(varyHeader string) bool {
 	if varyHeader == "" {
@@ -736,7 +734,7 @@ func (h *Handler) fetchFromUpstream(req *http.Request, upstreamURL, clientIP, re
 	ms := timeNow().Sub(start).Milliseconds()
 
 	if err != nil {
-		// UpstreamError = the upstream really answered with an error status — pass it through (Do already
+		// UpstreamError = the upstream really answered with an error status. Pass it through (Do already
 		// counted the CB failure)
 		var ue *breaker.UpstreamError
 		if !errors.As(err, &ue) || proxyResp == nil {
@@ -752,7 +750,7 @@ func (h *Handler) fetchFromUpstream(req *http.Request, upstreamURL, clientIP, re
 	// now there is no way to find out later whether the upstream negotiated content at all.
 	hasNonEncodingVary := varyBlocksCache(proxyResp.Headers.Get("Vary"))
 
-	// strip once, before sharing through singleflight — after this, headers must not be mutated
+	// strip once, before sharing through singleflight. After this, headers must not be mutated
 	service.StripHopByHop(proxyResp.Headers)
 	service.StripCORSHeaders(proxyResp.Headers)
 	service.StripUpstreamInternalHeaders(proxyResp.Headers)
@@ -791,7 +789,7 @@ func (h *Handler) fetchFromUpstream(req *http.Request, upstreamURL, clientIP, re
 		return upstreamResult{err: readErr, ms: ms, readMs: readMs}
 	}
 	if int64(len(body)) > maxBuffer {
-		// body over the buffer limit — return the prefix and stream the rest (do not close body)
+		// body over the buffer limit. Return the prefix and stream the rest (do not close body)
 		return upstreamResult{
 			statusCode:      proxyResp.StatusCode,
 			headers:         proxyResp.Headers,

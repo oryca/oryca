@@ -5,7 +5,7 @@ import (
 	"sync"
 )
 
-// regexCache holds compiled regexes keyed by their pattern — one compile per pattern.
+// regexCache holds compiled regexes keyed by their pattern. One compile per pattern.
 // *regexp.Regexp is safe to share across goroutines, and patterns come from the transform
 // config, so the set stays small.
 var regexCache sync.Map

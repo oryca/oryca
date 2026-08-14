@@ -507,7 +507,7 @@ func TestUserServicePublishesGatewayEvents(t *testing.T) {
 
 	t.Run("Delete publishes a synthesized Enabled=false payload, not a DB refetch", func(t *testing.T) {
 		// Regression: SoftDelete never touches `enabled`, and a deleted user is
-		// filtered out of FindByID entirely — so this must NOT come from a refetch.
+		// filtered out of FindByID entirely. So this must NOT come from a refetch.
 		id := bson.NewObjectID()
 		ctxUserID := bson.NewObjectID()
 		repo := new(mockUserRepo)

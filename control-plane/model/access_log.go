@@ -7,7 +7,7 @@ import (
 )
 
 // AccessLog is one proxied request as the gateway published it on the usage-log
-// stream. The shape mirrors oryca-gateway/logger/log_model.go — keep both sides
+// stream. The shape mirrors oryca-gateway/logger/log_model.go. Keep both sides
 // in sync when changing.
 type AccessLog struct {
 	ID        bson.ObjectID `json:"id" bson:"_id,omitempty"`
@@ -27,7 +27,7 @@ type AccessLog struct {
 }
 
 // AccessLogQuery is the filter shared by every dashboard endpoint. Scoping is
-// applied on top of it in the repository — a caller cannot widen its own scope
+// applied on top of it in the repository. A caller cannot widen its own scope
 // by sending a UserID it does not own.
 type AccessLogQuery struct {
 	From      time.Time

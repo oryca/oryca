@@ -7,7 +7,7 @@ import (
 	"time"
 )
 
-// flakyPublisher fails the first N calls before succeeding — simulates a Redis
+// flakyPublisher fails the first N calls before succeeding. Simulates a Redis
 // stream that flaps briefly under load, which is what triggers the
 // retry-with-sleep loops in Proxy().
 type flakyPublisher struct {
@@ -53,7 +53,7 @@ func TestEnqueueAsyncPublish_DoesNotBlockCaller(t *testing.T) {
 	elapsed := time.Since(start)
 
 	// Enqueueing 50 jobs whose bodies sleep up to 1.5s each must return
-	// near-instantly — this is the caller-facing guarantee that keeps
+	// near-instantly. This is the caller-facing guarantee that keeps
 	// retry backoff out of the measured request duration.
 	if elapsed > 50*time.Millisecond {
 		t.Fatalf("enqueueAsyncPublish blocked the caller for %v, want near-instant return", elapsed)
@@ -91,7 +91,7 @@ func TestDrainAsyncPublish_WaitsForPendingJobs(t *testing.T) {
 }
 
 // TestDrainAsyncPublish_TimesOutInsteadOfHanging verifies that a stuck job
-// (e.g. Redis permanently down) can't hang shutdown forever — the drain must
+// (e.g. Redis permanently down) can't hang shutdown forever. The drain must
 // respect the caller's context deadline.
 func TestDrainAsyncPublish_TimesOutInsteadOfHanging(t *testing.T) {
 	h := New(nil, nil, nil, &flakyPublisher{}, "")

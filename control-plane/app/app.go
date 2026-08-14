@@ -1,8 +1,8 @@
 // Package app wires the control plane together and runs it.
 //
 // It lives here rather than in package main so that the whole server can be
-// embedded in another program — a distribution that adds its own endpoints, or a
-// test that needs the real thing — while cmd/oryca-control-plane stays a
+// embedded in another program. A distribution that adds its own endpoints, or a
+// test that needs the real thing. While cmd/oryca-control-plane stays a
 // three-line entry point.
 package app
 
@@ -46,7 +46,7 @@ func Run() {
 
 	redisClient, cacheTTL, routingTTL := connectRedis(cfg)
 
-	// Real-time gateway sync — soft dependency: an empty channel or unreachable Redis just
+	// Real-time gateway sync. Soft dependency: an empty channel or unreachable Redis just
 	// means Publish() calls are no-ops and gateway stays on HTTP polling alone (see
 	// service.GatewayEventPublisher).
 	gwPublisher := service.NewGatewayEventPublisher(redisClient, cfg.SyncChannel)
@@ -58,18 +58,18 @@ func Run() {
 
 	svcs := buildServices(repos, caches, redisClient, routingTTL, gwPublisher)
 
-	// Seed before any traffic arrives — first boot only, nothing existing is overwritten (see package seed)
+	// Seed before any traffic arrives. First boot only, nothing existing is overwritten (see package seed)
 	runSeed(cfg, repos)
 
 	// Separate quiet GatewayRedisSync (nil publisher) for the boot-time bulk resync
-	// below — it loops over every service/source individually, and each one going
+	// below. It loops over every service/source individually, and each one going
 	// through the notifying instance would event-storm the gateway (one reload_services
 	// per entity, dozens at once) for what's just CP re-affirming state it already had,
 	// not new information. Real admin actions still notify via svcs.gatewaySync.
 	quietGatewaySync := service.NewGatewayRedisSync(redisClient, routingTTL, nil)
 	go startBackgroundJobs(repos, caches, svcs, quietGatewaySync)
 
-	// Log consumer — moves the gateway's access logs from the Redis stream into Mongo, for the dashboard
+	// Log consumer. Moves the gateway's access logs from the Redis stream into Mongo, for the dashboard
 	logConsumer := startLogConsumer(cfg, repos, redisClient)
 
 	// Daily cron for scheduled notifications (an API key about to expire, and so on). A distributed
@@ -126,7 +126,7 @@ func Run() {
 	notifyCron.Stop(cronShutCtx)
 	cronCancel()
 
-	// stop the consumer before Mongo and Redis close — a pending batch still has to be written
+	// stop the consumer before Mongo and Redis close. A pending batch still has to be written
 	if logConsumer != nil {
 		consumerShutCtx, consumerCancel := context.WithTimeout(context.Background(), 15*time.Second)
 		logConsumer.Stop(consumerShutCtx)
@@ -208,7 +208,7 @@ func startLogConsumer(cfg *config.Config, r appRepos, rc *redis.Client) *consume
 	if err != nil || name == "" {
 		name = "control-plane"
 	}
-	// the loop's ctx has to live as long as the process — the one above times out, and is for setup only
+	// the loop's ctx has to live as long as the process. The one above times out, and is for setup only
 	lc := consumer.NewLogConsumer(rc, r.accessLog, name)
 	if err := lc.Start(context.Background()); err != nil {
 		logger.Error("log consumer: start failed, dashboard will have no data: " + err.Error())
@@ -428,7 +428,7 @@ func envSeconds(val string, defaultSec int) time.Duration {
 	return time.Duration(defaultSec) * time.Second
 }
 
-// envTrue reads an env value as a bool, accepting "1", "TRUE" and "True" as well — a safety switch
+// envTrue reads an env value as a bool, accepting "1", "TRUE" and "True" as well. A safety switch
 // should not fall silent over capitalisation. Anything it cannot parse is false (observe mode),
 // which is safer than enforcing something nobody asked for.
 func envTrue(val string) bool {
@@ -443,7 +443,7 @@ func getEnv(key, defaultVal string) string {
 	return defaultVal
 }
 
-// startBackgroundJobs runs all startup background tasks — called in a single goroutine.
+// startBackgroundJobs runs all startup background tasks. Called in a single goroutine.
 func startBackgroundJobs(r appRepos, c appCaches, s appServices, quietGatewaySync *service.GatewayRedisSync) {
 	ctx := context.Background()
 

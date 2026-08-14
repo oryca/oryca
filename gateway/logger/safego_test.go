@@ -17,7 +17,7 @@ func TestGo_RecoversPanicWithoutCrashing(t *testing.T) {
 	})
 	select {
 	case <-done:
-		// fn ran to its own defer despite panicking — recover() didn't stop that,
+		// fn ran to its own defer despite panicking. Recover() didn't stop that,
 		// it just kept the panic from escaping the goroutine.
 	case <-time.After(time.Second):
 		t.Fatal("goroutine never completed")
@@ -50,13 +50,13 @@ func TestGoLoop_RestartsAfterPanicThenStopsOnNormalReturn(t *testing.T) {
 			if n <= 2 {
 				panic("boom")
 			}
-			// third call: return normally — GoLoop must not restart it again
+			// third call: return normally. GoLoop must not restart it again
 			<-stop
 		})
 		close(done)
 	}()
 
-	// GoLoop backs off 1s per restart — 2 panics before the 3rd (non-panicking) call
+	// GoLoop backs off 1s per restart. 2 panics before the 3rd (non-panicking) call
 	// means at least ~2s of backoff, so give this plenty of margin.
 	require.Eventually(t, func() bool { return calls.Load() >= 3 }, 4*time.Second, 10*time.Millisecond,
 		"expected fn to be restarted after each panic")

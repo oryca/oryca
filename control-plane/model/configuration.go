@@ -28,7 +28,7 @@ type ConfigToken struct {
 type ConfigRegister struct {
 	Enabled        bool   `json:"enabled" bson:"enabled"`
 	TrialExpiresIn *int64 `json:"trialExpiresIn,omitempty" bson:"trialExpiresIn,omitempty"`
-	// DefaultPackageAlias คือ package ที่ user สมัครเองจะได้รับ — ว่าง = ไม่ผูก package
+	// DefaultPackageAlias คือ package ที่ user สมัครเองจะได้รับ. ว่าง = ไม่ผูก package
 	DefaultPackageAlias string `json:"defaultPackageAlias,omitempty" bson:"defaultPackageAlias,omitempty"`
 }
 

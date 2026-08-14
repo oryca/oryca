@@ -66,7 +66,7 @@ func NewAuthHandler(deps AuthHandlerDeps) *AuthHandler {
 }
 
 // resolveTrustedOrigin คืน origin ที่ตรงกับ allowlist ที่ config ไว้ (เช่น ORYCA_API_ALLOW_ORIGIN)
-// ถ้า allowlist เป็น "*" (ไม่จำกัด) คืน "*" กลับไปตรงๆ — ไม่งั้นคืน "" เมื่อไม่ match (ห้าม reflect ค่าที่ validate ไม่ผ่าน)
+// ถ้า allowlist เป็น "*" (ไม่จำกัด) คืน "*" กลับไปตรงๆ. ไม่งั้นคืน "" เมื่อไม่ match (ห้าม reflect ค่าที่ validate ไม่ผ่าน)
 func (h *AuthHandler) resolveTrustedOrigin(candidate string) string {
 	for _, o := range h.allowedOrigins {
 		o = strings.TrimSpace(o)
@@ -444,7 +444,7 @@ func (h *AuthHandler) SettingPassword(c echo.Context) error {
 	return c.JSON(http.StatusOK, result)
 }
 
-// originFromRequest ดึง origin ของหน้าที่ยิง request มา — ใช้ header Origin ก่อน
+// originFromRequest ดึง origin ของหน้าที่ยิง request มา. ใช้ header Origin ก่อน
 // ตกมาที่ Referer ถ้า Origin ไม่มี (บาง browser ไม่ส่ง Origin บน GET navigation ปกติ)
 func originFromRequest(c echo.Context) string {
 	if o := c.Request().Header.Get(echo.HeaderOrigin); o != "" {

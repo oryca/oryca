@@ -74,7 +74,7 @@ type ProxyConfig struct {
 	KeepAlive             time.Duration
 }
 
-// MaxErrorBodyBytes caps how much of an error body (5xx/408/429) is buffered into RAM — a huge
+// MaxErrorBodyBytes caps how much of an error body (5xx/408/429) is buffered into RAM. A huge
 // error page is truncated
 const MaxErrorBodyBytes = 64 << 10 // 64KB
 
@@ -187,12 +187,12 @@ func (s *ProxyService) Do(req *ProxyRequest, clientIP, requestID string) (*Proxy
 		}
 
 		// counts as a failure: 5xx, 408, 429. The body is buffered up to a ceiling so the connection
-		// goes back to the pool, then passed through unchanged (RFC 9110 — a gateway does not rewrite
+		// goes back to the pool, then passed through unchanged (RFC 9110. A gateway does not rewrite
 		// the status)
 		if breaker.IsUpstreamFailure(upResp.StatusCode) {
 			body, _ := io.ReadAll(io.LimitReader(upResp.Body, MaxErrorBodyBytes))
 			upResp.Body.Close()
-			// the body may have been truncated — Content-Length has to match the bytes actually sent, or
+			// the body may have been truncated. Content-Length has to match the bytes actually sent, or
 			// the client waits forever
 			upResp.Header.Set("Content-Length", strconv.Itoa(len(body)))
 			resp = &ProxyResponse{
@@ -218,7 +218,7 @@ func (s *ProxyService) Do(req *ProxyRequest, clientIP, requestID string) (*Proxy
 		return nil, err
 	}
 
-	// upstream error — resp still holds something worth passing through
+	// upstream error. Resp still holds something worth passing through
 	if _, ok := err.(*breaker.UpstreamError); ok {
 		return resp, err
 	}

@@ -546,7 +546,7 @@ func TestApiKeyServiceUpdate_PublishesGatewayEvent(t *testing.T) {
 	cache.On("Delete", ctx, []string{"oldkey"}).Return(nil)
 	repo.On("FindByID", ctx, keyID).Return(updated, nil).Once()
 	cache.On("Set", ctx, updated, mock.Anything).Return(nil)
-	// mockApiKeyUserFinder is a fixed stub that always returns (nil, nil) — owner ends
+	// mockApiKeyUserFinder is a fixed stub that always returns (nil, nil). Owner ends
 	// up nil here, so the payload matcher below only checks the ApiKey fields.
 	pub.On("Publish", SyncEventTypeApiKey, mock.MatchedBy(func(p any) bool {
 		payload, ok := p.(*model.ApiKeyCache)

@@ -23,7 +23,7 @@ type CircuitBreakerConfig struct {
 	Interval            time.Duration
 	Timeout             time.Duration
 	ConsecutiveFailures int
-	// IdleEvictAfter — drop a breaker that hasn't been touched in this long, so per-path
+	// IdleEvictAfter. Drop a breaker that hasn't been touched in this long, so per-path
 	// cardinality can't grow without bound. <= 0 disables eviction.
 	IdleEvictAfter time.Duration
 }
@@ -151,8 +151,8 @@ func cbKey(upstreamURL string) string {
 	return u.Host + "/" + seg
 }
 
-// IsUpstreamFailure — status ที่นับเป็นความล้มเหลวฝั่ง provider (ไม่ใช่ความผิด client)
-// เป็น single source of truth ของทั้ง circuit breaker และ refund policy — ห้ามแยกเกณฑ์
+// IsUpstreamFailure. Status ที่นับเป็นความล้มเหลวฝั่ง provider (ไม่ใช่ความผิด client)
+// เป็น single source of truth ของทั้ง circuit breaker และ refund policy. ห้ามแยกเกณฑ์
 func IsUpstreamFailure(status int) bool {
 	return status >= 500 || status == 408 || status == 429
 }

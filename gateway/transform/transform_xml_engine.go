@@ -7,7 +7,7 @@ import (
 	"strings"
 )
 
-// reLocalName is a fixed pattern — compiled once at start
+// reLocalName is a fixed pattern. Compiled once at start
 var reLocalName = regexp.MustCompile(`local-name\(\)=['"]([^'"]+)['"]`)
 
 // XMLStdEngine is a generic, string-based XML engine
@@ -352,7 +352,7 @@ func (xe *XMLStdEngine) removeAttribute(content, elementName, attrName string) s
 func (xe *XMLStdEngine) performStringReplace(original string, rule model.TransformRule, vars map[string]string) string {
 	result := original
 
-	// Regex replacement — the compiled regex is cached, as the same rule runs on every request
+	// Regex replacement. The compiled regex is cached, as the same rule runs on every request
 	if rule.Params.Regex != "" {
 		replaceValue := xe.replaceTemplateVars(rule.Params.Replace, vars)
 		re, err := cachedRegexp(rule.Params.Regex)

@@ -13,7 +13,7 @@ type SyncProvider interface {
 	GetApiKeys(ctx context.Context) ([]*ApiKeyPayload, error)
 	GetJWKS(ctx context.Context) (*rsa.PublicKey, error)
 	GetTransformConfigs(ctx context.Context) ([]*TransformConfigPayload, error)
-	// GetUser fetches one user's freshness snapshot on cache miss — called synchronously
+	// GetUser fetches one user's freshness snapshot on cache miss. Called synchronously
 	// in the request path, unlike the background-polling methods above, so implementations
 	// must not retry-with-backoff.
 	GetUser(ctx context.Context, userID string) (*ApiKeyOwnerPayload, error)

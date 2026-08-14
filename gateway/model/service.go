@@ -10,7 +10,7 @@ type GatewayService struct {
 	ResourcePaths []*ResourcePath `json:"resources"`
 }
 
-// RateLimitTier คือ 1 tier ของ sliding window — limit requests per windowSec
+// RateLimitTier คือ 1 tier ของ sliding window. Limit requests per windowSec
 type RateLimitTier struct {
 	Limit     int `json:"limit"`
 	WindowSec int `json:"windowSec"`

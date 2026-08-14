@@ -18,7 +18,7 @@ const (
 
 	cronLockKeyApiKeyExpiring = "lock:cron:apikey_expiring"
 
-	// รันตี 1 ทุกวัน (เวลา server) — range check 7 วันรองรับกรณี cron ข้ามรอบ
+	// รันตี 1 ทุกวัน (เวลา server). Range check 7 วันรองรับกรณี cron ข้ามรอบ
 	cronSpecApiKeyExpiring = "0 1 * * *"
 )
 
@@ -36,7 +36,7 @@ type cronNotifier interface {
 }
 
 // NotificationCron รัน job รายวันสแกนหาเงื่อนไขที่ต้องแจ้งเตือน (เวลาผ่านไปเฉยๆ ก็ต้องแจ้ง ไม่มี event มา trigger)
-// distributed lock ให้ pod เดียวรันตอน scale — idempotency ที่แท้จริงมาจาก dedupKey (unique index)
+// distributed lock ให้ pod เดียวรันตอน scale. Idempotency ที่แท้จริงมาจาก dedupKey (unique index)
 type NotificationCron struct {
 	c          *cron.Cron
 	apiKeyRepo cronApiKeyRepo
@@ -62,7 +62,7 @@ func (nc *NotificationCron) Start() error {
 	return nil
 }
 
-// Stop หยุด scheduler แล้วรอ job ที่กำลังรันให้จบ (graceful) หรือจนกว่า ctx หมดเวลา — เรียกตอน shutdown
+// Stop หยุด scheduler แล้วรอ job ที่กำลังรันให้จบ (graceful) หรือจนกว่า ctx หมดเวลา. เรียกตอน shutdown
 func (nc *NotificationCron) Stop(ctx context.Context) {
 	stopped := nc.c.Stop()
 	select {
@@ -72,7 +72,7 @@ func (nc *NotificationCron) Stop(ctx context.Context) {
 	}
 }
 
-// withLock รัน fn ภายใต้ distributed lock — pod เดียวทำ, ปล่อย lock เมื่อจบ (ข้ามถ้า pod อื่นถืออยู่)
+// withLock รัน fn ภายใต้ distributed lock. Pod เดียวทำ, ปล่อย lock เมื่อจบ (ข้ามถ้า pod อื่นถืออยู่)
 func (nc *NotificationCron) withLock(lockKey string, fn func(ctx context.Context)) {
 	ctx, cancel := context.WithTimeout(context.Background(), cronLockTTL)
 	defer cancel()
@@ -125,7 +125,7 @@ func (nc *NotificationCron) notifyApiKeyExpiring(ctx context.Context, k *model.A
 	if k.OwnerBy == nil || k.ExpiredAt == nil {
 		return
 	}
-	// dedup ต่อ (key, วันหมดอายุ) — แจ้งครั้งเดียวต่อ deadline, ทน cron รันซ้ำ/ข้ามรอบ, renew แล้วแจ้งใหม่ได้
+	// dedup ต่อ (key, วันหมดอายุ). แจ้งครั้งเดียวต่อ deadline, ทน cron รันซ้ำ/ข้ามรอบ, renew แล้วแจ้งใหม่ได้
 	dedupKey := "apikey_expiring:" + k.ID.Hex() + ":" + k.ExpiredAt.UTC().Format("2006-01-02")
 	if err := nc.notifier.Create(ctx, &model.NotificationCreate{
 		UserID:   *k.OwnerBy,

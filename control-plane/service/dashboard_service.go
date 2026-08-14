@@ -56,7 +56,7 @@ func scope(q model.AccessLogQuery, actor *model.User) model.AccessLogQuery {
 }
 
 // normalizeRange fills in a default window and rejects an inverted or absurdly
-// long one — an unbounded range would scan the whole collection.
+// long one. An unbounded range would scan the whole collection.
 func normalizeRange(q model.AccessLogQuery) (model.AccessLogQuery, error) {
 	now := time.Now().UTC()
 	if q.To.IsZero() {
@@ -117,7 +117,7 @@ func (s *DashboardService) Summary(ctx context.Context, q model.AccessLogQuery, 
 	return summary, nil
 }
 
-// fillServiceNames resolves ids to names in one query — best-effort, a deleted
+// fillServiceNames resolves ids to names in one query. Best-effort, a deleted
 // service just keeps its id.
 func (s *DashboardService) fillServiceNames(ctx context.Context, rows []*model.DashboardServiceUsage) {
 	if len(rows) == 0 || s.serviceRepo == nil {
@@ -174,7 +174,7 @@ func (s *DashboardService) Logs(ctx context.Context, q model.AccessLogQuery, act
 }
 
 // EncodeLogCursor/DecodeLogCursor carry the (time, _id) pair the next page
-// starts after. Format is "<unixMilli>_<objectId>" — opaque to clients but
+// starts after. Format is "<unixMilli>_<objectId>". Opaque to clients but
 // readable in a log when debugging.
 func EncodeLogCursor(t time.Time, id bson.ObjectID) string {
 	return strconv.FormatInt(t.UTC().UnixMilli(), 10) + "_" + id.Hex()

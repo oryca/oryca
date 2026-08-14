@@ -21,7 +21,7 @@ func Init(serviceName string) {
 	stdout := zapcore.AddSync(os.Stdout)
 	logFormat := os.Getenv("LOG_FORMAT") // "console" (default) | "json"
 	isJSON := logFormat == "json"
-	// console logger — compact one-liner หรือ JSON ขึ้นกับ LOG_FORMAT
+	// console logger. Compact one-liner หรือ JSON ขึ้นกับ LOG_FORMAT
 	consoleEnc := buildConsoleEncoder(isJSON)
 	consoleCore := zapcore.NewCore(consoleEnc, stdout, zap.NewAtomicLevelAt(zap.DebugLevel))
 	globalLogger = zap.New(consoleCore, zap.AddCaller(), zap.AddCallerSkip(1), zap.AddStacktrace(zapcore.ErrorLevel)).
@@ -65,7 +65,7 @@ func buildConsoleEncoder(isJSON bool) zapcore.Encoder {
 	return zapcore.NewConsoleEncoder(cfg)
 }
 
-// Info — backward compat กับ logger.Info(msg string)
+// Info. Backward compat กับ logger.Info(msg string)
 func Info(msg string) {
 	if globalLogger == nil {
 		fmt.Println("[INFO]", msg)
@@ -74,7 +74,7 @@ func Info(msg string) {
 	globalLogger.Info(msg)
 }
 
-// Error — backward compat กับ logger.Error(msg string)
+// Error. Backward compat กับ logger.Error(msg string)
 func Error(msg string) {
 	if globalLogger == nil {
 		fmt.Fprintln(os.Stderr, "[ERROR]", msg)
@@ -90,7 +90,7 @@ func ProxyLog(f ProxyLogFields) {
 		return
 	}
 
-	// compact console message — the full structured record goes to Redis Stream
+	// compact console message. The full structured record goes to Redis Stream
 	// separately via BuildProxyLogJSON, so nothing is duplicated here.
 	compact := fmt.Sprintf("%d %s %s  %dms  trace=%s", f.StatusCode, f.Method, f.Path, f.TotalMs, f.TraceID)
 	if f.UserID != "" {

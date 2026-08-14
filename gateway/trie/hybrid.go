@@ -15,7 +15,7 @@ import (
 	"golang.org/x/sync/singleflight"
 )
 
-// trieCache abstracts cache operations used by HybridTrie — allows injection in tests.
+// trieCache abstracts cache operations used by HybridTrie. Allows injection in tests.
 type trieCache interface {
 	SaveServices(ctx context.Context, services []*model.GatewayService) error
 	SaveSources(ctx context.Context, sources []*gwsync.SourcePayload) error

@@ -239,7 +239,7 @@ func (r *ApiKeyRepository) FindAllActive(ctx context.Context) ([]*model.ApiKey, 
 	return results, nil
 }
 
-// FindExpiring คืน api key ที่ยัง active และ expiredAt อยู่ในช่วง (from, to] — แบ่งหน้าด้วย limit/offset
+// FindExpiring คืน api key ที่ยัง active และ expiredAt อยู่ในช่วง (from, to]. แบ่งหน้าด้วย limit/offset
 // enabled: $ne false = true หรือ default (nil) ถือว่า active; sort _id เพื่อ pagination เสถียร
 func (r *ApiKeyRepository) FindExpiring(ctx context.Context, from, to time.Time, limit, offset int) ([]*model.ApiKey, error) {
 	filter := bson.M{

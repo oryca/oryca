@@ -22,9 +22,9 @@ type Config struct {
 	RedisReadTimeout  time.Duration
 	RedisWriteTimeout time.Duration
 
-	// CacheRedis* — connection ของ UpstreamCache (response cache) แยกจาก RedisAddress ที่ใช้
+	// CacheRedis*. Connection ของ UpstreamCache (response cache) แยกจาก RedisAddress ที่ใช้
 	// สำหรับ auth/rate-limit โดยเจตนา เพื่อให้ย้าย cache ไป Redis instance ต่างหากได้แค่
-	// ตั้ง env ใหม่ ไม่ต้องแก้โค้ด — ตอนนี้ default fallback ไปที่ Redis ตัวเดียวกับด้านบนเสมอ
+	// ตั้ง env ใหม่ ไม่ต้องแก้โค้ด. ตอนนี้ default fallback ไปที่ Redis ตัวเดียวกับด้านบนเสมอ
 	// (ยังไม่มี instance แยกจริง) พอมี instance ที่สองค่อยตั้ง ORYCA_GW_CACHE_REDIS_ADDRESS แยก
 	CacheRedisAddress  string
 	CacheRedisPassword string
@@ -32,7 +32,7 @@ type Config struct {
 
 	AllowOrigin string
 
-	// MaxRequestBody — เพดานความปลอดภัย (safety net) ไม่ใช่ limit ธุรกิจ ตั้งสูงพอไม่กระทบ
+	// MaxRequestBody. เพดานความปลอดภัย (safety net) ไม่ใช่ limit ธุรกิจ ตั้งสูงพอไม่กระทบ
 	// GeoJSON feature ขนาดใหญ่ที่ map API ต้องรับได้จริง กันแค่ payload ผิดปกติ (หลาย GB)
 	// รูปแบบตาม Echo BodyLimit เช่น "500M", "1G"
 	MaxRequestBody string
@@ -50,7 +50,7 @@ type Config struct {
 	// how long a background-refresh-worthy entry is served before it is refreshed again.
 	UserCacheTTL int
 	// UserCacheRefreshConcurrency bounds how many background user-freshness refetches run
-	// at once — protects control-plane from a burst of many distinct cache misses at once
+	// at once. Protects control-plane from a burst of many distinct cache misses at once
 	// (e.g. right after a pod restart under real traffic).
 	UserCacheRefreshConcurrency int
 
@@ -66,13 +66,13 @@ type Config struct {
 	UpstreamDialTimeout           time.Duration
 	UpstreamKeepAlive             time.Duration
 
-	// CB* tune the per-upstream circuit breaker (breaker.PerDomainBreaker) — defaults match
+	// CB* tune the per-upstream circuit breaker (breaker.PerDomainBreaker). Defaults match
 	// what was previously hardcoded, so an unset env keeps existing behavior unchanged.
 	CBMaxRequests         int
 	CBInterval            time.Duration
 	CBTimeout             time.Duration
 	CBConsecutiveFailures int
-	// CBIdleEvictAfter — a breaker untouched for this long is dropped from memory so
+	// CBIdleEvictAfter. A breaker untouched for this long is dropped from memory so
 	// per-path cardinality can't grow unbounded; 0 disables eviction.
 	CBIdleEvictAfter time.Duration
 }

@@ -28,7 +28,7 @@ func (m *mockPackageUserGatewayPublisher) Publish(eventType string, payload any)
 	m.Called(eventType, payload)
 }
 
-// fakePackageUserRepo implements packageUserRepo — only BulkSetPackageID/
+// fakePackageUserRepo implements packageUserRepo. Only BulkSetPackageID/
 // BulkUnsetPackageID/CountByOldPackageIDs are exercised here, FindByPackageID isn't
 // used by AssignUsers/RemoveUsers.
 type fakePackageUserRepo struct {
@@ -68,7 +68,7 @@ func newPackageUserService(repo *fakePackageUserRepo, pkgRepo *mockPackageFinder
 // --- AssignUsers / RemoveUsers publish exactly one event ---
 
 func TestPackageUserServiceAssignUsersPublishesOneInvalidateEvent(t *testing.T) {
-	// Regression test: AssignUsers is a bulk operation — one call can touch
+	// Regression test: AssignUsers is a bulk operation. One call can touch
 	// hundreds of users in one BulkSetPackageID call. Publishing must fire exactly
 	// once per call, carrying the full deduped id set, never once per user (that's
 	// the event-storm bug already fixed for reload_services).

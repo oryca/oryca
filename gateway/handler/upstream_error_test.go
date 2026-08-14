@@ -15,7 +15,7 @@ import (
 
 // ── upstream error pass-through (RFC 9110: gateway ห้าม rewrite status ที่ origin ตอบมา) ──
 
-// TestFetchFromUpstream5xxPassThrough — upstream ตอบ 503 → ต้องได้ status/body/headers จริง ไม่ใช่ err
+// TestFetchFromUpstream5xxPassThrough. Upstream ตอบ 503 → ต้องได้ status/body/headers จริง ไม่ใช่ err
 func TestFetchFromUpstream5xxPassThrough(t *testing.T) {
 	up := httptest.NewServer(http.HandlerFunc(func(w http.ResponseWriter, r *http.Request) {
 		w.Header().Set("Retry-After", "30")
@@ -43,7 +43,7 @@ func TestFetchFromUpstream5xxPassThrough(t *testing.T) {
 	}
 }
 
-// TestFetchFromUpstream429PassThrough — 429 ต้อง pass-through เช่นกัน (ไม่ใช่ 502)
+// TestFetchFromUpstream429PassThrough. 429 ต้อง pass-through เช่นกัน (ไม่ใช่ 502)
 func TestFetchFromUpstream429PassThrough(t *testing.T) {
 	up := httptest.NewServer(http.HandlerFunc(func(w http.ResponseWriter, r *http.Request) {
 		w.Header().Set("Retry-After", "5")
@@ -64,7 +64,7 @@ func TestFetchFromUpstream429PassThrough(t *testing.T) {
 	}
 }
 
-// TestFetchFromUpstreamNetworkError — คุยกับ upstream ไม่ได้จริง ต้องยังเป็น err (handler ตอบ 502 ตามเดิม)
+// TestFetchFromUpstreamNetworkError. คุยกับ upstream ไม่ได้จริง ต้องยังเป็น err (handler ตอบ 502 ตามเดิม)
 func TestFetchFromUpstreamNetworkError(t *testing.T) {
 	up := httptest.NewServer(http.HandlerFunc(func(w http.ResponseWriter, r *http.Request) {}))
 	up.Close() // ปิดทันที — connection refused
@@ -78,7 +78,7 @@ func TestFetchFromUpstreamNetworkError(t *testing.T) {
 	}
 }
 
-// TestUpstreamErrorBodyCapped — error body ยักษ์ต้องถูกตัดที่เพดาน ไม่ buffer ทั้งก้อน
+// TestUpstreamErrorBodyCapped. Error body ยักษ์ต้องถูกตัดที่เพดาน ไม่ buffer ทั้งก้อน
 func TestUpstreamErrorBodyCapped(t *testing.T) {
 	huge := strings.Repeat("e", 2<<20) // 2MB
 	up := httptest.NewServer(http.HandlerFunc(func(w http.ResponseWriter, r *http.Request) {
@@ -110,7 +110,7 @@ func TestUpstreamErrorBodyCapped(t *testing.T) {
 	}
 }
 
-// TestIsUpstreamFailure — เส้นแบ่ง refund/CB ต้องมาจาก classification เดียวกัน
+// TestIsUpstreamFailure. เส้นแบ่ง refund/CB ต้องมาจาก classification เดียวกัน
 func TestIsUpstreamFailure(t *testing.T) {
 	for _, s := range []int{500, 502, 503, 504, 408, 429} {
 		if !breaker.IsUpstreamFailure(s) {
@@ -124,7 +124,7 @@ func TestIsUpstreamFailure(t *testing.T) {
 	}
 }
 
-// TestForwardingHeaders — X-Forwarded-Host ต้องเป็น host จริงของ client request (Go เก็บใน req.Host ไม่ใช่ header map)
+// TestForwardingHeaders. X-Forwarded-Host ต้องเป็น host จริงของ client request (Go เก็บใน req.Host ไม่ใช่ header map)
 func TestForwardingHeaders(t *testing.T) {
 	var gotXFH, gotXFF string
 	up := httptest.NewServer(http.HandlerFunc(func(w http.ResponseWriter, r *http.Request) {

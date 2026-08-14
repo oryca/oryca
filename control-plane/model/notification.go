@@ -19,7 +19,7 @@ const (
 	NotificationTopicApiKeyExpiring         = "apikey_expiring"
 )
 
-// SystemObjectID แทนผู้สร้างจากระบบ (batch/cron) — ใช้ "fff...f" กันชนกับ zero-value ของ ObjectID
+// SystemObjectID แทนผู้สร้างจากระบบ (batch/cron). ใช้ "fff...f" กันชนกับ zero-value ของ ObjectID
 var SystemObjectID bson.ObjectID
 
 func init() {

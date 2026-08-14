@@ -70,7 +70,7 @@ func NewPackageSvcLinkService(repo packageSvcLinkRepo, serviceSvc packageGateway
 
 const packageUserNotifyBatchSize = 500
 
-// notifyServicesUpdated แจ้งเตือนทุกคนในแพ็กเกจ — ดึง user แบบแบ่งหน้าทีละ packageUserNotifyBatchSize
+// notifyServicesUpdated แจ้งเตือนทุกคนในแพ็กเกจ. ดึง user แบบแบ่งหน้าทีละ packageUserNotifyBatchSize
 // คุมหน่วยความจำให้คงที่ไม่ว่าแพ็กเกจจะมีสมาชิกกี่คน
 func (s *PackageSvcLinkService) notifyServicesUpdated(ctx context.Context, pkg *model.Package, serviceName, action string, actorID bson.ObjectID) {
 	if s.notifier == nil || s.userFinder == nil {

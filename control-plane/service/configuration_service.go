@@ -35,7 +35,7 @@ func (s *ConfigurationService) Get(ctx context.Context) (*model.Configuration, e
 		return cached, nil
 	}
 
-	// cache miss — singleflight ป้องกันไม่ให้ยิง DB ซ้ำซ้อน
+	// cache miss. Singleflight ป้องกันไม่ให้ยิง DB ซ้ำซ้อน
 	// request ที่เข้ามาพร้อมกันจะ block รอผลจาก request แรกแทน
 	v, err, _ := s.cache.SF().Do("get_configuration", func() (any, error) {
 		cfg, err := s.repo.Get(ctx)

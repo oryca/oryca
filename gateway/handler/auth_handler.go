@@ -96,7 +96,7 @@ func (h *Handler) checkUserStatus(c echo.Context, user *model.User, svc *model.G
 		})
 	}
 	// Policy: a private (non-IsPublic) service must be linked to at least one package to be
-	// callable at all — an empty svc.PackageIDs means no package has been granted access yet,
+	// callable at all. An empty svc.PackageIDs means no package has been granted access yet,
 	// not "open to everyone." Fail closed, not open.
 	if !slices.Contains(svc.PackageIDs, user.PackageID) {
 		return writeAndReturn(http.StatusForbidden, model.Exception{

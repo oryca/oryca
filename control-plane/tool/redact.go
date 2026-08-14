@@ -7,7 +7,7 @@ import "regexp"
 var reURLCredentials = regexp.MustCompile(`://[^/\s@]+@`)
 
 // reURLSecretParam matches common secret query-string params (api_key, token,
-// password, ...) so their values never end up in logs — e.g. Go's *url.Error
+// password, ...) so their values never end up in logs. E.g. Go's *url.Error
 // embeds the full request URL (including query string) in its Error() text.
 var reURLSecretParam = regexp.MustCompile(`(?i)([?&](?:api[_-]?key|apikey|token|access[_-]?token|password|passwd|pwd|secret|auth)=)[^&\s"']+`)
 

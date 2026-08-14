@@ -111,7 +111,7 @@ func TestPackageSvcLinkService_Create_SyncsWithFullServiceObject(t *testing.T) {
 	pkgRepo.On("IncrServiceCount", ctx, pid, int64(1)).Return(nil)
 	repo.On("FindPackageIDsByServiceID", ctx, sid).Return(pkgIDs, nil)
 	// SyncServicePackageIDs must receive the *same* full service object fetched above,
-	// not just its ID — this is what makes the write independent of any prior Redis state.
+	// not just its ID. This is what makes the write independent of any prior Redis state.
 	redisSync.On("SyncServicePackageIDs", ctx, gatewaySvc, pkgIDs).Return(nil)
 	packageRepo.On("FindByID", ctx, pid).Return(nil, assert.AnError)
 
@@ -161,8 +161,8 @@ func TestPackageSvcLinkService_Delete_SyncsWithFullServiceObject(t *testing.T) {
 
 func TestPackageSvcLinkService_Delete_SkipsSyncWhenServiceNotFound(t *testing.T) {
 	// Regression test: when the gateway service can no longer be fetched (e.g. it was already
-	// deleted — GatewayServiceService.Delete already removes its Redis entry via DeleteService),
-	// syncServicePackages must not run — there is no *model.GatewayService to rebuild the
+	// deleted. GatewayServiceService.Delete already removes its Redis entry via DeleteService),
+	// syncServicePackages must not run. There is no *model.GatewayService to rebuild the
 	// payload from, and the entry shouldn't exist in Redis anymore anyway.
 	svc, repo, serviceSvc, _, redisSync, pkgRepo := newTestPackageSvcLinkService()
 	ctx := context.Background()

@@ -44,7 +44,7 @@ func NewNotificationService(repo notificationRepo, redisClient *redis.Client) *N
 	return &NotificationService{repo: repo, redis: redisClient}
 }
 
-// Create บันทึกแจ้งเตือนแล้ว publish ต่อ Redis — ชน dedupKey ถือว่าสำเร็จเงียบๆ (idempotent)
+// Create บันทึกแจ้งเตือนแล้ว publish ต่อ Redis. ชน dedupKey ถือว่าสำเร็จเงียบๆ (idempotent)
 func (s *NotificationService) Create(ctx context.Context, in *model.NotificationCreate) error {
 	createdBy := in.CreatedBy
 	if createdBy.IsZero() {
@@ -77,7 +77,7 @@ func (s *NotificationService) Create(ctx context.Context, in *model.Notification
 	return nil
 }
 
-// CreateBackground เหมือน Create แต่รันแบบ background ไม่ block ผู้เรียก — pattern เดียวกับ trigger อื่น
+// CreateBackground เหมือน Create แต่รันแบบ background ไม่ block ผู้เรียก. Pattern เดียวกับ trigger อื่น
 func (s *NotificationService) CreateBackground(ctx context.Context, in *model.NotificationCreate) {
 	runNotifyBackground(ctx, 30*time.Second, func(bgCtx context.Context) {
 		if err := s.Create(bgCtx, in); err != nil {
@@ -157,7 +157,7 @@ func (s *NotificationService) VerifyStreamTicket(ctx context.Context, ticket str
 	return userID, nil
 }
 
-// SubscribeUser คืน PubSub subscription ของ userID นี้ — ผู้เรียกต้อง Close() เอง
+// SubscribeUser คืน PubSub subscription ของ userID นี้. ผู้เรียกต้อง Close() เอง
 func (s *NotificationService) SubscribeUser(ctx context.Context, userID bson.ObjectID) *redis.PubSub {
 	return s.redis.Subscribe(ctx, notificationPubSubChanPrefix+userID.Hex())
 }

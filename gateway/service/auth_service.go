@@ -14,7 +14,7 @@ import (
 	"github.com/golang-jwt/jwt/v5"
 )
 
-// jwtClaims — internal API JWT (legacy) ที่ CP ออกเอง เซ็นด้วย ORYCA_API_JWT key เดียว
+// jwtClaims. Internal API JWT (legacy) ที่ CP ออกเอง เซ็นด้วย ORYCA_API_JWT key เดียว
 type jwtClaims struct {
 	Session   string `json:"ses"`
 	UserID    string `json:"uid"`
@@ -37,7 +37,7 @@ func NewAuthService(provider gwsync.SyncProvider, c *cache.Cache, userCache *cac
 }
 
 // overlayFreshness overwrites user's packageId/enabled/verified/expiredAt with the
-// latest known values from the per-pod UserFreshnessCache — replacing whatever was baked
+// latest known values from the per-pod UserFreshnessCache. Replacing whatever was baked
 // into a JWT at login time (fixed for the token's whole lifetime) or embedded in a
 // cached api-key's Owner snapshot (refreshed only ~every ApiKeyPollInterval). Get() never
 // blocks on network, so this adds no request latency on the hot path.

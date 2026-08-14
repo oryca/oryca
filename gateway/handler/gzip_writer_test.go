@@ -22,7 +22,7 @@ func gzipCtx(t *testing.T, acceptGzip bool) (echo.Context, *httptest.ResponseRec
 	return e.NewContext(req, rec), rec
 }
 
-// TestShouldGzipResponse — เงื่อนไขครบทุกแขนง
+// TestShouldGzipResponse. เงื่อนไขครบทุกแขนง
 func TestShouldGzipResponse(t *testing.T) {
 	req := httptest.NewRequest("GET", "/", nil)
 	req.Header.Set("Accept-Encoding", "gzip")
@@ -53,7 +53,7 @@ func TestShouldGzipResponse(t *testing.T) {
 	}
 }
 
-// TestWriteGzipRoundtrip — บีบแล้วแตกกลับต้องได้ข้อมูลเดิม และคืนขนาดก่อนบีบ
+// TestWriteGzipRoundtrip. บีบแล้วแตกกลับต้องได้ข้อมูลเดิม และคืนขนาดก่อนบีบ
 func TestWriteGzipRoundtrip(t *testing.T) {
 	c, rec := gzipCtx(t, true)
 	body := []byte(strings.Repeat(`{"k":"v"},`, 500))
@@ -75,7 +75,7 @@ func TestWriteGzipRoundtrip(t *testing.T) {
 	}
 }
 
-// TestWriteStreamedBodyGzip — stream mode บีบ: นับ bytes ก่อนบีบ + แตกกลับได้ครบ
+// TestWriteStreamedBodyGzip. Stream mode บีบ: นับ bytes ก่อนบีบ + แตกกลับได้ครบ
 func TestWriteStreamedBodyGzip(t *testing.T) {
 	c, rec := gzipCtx(t, true)
 	prefix := []byte(strings.Repeat("A", 2000))
@@ -95,7 +95,7 @@ func TestWriteStreamedBodyGzip(t *testing.T) {
 	}
 }
 
-// TestWriteJSONMaybeGzip — เก็บขนาดก่อนบีบใน context ให้ log
+// TestWriteJSONMaybeGzip. เก็บขนาดก่อนบีบใน context ให้ log
 func TestWriteJSONMaybeGzip(t *testing.T) {
 	c, rec := gzipCtx(t, true)
 	body := []byte(strings.Repeat(`{"x":1},`, 400))

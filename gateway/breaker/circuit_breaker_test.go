@@ -48,7 +48,7 @@ func TestPerDomainBreaker_4xxDoesNotCountAsFailure(t *testing.T) {
 		require.ErrorAs(t, err, &ue)
 	}
 
-	// 404 is a definitive client-error response, not an upstream failure — breaker stays closed
+	// 404 is a definitive client-error response, not an upstream failure. Breaker stays closed
 	assert.Equal(t, gobreaker.StateClosed, p.State(url))
 }
 
@@ -93,7 +93,7 @@ func TestPerDomainBreaker_RecoversAfterTimeout(t *testing.T) {
 
 	time.Sleep(cfg.Timeout + 10*time.Millisecond)
 
-	// half-open now — needs MaxRequests consecutive successes to close again
+	// half-open now. Needs MaxRequests consecutive successes to close again
 	for i := 0; i < cfg.MaxRequests; i++ {
 		err := p.Execute(url, func() error { return nil })
 		require.NoError(t, err)
@@ -140,7 +140,7 @@ func TestCbKey(t *testing.T) {
 		"https://map.example.com/osm/tiles/1/2/3.png": "map.example.com/osm",
 		"https://api.example.com/":                    "api.example.com",
 		"https://api.example.com":                     "api.example.com",
-		// no scheme/host — url.Parse treats the whole string as a relative path
+		// no scheme/host. Url.Parse treats the whole string as a relative path
 		"not-a-valid-url-but-still-a-string": "/not-a-valid-url-but-still-a-string",
 	}
 	for input, want := range cases {

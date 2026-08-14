@@ -62,7 +62,7 @@ func (s *GatewayServiceService) List(ctx context.Context, params url.Values) ([]
 	return s.repo.FindAll(ctx, params)
 }
 
-// ListAllActive returns every non-deleted service with no pagination cap — used for boot-time
+// ListAllActive returns every non-deleted service with no pagination cap. Used for boot-time
 // Redis resync where a partial page would silently leave some services unsynced.
 func (s *GatewayServiceService) ListAllActive(ctx context.Context) ([]*model.GatewayService, error) {
 	return s.repo.FindAllActive(ctx)
@@ -173,7 +173,7 @@ func (s *GatewayServiceService) resolveInlineSource(ctx context.Context, i int, 
 		rp.SourceAlias = genSourceAlias()
 	}
 	if existing, err := s.sourceRepo.FindByAlias(ctx, rp.SourceAlias); err == nil && existing != nil {
-		// alias already exists — update it with new inline source data then return it for redis sync
+		// alias already exists. Update it with new inline source data then return it for redis sync
 		name := rp.Source.Name
 		if name == "" {
 			name = existing.Name

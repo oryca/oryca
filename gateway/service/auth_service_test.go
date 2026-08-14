@@ -15,7 +15,7 @@ import (
 	"github.com/stretchr/testify/require"
 )
 
-// stubUserProvider implements gwsync.SyncProvider — only GetUser is used, by
+// stubUserProvider implements gwsync.SyncProvider. Only GetUser is used, by
 // cache.NewUserFreshnessCache in the overlayFreshness tests below.
 type stubUserProvider struct {
 	result *gwsync.ApiKeyOwnerPayload
@@ -108,7 +108,7 @@ func TestOverlayFreshness_OverwritesPackageIDVerifiedEnabledExpiredAt(t *testing
 	require.NotNil(t, user.Enabled)
 	assert.False(t, *user.Enabled)
 	require.NotNil(t, user.ExpiredAt)
-	// Role is out of scope for this fix — still JWT-derived, untouched.
+	// Role is out of scope for this fix. Still JWT-derived, untouched.
 	assert.Equal(t, "admin", user.Role)
 }
 

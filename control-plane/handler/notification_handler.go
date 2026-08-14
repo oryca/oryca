@@ -231,7 +231,7 @@ func (h *NotificationHandler) IssueStreamTicket(c echo.Context) error {
 	return c.JSON(http.StatusOK, map[string]string{"ticket": ticket})
 }
 
-// Stream เปิด SSE connection — auth ผ่าน ticket ใน query param ไม่ใช่ JWT header
+// Stream เปิด SSE connection. Auth ผ่าน ticket ใน query param ไม่ใช่ JWT header
 func (h *NotificationHandler) Stream(c echo.Context) error {
 	ticket := c.QueryParam("ticket")
 	if ticket == "" {

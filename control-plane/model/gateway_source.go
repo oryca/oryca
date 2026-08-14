@@ -26,7 +26,7 @@ type GatewaySource struct {
 	DeletedBy *bson.ObjectID `json:"deletedBy,omitempty" bson:"deletedBy,omitempty"`
 }
 
-// GatewaySourcePublic is returned to user role — sensitive fields (URL, headers, body, contentType) are omitted
+// GatewaySourcePublic is returned to user role. Sensitive fields (URL, headers, body, contentType) are omitted
 type GatewaySourcePublic struct {
 	ID          bson.ObjectID `json:"id"`
 	Alias       string        `json:"alias,omitempty"`
