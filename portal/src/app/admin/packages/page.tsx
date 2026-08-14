@@ -76,6 +76,17 @@ export default function AdminPackagesPage() {
   const queryClient = useQueryClient();
   const [activeTab, setActiveTab] = useState<'packages' | 'users'>('packages');
 
+  // Opening an account for someone, rather than waiting for them to sign up
+  const [userSearch, setUserSearch] = useState('');
+  const [isNewUserOpen, setIsNewUserOpen] = useState(false);
+  const [newEmail, setNewEmail] = useState('');
+  const [newFirstName, setNewFirstName] = useState('');
+  const [newLastName, setNewLastName] = useState('');
+  const [newPassword, setNewPassword] = useState('');
+  const [newRole, setNewRole] = useState<'user' | 'admin'>('user');
+  const [newPackageId, setNewPackageId] = useState('');
+  const [newUserError, setNewUserError] = useState<string | null>(null);
+
   // Form states for Package CRUD
   const [editingPackage, setEditingPackage] = useState<Package | null>(null);
   const [isPackageFormOpen, setIsPackageFormOpen] = useState(false);
@@ -122,10 +133,23 @@ export default function AdminPackagesPage() {
     },
   });
 
-  const { data: users, isLoading: isLoadingUsers } = useQuery<User[]>({
-    queryKey: ['admin-users'],
+  // Which package a self-registered user gets. An account created here is given
+  // the same one unless told otherwise, so both routes in end up alike.
+  const { data: defaultPackageAlias } = useQuery<string>({
+    queryKey: ['register-default-package'],
     queryFn: async () => {
-      const res = await api.get('/users');
+      const res = await api.get('/configuration');
+      return res.data?.register?.defaultPackageAlias || '';
+    },
+    enabled: activeTab === 'users',
+  });
+
+  const { data: users, isLoading: isLoadingUsers } = useQuery<User[]>({
+    queryKey: ['admin-users', userSearch],
+    queryFn: async () => {
+      const res = await api.get('/users', {
+        params: userSearch ? { search: userSearch } : undefined,
+      });
       return res.data.items || [];
     },
     enabled: activeTab === 'users',
@@ -283,6 +307,37 @@ export default function AdminPackagesPage() {
     },
     onError: (err: any) => {
       setFormError(err.message || 'Failed to update user.');
+    },
+  });
+
+  const createUserMutation = useMutation({
+    mutationFn: async () => {
+      setNewUserError(null);
+      await api.post('/users', {
+        email: newEmail.trim(),
+        firstName: newFirstName.trim(),
+        lastName: newLastName.trim(),
+        password: newPassword,
+        role: newRole,
+        packageId: newPackageId || undefined,
+        // A default install has no mail server, so the account is usable at once
+        // and the administrator hands over the password.
+        verified: true,
+        enabled: true,
+      });
+    },
+    onSuccess: () => {
+      queryClient.invalidateQueries({ queryKey: ['admin-users'] });
+      setIsNewUserOpen(false);
+      setNewEmail('');
+      setNewFirstName('');
+      setNewLastName('');
+      setNewPassword('');
+      setNewRole('user');
+      setNewPackageId('');
+    },
+    onError: (err: any) => {
+      setNewUserError(err.message || 'Could not create the account.');
     },
   });
 
@@ -742,7 +797,128 @@ export default function AdminPackagesPage() {
         {/* ================================= USERS TAB ================================= */}
         {activeTab === 'users' && (
           <div className="space-y-6">
-            <h2 className="text-xs font-bold text-muted uppercase tracking-wider">User Account Management</h2>
+            <div className="flex flex-wrap items-center justify-between gap-3">
+              <h2 className="text-xs font-bold text-muted uppercase tracking-wider">User Account Management</h2>
+              <div className="flex items-center gap-2">
+                <input
+                  value={userSearch}
+                  onChange={(e) => setUserSearch(e.target.value)}
+                  placeholder="Search by email or name"
+                  className="bg-paper-2 border border-rule rounded-control px-3 py-1.5 text-xs text-ink outline-none focus:border-focus w-56"
+                />
+                <button
+                  type="button"
+                  onClick={() => {
+                    setNewUserError(null);
+                    const fallback = packages?.find((p) => p.alias === defaultPackageAlias);
+                    setNewPackageId(fallback?.id || '');
+                    setIsNewUserOpen(true);
+                  }}
+                  className="px-3 py-1.5 rounded-control bg-accent text-white text-xs font-semibold"
+                >
+                  New user
+                </button>
+              </div>
+            </div>
+
+            {isNewUserOpen && (
+              <div className="fixed inset-0 z-50 bg-scrim flex items-center justify-center p-4">
+                <div className="bg-paper border border-rule rounded-surface p-6 w-full max-w-md shadow-sm space-y-4 max-h-[90vh] overflow-y-auto">
+                  <h3 className="font-title text-base font-bold text-ink">New user</h3>
+                  <p className="text-xs text-muted">
+                    The account works straight away. Hand the password over yourself, and ask them to
+                    change it from Profile.
+                  </p>
+
+                  {newUserError && (
+                    <div className="flex items-start gap-3 rounded-control border border-danger-edge bg-danger-wash p-4 text-xs text-danger">
+                      <AlertTriangle className="w-4 h-4 mt-0.5 flex-shrink-0" />
+                      <div>{newUserError}</div>
+                    </div>
+                  )}
+
+                  <form
+                    onSubmit={(e) => {
+                      e.preventDefault();
+                      createUserMutation.mutate();
+                    }}
+                    className="space-y-3 text-xs"
+                  >
+                    <input
+                      required
+                      type="email"
+                      value={newEmail}
+                      onChange={(e) => setNewEmail(e.target.value)}
+                      placeholder="Email address"
+                      className="w-full bg-paper-2 border border-rule rounded-control px-3 py-2 text-sm text-ink outline-none focus:border-focus"
+                    />
+                    <div className="flex gap-2">
+                      <input
+                        required
+                        value={newFirstName}
+                        onChange={(e) => setNewFirstName(e.target.value)}
+                        placeholder="First name"
+                        className="flex-1 min-w-0 bg-paper-2 border border-rule rounded-control px-3 py-2 text-sm text-ink outline-none focus:border-focus"
+                      />
+                      <input
+                        required
+                        value={newLastName}
+                        onChange={(e) => setNewLastName(e.target.value)}
+                        placeholder="Last name"
+                        className="flex-1 min-w-0 bg-paper-2 border border-rule rounded-control px-3 py-2 text-sm text-ink outline-none focus:border-focus"
+                      />
+                    </div>
+                    <input
+                      required
+                      type="text"
+                      value={newPassword}
+                      onChange={(e) => setNewPassword(e.target.value)}
+                      placeholder="Password to hand over"
+                      className="w-full bg-paper-2 border border-rule rounded-control px-3 py-2 text-sm text-ink outline-none focus:border-focus font-mono"
+                    />
+                    <div className="flex gap-2">
+                      <select
+                        value={newRole}
+                        onChange={(e) => setNewRole(e.target.value as 'user' | 'admin')}
+                        className="flex-1 bg-paper-2 border border-rule rounded-control px-3 py-2 text-sm text-ink outline-none focus:border-focus"
+                      >
+                        <option value="user">User</option>
+                        <option value="admin">Administrator</option>
+                      </select>
+                      <select
+                        value={newPackageId}
+                        onChange={(e) => setNewPackageId(e.target.value)}
+                        className="flex-1 bg-paper-2 border border-rule rounded-control px-3 py-2 text-sm text-ink outline-none focus:border-focus font-mono"
+                      >
+                        <option value="">No package (cannot call anything)</option>
+                        {packages?.map((pkg) => (
+                          <option key={pkg.id} value={pkg.id}>
+                            {pkg.name} ({pkg.alias})
+                          </option>
+                        ))}
+                      </select>
+                    </div>
+
+                    <div className="flex justify-end gap-3 pt-1">
+                      <button
+                        type="button"
+                        onClick={() => setIsNewUserOpen(false)}
+                        className="px-4 py-2 text-xs font-semibold text-muted"
+                      >
+                        Cancel
+                      </button>
+                      <button
+                        type="submit"
+                        disabled={createUserMutation.isPending}
+                        className="px-4 py-2 rounded-control bg-accent text-white text-xs font-semibold disabled:opacity-50"
+                      >
+                        {createUserMutation.isPending ? 'Creating...' : 'Create account'}
+                      </button>
+                    </div>
+                  </form>
+                </div>
+              </div>
+            )}
 
             {/* Edit User Modal */}
             {isUserModalOpen && editingUser && (
@@ -862,7 +1038,9 @@ export default function AdminPackagesPage() {
                 ))}
               </div>
             ) : !users || users.length === 0 ? (
-              <p className="text-xs text-muted text-center py-6">No users found.</p>
+              <p className="text-xs text-muted text-center py-6">
+                {userSearch ? `Nobody matches "${userSearch}".` : 'No users yet.'}
+              </p>
             ) : (
               <div className="bg-paper border border-rule rounded-surface overflow-hidden shadow-sm">
                 <div className="overflow-x-auto">
