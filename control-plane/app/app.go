@@ -359,7 +359,7 @@ func buildServices(r appRepos, c appCaches, rc *redis.Client, routingTTL time.Du
 		pkg:             service.NewPackageService(r.pkg),
 		packageSvcLink:  service.NewPackageSvcLinkService(r.packageSvcLink, r.gatewayService, r.pkg, r.pkg, gatewaySync, r.user, notificationSvc),
 		packageUser:     service.NewPackageUserService(r.user, r.pkg, r.pkg, notificationSvc, gwPublisher),
-		transformConfig: service.NewTransformConfigService(r.transformConfig),
+		transformConfig: service.NewTransformConfigService(r.transformConfig, gwPublisher),
 		notification:    notificationSvc,
 		apiDoc:          service.NewApiDocService(r.apiDoc),
 		dashboard:       service.NewDashboardService(r.accessLog, r.gatewayService),

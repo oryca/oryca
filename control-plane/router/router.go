@@ -288,10 +288,12 @@ func Setup(e *echo.Echo, infra Infra, svcs Services, internalCfg InternalConfig,
 	packages.DELETE(routePackageID+"/users", packageHandler.RemovePackageUsers)
 
 	// Response Transforms
-	transformConfigHandler := handler.NewTransformConfigHandler(svcs.TransformResponseConfig)
+	transformConfigHandler := handler.NewTransformConfigHandler(svcs.TransformResponseConfig, svcs.GatewayService, internalCfg.SourceRepo)
 	transformConfigs := v1.Group("/response-transforms", jwtMW.Authenticate)
 	transformConfigs.GET("", transformConfigHandler.List)
 	transformConfigs.GET("/variables", transformConfigHandler.Variables)
+	transformConfigs.GET("/presets", transformConfigHandler.Presets)
+	transformConfigs.POST("/presets/:presetName/apply", transformConfigHandler.ApplyPreset)
 	transformConfigs.GET(routeTransformConfigID, transformConfigHandler.Get)
 	transformConfigs.POST("", transformConfigHandler.Create)
 	transformConfigs.PUT(routeTransformConfigID, transformConfigHandler.Update)

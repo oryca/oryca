@@ -15,6 +15,7 @@ type GatewayService struct {
 	Enabled       *bool           `json:"enabled,omitempty" bson:"enabled,omitempty"`
 	IsPublic      *bool           `json:"isPublic,omitempty" bson:"isPublic,omitempty"`
 	ResourcePaths []*ResourcePath `json:"resourcePaths,omitempty" bson:"resourcePaths,omitempty"`
+	OGC           *OGCInfo        `json:"ogc,omitempty" bson:"ogc,omitempty"`
 
 	CreatedAt *time.Time     `json:"createdAt,omitempty" bson:"createdAt,omitempty"`
 	CreatedBy *bson.ObjectID `json:"createdBy,omitempty" bson:"createdBy,omitempty"`
@@ -67,6 +68,7 @@ type GatewayServiceWithSource struct {
 	Enabled       *bool                     `json:"enabled,omitempty" bson:"enabled,omitempty"`
 	IsPublic      *bool                     `json:"isPublic,omitempty" bson:"isPublic,omitempty"`
 	ResourcePaths []*ResourcePathWithSource `json:"resourcePaths,omitempty" bson:"resourcePaths,omitempty"`
+	OGC           *OGCInfo                  `json:"ogc,omitempty" bson:"ogc,omitempty"`
 	CreatedAt     *time.Time                `json:"createdAt,omitempty" bson:"createdAt,omitempty"`
 	CreatedBy     *bson.ObjectID            `json:"createdBy,omitempty" bson:"createdBy,omitempty"`
 	UpdatedAt     *time.Time                `json:"updatedAt,omitempty" bson:"updatedAt,omitempty"`
@@ -83,6 +85,7 @@ type GatewayServiceCreate struct {
 	Enabled       *bool           `json:"enabled"`
 	IsPublic      *bool           `json:"isPublic"`
 	ResourcePaths []*ResourcePath `json:"resourcePaths"`
+	OGC           *OGCInfo        `json:"ogc,omitempty"`
 }
 
 type GatewayServiceUpdate struct {
@@ -93,9 +96,13 @@ type GatewayServiceUpdate struct {
 	Enabled       *bool           `json:"enabled"`
 	IsPublic      *bool           `json:"isPublic"`
 	ResourcePaths []*ResourcePath `json:"resourcePaths"`
+	OGC           *OGCInfo        `json:"ogc,omitempty"`
 }
 
 type GatewayServiceCheckPathsRequest struct {
+	// Type is optional; when it names an OGC standard the response also reports
+	// which of its core endpoints are not covered.
+	Type             string   `json:"type,omitempty"`
 	BasePath         string   `json:"basePath"`
 	ResourcePaths    []string `json:"resourcePaths"`
 	ExcludeServiceID string   `json:"excludeServiceId,omitempty"`
@@ -115,4 +122,6 @@ type GatewayServiceCheckPathsResponse struct {
 	HasConflict           bool                    `json:"hasConflict"`
 	BasePathConflict      *BasePathConflictInfo   `json:"basePathConflict,omitempty"`
 	ResourcePathConflicts []*InternalPathConflict `json:"resourcePathConflicts,omitempty"`
+	// MissingOGCPaths is advisory: the paths are still accepted as given.
+	MissingOGCPaths []string `json:"missingOgcPaths,omitempty"`
 }

@@ -1,0 +1,83 @@
+# Response transforms offered for OGC API services.
+#
+# An OGC API answers with links that point at the upstream server. Follow one and
+# you leave the gateway: no API key, no rate limit, no cache. These presets rewrite
+# those links back to the gateway so a client can navigate the whole service
+# through it.
+#
+# `find` is filled in when the preset is applied — one rule per upstream the
+# service is built from. `{{oryca_gateway_url}}` is resolved per request by the
+# gateway, and is the public URL of that service.
+
+presets:
+  - name: rewrite-links
+    types: [OGC_API_Features, OGC_API_STAC, OGC_API_Styles, OGC_API_Tiles]
+    title: Keep links inside the gateway
+    description: >
+      Rewrites href in the links array so clients following them stay on the
+      gateway instead of jumping to the upstream server.
+    match:
+      path: /*
+      methods: [GET]
+    rules:
+      - type: json
+        target: body
+        action: replace
+        path: $.links[*]
+        params:
+          field: href
+          find: "{{sourceUrl}}"
+          replace: "{{oryca_gateway_url}}"
+
+  - name: rewrite-collection-links
+    types: [OGC_API_Features, OGC_API_STAC]
+    title: Keep links inside the gateway, including nested collections
+    description: >
+      Same as the plain link rewrite, and also covers the links carried by each
+      entry of a collections or features response.
+    match:
+      path: /*
+      methods: [GET]
+    rules:
+      - type: json
+        target: body
+        action: replace
+        path: $.links[*]
+        params:
+          field: href
+          find: "{{sourceUrl}}"
+          replace: "{{oryca_gateway_url}}"
+      - type: json
+        target: body
+        action: replace
+        path: $.collections[*].links[*]
+        params:
+          field: href
+          find: "{{sourceUrl}}"
+          replace: "{{oryca_gateway_url}}"
+      - type: json
+        target: body
+        action: replace
+        path: $.features[*].links[*]
+        params:
+          field: href
+          find: "{{sourceUrl}}"
+          replace: "{{oryca_gateway_url}}"
+
+  - name: rewrite-sensorthings-navigation
+    types: [OGC_API_SensorThings]
+    title: Keep navigation links inside the gateway
+    description: >
+      SensorThings answers carry selfLink and navigationLink fields rather than a
+      links array. This rewrites both, at the top level and per value.
+    match:
+      path: /*
+      methods: [GET]
+    rules:
+      - type: json
+        target: body
+        action: replace
+        path: $..*
+        params:
+          regex: "^{{sourceUrl}}"
+          replace: "{{oryca_gateway_url}}"

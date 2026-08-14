@@ -289,6 +289,7 @@ func toServiceWithSource(svc *model.GatewayService, sourceMap map[string]*model.
 		Enabled:       svc.Enabled,
 		IsPublic:      svc.IsPublic,
 		ResourcePaths: rps,
+		OGC:           svc.OGC,
 		CreatedAt:     svc.CreatedAt,
 		CreatedBy:     svc.CreatedBy,
 		UpdatedAt:     svc.UpdatedAt,
@@ -328,6 +329,7 @@ func (s *GatewayServiceService) Create(ctx context.Context, body *model.GatewayS
 		Enabled:       &enabled,
 		IsPublic:      &isPublic,
 		ResourcePaths: body.ResourcePaths,
+		OGC:           body.OGC,
 		CreatedAt:     &now,
 		CreatedBy:     &ctxUser.ID,
 		UpdatedAt:     &now,
@@ -400,6 +402,7 @@ func (s *GatewayServiceService) Update(ctx context.Context, id string, body *mod
 		"enabled":       enabled,
 		"isPublic":      isPublic,
 		"resourcePaths": body.ResourcePaths,
+		"ogc":           body.OGC,
 	}
 
 	if err := s.repo.Update(ctx, existing.ID, fields); err != nil {

@@ -8,6 +8,7 @@ import (
 	"strings"
 
 	"github.com/oryca/oryca/control-plane/model"
+	"github.com/oryca/oryca/control-plane/preset"
 	"github.com/oryca/oryca/control-plane/service"
 	"github.com/oryca/oryca/control-plane/tool"
 
@@ -29,12 +30,138 @@ type transformConfigService interface {
 	Delete(ctx context.Context, id bson.ObjectID, adminID bson.ObjectID) error
 }
 
-type TransformConfigHandler struct {
-	svc transformConfigService
+// presetServiceGetter and presetSourceFinder are what applying a preset needs:
+// the service being configured, and the address of each upstream behind it.
+type presetServiceGetter interface {
+	GetByID(ctx context.Context, id string) (*model.GatewayService, error)
 }
 
-func NewTransformConfigHandler(svc transformConfigService) *TransformConfigHandler {
-	return &TransformConfigHandler{svc: svc}
+type presetSourceFinder interface {
+	FindByAlias(ctx context.Context, alias string) (*model.GatewaySource, error)
+}
+
+type TransformConfigHandler struct {
+	svc        transformConfigService
+	serviceSvc presetServiceGetter
+	sourceRepo presetSourceFinder
+}
+
+func NewTransformConfigHandler(svc transformConfigService, serviceSvc presetServiceGetter, sourceRepo presetSourceFinder) *TransformConfigHandler {
+	return &TransformConfigHandler{svc: svc, serviceSvc: serviceSvc, sourceRepo: sourceRepo}
+}
+
+// Presets lists the ready-made transforms, narrowed to a service type when the
+// `type` query parameter is given.
+func (h *TransformConfigHandler) Presets(c echo.Context) error {
+	ctxUser, _ := c.Get("user").(*model.User)
+	if ctxUser == nil || !h.canManage(c, ctxUser) {
+		return c.JSON(http.StatusForbidden, &model.Exception{
+			Code:   tool.CodeUnauthorizedAccess,
+			Status: http.StatusForbidden,
+			Detail: msgNoPermission,
+		})
+	}
+
+	items := preset.ForType(c.QueryParam("type"))
+	if items == nil {
+		items = []preset.Preset{}
+	}
+	return c.JSON(http.StatusOK, &model.ListResponse[preset.Preset]{
+		NumberMatched:  len(items),
+		NumberReturned: len(items),
+		Items:          items,
+	})
+}
+
+// ApplyPreset writes a preset out as a normal transform config for one service,
+// with the upstream addresses filled in. What it creates is editable afterwards.
+func (h *TransformConfigHandler) ApplyPreset(c echo.Context) error {
+	ctxUser, _ := c.Get("user").(*model.User)
+	if ctxUser == nil || !h.canManage(c, ctxUser) {
+		return c.JSON(http.StatusForbidden, &model.Exception{
+			Code:   tool.CodeUnauthorizedAccess,
+			Status: http.StatusForbidden,
+			Detail: msgNoPermission,
+		})
+	}
+
+	p, ok := preset.Find(c.Param("presetName"))
+	if !ok {
+		return c.JSON(http.StatusNotFound, &model.Exception{
+			Code:   tool.CodeNotFound,
+			Status: http.StatusNotFound,
+			Detail: "Preset not found",
+		})
+	}
+
+	var body struct {
+		ServiceID string `json:"serviceId"`
+	}
+	if err := c.Bind(&body); err != nil || body.ServiceID == "" {
+		return c.JSON(http.StatusBadRequest, &model.Exception{
+			Code:   tool.CodeBodyInvalidFormat,
+			Status: http.StatusBadRequest,
+			Detail: "Body 'serviceId' is required",
+		})
+	}
+
+	svc, err := h.serviceSvc.GetByID(c.Request().Context(), body.ServiceID)
+	if err != nil || svc == nil {
+		return c.JSON(http.StatusNotFound, &model.Exception{
+			Code:   tool.CodeGatewayServiceNotFound,
+			Status: http.StatusNotFound,
+			Detail: "Service not found",
+		})
+	}
+
+	sourceURLs := h.serviceSourceURLs(c, svc)
+	if len(sourceURLs) == 0 {
+		return c.JSON(http.StatusUnprocessableEntity, &model.Exception{
+			Code:   tool.CodeOperationFailed,
+			Status: http.StatusUnprocessableEntity,
+			Detail: "The service has no upstream to rewrite links away from",
+		})
+	}
+
+	created, err := h.svc.Create(c.Request().Context(), &model.TransformConfigRequest{
+		Name:        svc.Name + " — " + p.Title,
+		Description: p.Description,
+		ServiceID:   body.ServiceID,
+		Match:       p.Match,
+		Enabled:     true,
+		Rules:       p.Rewrite(sourceURLs),
+	}, ctxUser.ID)
+	if err != nil {
+		return c.JSON(http.StatusUnprocessableEntity, &model.Exception{
+			Code:   tool.CodeOperationFailed,
+			Status: http.StatusUnprocessableEntity,
+			Detail: "Could not apply the preset",
+		})
+	}
+
+	return c.JSON(http.StatusCreated, created)
+}
+
+// serviceSourceURLs collects the distinct upstream addresses a service is built
+// from. A source that cannot be read is skipped rather than failing the request.
+func (h *TransformConfigHandler) serviceSourceURLs(c echo.Context, svc *model.GatewayService) []string {
+	seen := make(map[string]struct{})
+	var urls []string
+	for _, rp := range svc.ResourcePaths {
+		if rp.SourceAlias == "" {
+			continue
+		}
+		src, err := h.sourceRepo.FindByAlias(c.Request().Context(), rp.SourceAlias)
+		if err != nil || src == nil || src.URL == "" {
+			continue
+		}
+		if _, dup := seen[src.URL]; dup {
+			continue
+		}
+		seen[src.URL] = struct{}{}
+		urls = append(urls, src.URL)
+	}
+	return urls
 }
 
 func (h *TransformConfigHandler) canManage(c echo.Context, ctxUser *model.User) bool {

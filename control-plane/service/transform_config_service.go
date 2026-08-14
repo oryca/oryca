@@ -19,12 +19,28 @@ type transformConfigRepo interface {
 	Delete(ctx context.Context, id bson.ObjectID, adminID bson.ObjectID) error
 }
 
-type TransformResponseConfigService struct {
-	repo transformConfigRepo
+// transformGatewayPublisher tells the gateway to re-read its config. Transform
+// configs are edited one at a time by an administrator, so there is no bulk loop
+// here that could turn into an event storm.
+type transformGatewayPublisher interface {
+	Publish(eventType string, payload any)
 }
 
-func NewTransformConfigService(repo transformConfigRepo) *TransformResponseConfigService {
-	return &TransformResponseConfigService{repo: repo}
+type TransformResponseConfigService struct {
+	repo      transformConfigRepo
+	publisher transformGatewayPublisher
+}
+
+func NewTransformConfigService(repo transformConfigRepo, publisher transformGatewayPublisher) *TransformResponseConfigService {
+	return &TransformResponseConfigService{repo: repo, publisher: publisher}
+}
+
+// notifyGateway asks the gateway to re-pull. Without it a new transform waits for
+// the next poll, which makes a saved change look like it did nothing.
+func (s *TransformResponseConfigService) notifyGateway() {
+	if s.publisher != nil {
+		s.publisher.Publish(SyncEventTypeReloadServices, nil)
+	}
 }
 
 func (s *TransformResponseConfigService) List(ctx context.Context, serviceID *bson.ObjectID, limit, offset int64) ([]*model.TransformConfig, int64, error) {
@@ -51,6 +67,7 @@ func (s *TransformResponseConfigService) Create(ctx context.Context, req *model.
 	if err := s.repo.Create(ctx, cfg, adminID); err != nil {
 		return nil, err
 	}
+	s.notifyGateway()
 	return cfg, nil
 }
 
@@ -62,7 +79,11 @@ func (s *TransformResponseConfigService) Update(ctx context.Context, id bson.Obj
 	if existing == nil {
 		return ErrTransformConfigNotFound
 	}
-	return s.repo.Update(ctx, id, req, adminID)
+	if err := s.repo.Update(ctx, id, req, adminID); err != nil {
+		return err
+	}
+	s.notifyGateway()
+	return nil
 }
 
 func (s *TransformResponseConfigService) Delete(ctx context.Context, id bson.ObjectID, adminID bson.ObjectID) error {
@@ -73,5 +94,9 @@ func (s *TransformResponseConfigService) Delete(ctx context.Context, id bson.Obj
 	if existing == nil {
 		return ErrTransformConfigNotFound
 	}
-	return s.repo.Delete(ctx, id, adminID)
+	if err := s.repo.Delete(ctx, id, adminID); err != nil {
+		return err
+	}
+	s.notifyGateway()
+	return nil
 }

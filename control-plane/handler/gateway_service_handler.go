@@ -327,6 +327,9 @@ func (h *GatewayServiceHandler) CheckResourcePaths(c echo.Context) error {
 		})
 	}
 
+	// Advisory only: an OGC service that exposes part of the standard is still valid.
+	resp.MissingOGCPaths = model.MissingOGCPaths(body.Type, body.ResourcePaths)
+
 	return c.JSON(http.StatusOK, resp)
 }
 
