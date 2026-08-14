@@ -33,7 +33,8 @@ curl -fsSL -o .env https://raw.githubusercontent.com/oryca/oryca/main/.env.examp
 docker compose up -d
 ```
 
-That pulls the published images. To build from source instead:
+That pulls the published images, tracking the newest release. Pin a version with
+`ORYCA_VERSION=0.1.0 docker compose up -d`. To build from source instead:
 ```sh
 git clone https://github.com/oryca/oryca.git
 cd oryca && cp .env.example .env
@@ -61,7 +62,7 @@ upstream, service, package, key — and the one detail that trips everyone up.
 
 **For any API**
 
-- **Try it in the browser.** The portal calls the gateway with your key and shows what comes back, rate-limit headers included (`RateLimit-Limit`, `RateLimit-Remaining`).
+- **A sandbox.** Call a published service the way your users will: pick a path, add headers or a body, send it with a key, and see the status, the timing, the rate-limit headers, and the same call written as `curl`.
 - **Request charts and logs.** Volume, response time, status breakdown, and a searchable log. Each person sees their own traffic, administrators see everyone's.
 - **Self-service sign-up.** Developers register, get a key, and read the docs without an administrator in the loop.
 - **Rewrite rules you write yourself.** JSON by JSONPath, XML by XPath, headers by name — see [response transforms](docs/response-transforms.md).
