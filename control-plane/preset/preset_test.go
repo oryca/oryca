@@ -3,8 +3,11 @@ package preset
 import (
 	"testing"
 
+	"github.com/oryca/oryca/control-plane/model"
+
 	"github.com/stretchr/testify/assert"
 	"github.com/stretchr/testify/require"
+	"gopkg.in/yaml.v3"
 )
 
 func TestForType(t *testing.T) {
@@ -63,4 +66,30 @@ func TestRewriteQuotesTheRegexForm(t *testing.T) {
 	require.Len(t, rules, 1)
 	// The dot in v1.1 must not stay a regex wildcard.
 	assert.Equal(t, `^https://sensors\.example/v1\.1`, rules[0].Params.Regex)
+}
+
+// Presets are written in YAML, and yaml.v3 lowercases a field name unless a tag
+// says otherwise. Without tags, headerName and notEquals bind to nothing and a
+// rule loads with those parts silently missing.
+func TestYAMLKeysBindToTheRule(t *testing.T) {
+	var rule model.TransformRule
+	src := `
+type: json
+target: headers
+action: replace
+headerName: X-Example
+conditions:
+  - field: rel
+    notEquals: [resource]
+params:
+  field: href
+  find: a
+  replace: b
+`
+	require.NoError(t, yaml.Unmarshal([]byte(src), &rule))
+
+	assert.Equal(t, "X-Example", rule.HeaderName)
+	require.Len(t, rule.Conditions, 1)
+	assert.Equal(t, []interface{}{"resource"}, rule.Conditions[0].NotEquals)
+	assert.Equal(t, "href", rule.Params.Field)
 }

@@ -104,6 +104,40 @@ this", and use the path to say what to edit.
 
 `equals` and `notEquals` both take a list, and values are compared as text.
 
+## XML
+
+Set `type: xml` and select with `xpath` instead of `path`. Namespaces are the
+usual difficulty, and `local-name()` sidesteps them:
+
+```json
+{
+  "type": "xml",
+  "target": "body",
+  "action": "replace",
+  "xpath": "//*[local-name()='ResourceURL']",
+  "params": { "field": "@template", "regex": "api_key=[^&]*", "replace": "{{oryca_auth}}" }
+}
+```
+
+In an XML rule, `field` says which part of the element to edit:
+
+| `field` | Edits |
+|---|---|
+| left out | The element's text |
+| `@template` | The attribute named `template` |
+| `@href` | The attribute named `href` |
+| `@xlink:href` | An attribute carrying a namespace prefix |
+
+A WMTS capabilities document is the common case: its `ResourceURL/@template`
+and `ServiceMetadataURL/@href` both carry the upstream address and the upstream's
+own API key, and both need rewriting for a client to keep working through the
+gateway.
+
+XML is handled with text matching rather than a full parser, so it suits
+straightforward edits — an address, an attribute — and not restructuring a
+document. XPath support is limited to that: element selection, `local-name()`,
+and simple predicates.
+
 ## What is left alone
 
 - **A body that did not arrive whole.** Very large answers are streamed straight
@@ -143,6 +177,15 @@ address behind *this* service, so:
 - A link into a part of the upstream server your service does not cover is also
   left alone. Rewriting it would send clients to a path the gateway answers 404
   for. Register that path on the service if you want it proxied.
+
+## Reference
+
+- JSONPath is evaluated by [ojg/jp](https://github.com/ohler55/ojg), which
+  follows [RFC 9535](https://www.rfc-editor.org/rfc/rfc9535.html). `$` is the
+  root, `*` matches any element, `[*]` every entry of an array, and `$..` any
+  depth.
+- Regular expressions are Go's, and a backslash needs escaping when the rule is
+  written as JSON.
 
 ## Cost
 

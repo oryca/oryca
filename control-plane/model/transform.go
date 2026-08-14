@@ -28,13 +28,16 @@ type TransformMatch struct {
 	Options map[string]interface{} `bson:"options,omitempty"  json:"options,omitempty"`
 }
 
+// The yaml tags matter because presets are written in YAML: yaml.v3 lowercases a
+// field name when no tag says otherwise, so headerName and notEquals would be
+// read as headername and notequals, and quietly come back empty.
 type TransformRule struct {
 	Type       string               `bson:"type"                  json:"type"`
 	Target     string               `bson:"target"                json:"target"`
 	Action     string               `bson:"action"                json:"action"`
 	Path       string               `bson:"path,omitempty"        json:"path,omitempty"`
 	XPath      string               `bson:"xpath,omitempty"       json:"xpath,omitempty"`
-	HeaderName string               `bson:"headerName,omitempty"  json:"headerName,omitempty"`
+	HeaderName string               `bson:"headerName,omitempty"  json:"headerName,omitempty"  yaml:"headerName"`
 	Conditions []TransformCondition `bson:"conditions,omitempty"  json:"conditions,omitempty"`
 	Params     TransformParams      `bson:"params"                json:"params"`
 }
@@ -42,7 +45,7 @@ type TransformRule struct {
 type TransformCondition struct {
 	Field     string        `bson:"field"                json:"field"`
 	Equals    []interface{} `bson:"equals,omitempty"     json:"equals,omitempty"`
-	NotEquals []interface{} `bson:"notEquals,omitempty"  json:"notEquals,omitempty"`
+	NotEquals []interface{} `bson:"notEquals,omitempty"  json:"notEquals,omitempty"  yaml:"notEquals"`
 }
 
 type TransformParams struct {
