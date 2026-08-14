@@ -137,6 +137,13 @@ With the stack up, `tools/smoke-test.sh` walks the whole path: sign in, publish 
 service, issue a key, call it through the gateway, and check it reaches the
 dashboard.
 
+## Docs
+
+- [Response transforms](docs/response-transforms.md) — rewriting an answer on its
+  way back, and the presets that do it for you
+- [The gateway ↔ control plane contract](docs/sync-contract.md) — what the two
+  services promise each other
+
 ## Contributing
 
 Issues and questions are welcome, see [CONTRIBUTING.md](CONTRIBUTING.md). Found a
