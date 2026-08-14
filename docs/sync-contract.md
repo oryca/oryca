@@ -1,8 +1,6 @@
 # Synchronization Protocol: Gateway ↔ Control Plane
 
-To ensure high availability and performance, the **ORYCA Gateway** never imports control-plane code and never establishes database connections directly to MongoDB. 
-
-Instead, the gateway coordinates routes, API keys, user accounts, and request logs through two distinct sync channels: **HTTP Polling** and **Redis Pub/Sub**.
+The gateway never imports control-plane code and never connects to MongoDB. It gets routes, API keys and user accounts, and sends its request logs back, over two channels: **HTTP polling** and **Redis**.
 
 ```
                    ┌────────────────────────────────────────┐
@@ -18,7 +16,7 @@ Instead, the gateway coordinates routes, API keys, user accounts, and request lo
                    └────────────────────────────────────────┘
 ```
 
-This architecture ensures that if the control plane or MongoDB goes offline, **the gateway continues to proxy traffic uninterrupted** using its cached routing tables.
+So if the control plane or MongoDB goes offline, the gateway keeps proxying traffic from its cached routing tables. Nothing new arrives until they are back.
 
 > [!IMPORTANT]
 > Both services must point at the **same Redis database**: `ORYCA_API_REDIS_DB` and `ORYCA_GW_REDIS_DB` have to match. Pub/Sub ignores the database number, so a mismatch looks healthy — events arrive, but the cached routing tables never do.
@@ -68,7 +66,7 @@ Pub/Sub is **at-most-once**: an event published while the gateway is restarting 
 
 ## 3. Redis Log Stream (Usage Logs)
 
-The gateway records details of every request it proxies and streams them back to the control plane for dashboard analytics:
+The gateway records every request it proxies and sends them to the control plane, which is where the dashboard reads them from:
 
 1. **Upload:** The gateway appends traffic entries to the Redis log stream (`stream:usage-log`) using `XADD`.
 2. **Process:** The control plane reads entries via consumer group `cp-log-consumer` in batches of up to 100 or every 1 second, writing them to MongoDB (`access_logs` collection).

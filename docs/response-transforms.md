@@ -1,11 +1,11 @@
 # Response Transforms (Link Rewriter)
 
-A **Response Transform** intercepts responses coming back from your upstream servers and mutates their contents (headers or body) before delivering them to clients. 
+A **response transform** changes a response — its headers or its body — on the way back from your upstream server to the client.
 
-This is crucial for geospatial services (e.g. OGC API Features, STAC, WMTS), where responses contain self-referencing hyperlinks. Without transforms, clients would follow those links and bypass the gateway, losing access key authentication and rate limiting.
+The reason it exists: a geospatial API (OGC API Features, STAC, WMTS) answers with links to itself. A client that follows those links leaves the gateway, and with it the API key check and the rate limit. Rewriting the links keeps clients coming back.
 
 > [!TIP]
-> **Use Presets:** If you just want to solve OGC API link rewriting, **do not write custom rules**. Simply select your service in the portal, click **"Apply OGC API Preset"**, and the gateway will handle the rest.
+> **Start with a preset.** If all you need is OGC link rewriting, you do not have to write rules. Select the service in the portal and click **"Apply OGC API Preset"**.
 
 ---
 
