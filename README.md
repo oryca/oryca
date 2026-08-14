@@ -10,6 +10,25 @@ key, and read your docs on their own.
 It knows the OGC API shapes (Features, Tiles, Styles, STAC, SensorThings), and
 plain REST and static JSON work too.
 
+### What "knows" means
+
+ORYCA does not implement these standards. It sits in front of servers that do,
+and understands their shapes well enough to do two things: suggest the paths a
+service of that kind usually exposes, and rewrite the links in its answers so
+clients keep talking to the gateway instead of wandering off to the server
+behind it.
+
+| Standard | Version we follow | Note |
+|---|---|---|
+| OGC API - Features | Part 1: Core 1.0 | Also published as ISO 19168-1 |
+| OGC API - Tiles | Part 1: Core 1.0 | |
+| OGC API - Styles | Part 1: Core | Still a draft, so our path hints may change with it |
+| SensorThings API | 1.0, 1.1 | Conformance is advertised on the landing page, not at /conformance |
+| STAC API | 1.0 | A community specification, not an OGC standard |
+
+Each service you register records the version its own upstream implements, which
+is the number that actually matters to a client.
+
 > **Status: under construction.** The gateway and control plane work today. The
 > portal is not built yet, a placeholder page stands in for it.
 
@@ -86,6 +105,16 @@ your work.
 
 Admin credentials are not in those files. They come from `ORYCA_API_ROOT_EMAIL`
 and `ORYCA_API_ROOT_PASSWORD`.
+
+Two settings behave differently from the rest: `ORYCA_PORTAL_API_URL` and
+`ORYCA_PORTAL_GATEWAY_URL`. The portal calls both services from the visitor's
+browser, so they have to be addresses your users can reach, and Next.js writes
+them into the page bundle while the image is built. Serving the stack from a real
+domain therefore means rebuilding the portal:
+
+```sh
+docker compose build portal && docker compose up -d
+```
 
 ## Development
 

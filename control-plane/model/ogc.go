@@ -27,23 +27,34 @@ type OGCInfo struct {
 // They are deliberately the core ones only: registering a service that exposes
 // just a slice of a standard is legitimate, so a missing path is a warning to the
 // person filling the form, never a reason to reject what they typed.
+//
+// ORYCA does not implement any of these standards. It sits in front of servers
+// that do, and knows their shapes well enough to suggest paths and rewrite links.
+// The versions each set follows are noted per entry; a server on a different
+// version may legitimately answer at other paths.
 var ogcCorePaths = map[string][]string{
+	// OGC API - Features - Part 1: Core 1.0 (also ISO 19168-1)
 	TypeOGCAPIFeatures: {
 		"/", "/conformance", "/collections",
 		"/collections/{collectionId}",
 		"/collections/{collectionId}/items",
 	},
+	// STAC API 1.0. A community specification, not an OGC standard, though its
+	// item search follows OGC API - Features closely.
 	TypeOGCAPISTAC: {
 		"/", "/conformance", "/collections", "/search",
 	},
+	// OGC API - Styles - Part 1: Core, still a draft at the time of writing, so
+	// these paths can change before it is adopted.
 	TypeOGCAPIStyles: {
 		"/", "/conformance", "/styles",
 	},
+	// OGC API - Tiles - Part 1: Core 1.0
 	TypeOGCAPITiles: {
 		"/", "/conformance", "/tileMatrixSets",
 	},
-	// SensorThings advertises conformance from its landing page rather than a
-	// /conformance endpoint, so only the entity sets are listed.
+	// SensorThings API 1.0 and 1.1. It advertises conformance from its landing
+	// page rather than a /conformance endpoint, so only the entity sets are listed.
 	TypeOGCAPISensorThings: {
 		"/", "/Things", "/Datastreams", "/Observations",
 	},

@@ -1,21 +1,31 @@
-# Response transforms offered for OGC API services.
+# Response transforms offered per service type.
 #
-# An OGC API answers with links that point at the upstream server. Follow one and
-# you leave the gateway: no API key, no rate limit, no cache. These presets rewrite
-# those links back to the gateway so a client can navigate the whole service
-# through it.
+# These APIs answer with links that point at the upstream server. Follow one and
+# you leave the gateway: no API key, no rate limit, no cache. Each preset here
+# rewrites the links a given standard puts in its answers, so a client can
+# navigate the whole service through the gateway.
 #
-# `find` is filled in when the preset is applied — one rule per upstream the
-# service is built from. `{{oryca_gateway_url}}` is resolved per request by the
-# gateway, and is the public URL of that service.
+# `find` is filled in when the preset is applied, with the upstream address of
+# the service. `{{oryca_gateway_url}}` is resolved per request by the gateway and
+# is the public address of that service.
+#
+# Only href fields are touched. Registry URIs such as
+# http://www.opengis.net/def/tilematrixset/OGC/1.0/WebMercatorQuad are identifiers,
+# not addresses to fetch, and are left alone because they do not start with the
+# upstream address.
+#
+# A link into a part of the upstream server the service does not cover keeps
+# pointing at the upstream. Registering /collections/lakes/tiles and nothing else
+# leaves the tiling-scheme link at /TileMatrixSets alone, because the gateway
+# would answer 404 for it. Register that path too if you want it proxied.
 
 presets:
-  - name: rewrite-links
-    types: [OGC_API_Features, OGC_API_STAC, OGC_API_Styles, OGC_API_Tiles]
+  - name: features-links
+    types: [OGC_API_Features]
     title: Keep links inside the gateway
     description: >
-      Rewrites href in the links array so clients following them stay on the
-      gateway instead of jumping to the upstream server.
+      Rewrites the links of the landing page, the collections list, and the
+      features of a collection.
     match:
       path: /*
       methods: [GET]
@@ -24,52 +34,105 @@ presets:
         target: body
         action: replace
         path: $.links[*]
-        params:
-          field: href
-          find: "{{sourceUrl}}"
-          replace: "{{oryca_gateway_url}}"
-
-  - name: rewrite-collection-links
-    types: [OGC_API_Features, OGC_API_STAC]
-    title: Keep links inside the gateway, including nested collections
-    description: >
-      Same as the plain link rewrite, and also covers the links carried by each
-      entry of a collections or features response.
-    match:
-      path: /*
-      methods: [GET]
-    rules:
-      - type: json
-        target: body
-        action: replace
-        path: $.links[*]
-        params:
-          field: href
-          find: "{{sourceUrl}}"
-          replace: "{{oryca_gateway_url}}"
+        params: { field: href, find: "{{sourceUrl}}", replace: "{{oryca_gateway_url}}" }
       - type: json
         target: body
         action: replace
         path: $.collections[*].links[*]
-        params:
-          field: href
-          find: "{{sourceUrl}}"
-          replace: "{{oryca_gateway_url}}"
+        params: { field: href, find: "{{sourceUrl}}", replace: "{{oryca_gateway_url}}" }
       - type: json
         target: body
         action: replace
         path: $.features[*].links[*]
-        params:
-          field: href
-          find: "{{sourceUrl}}"
-          replace: "{{oryca_gateway_url}}"
+        params: { field: href, find: "{{sourceUrl}}", replace: "{{oryca_gateway_url}}" }
 
-  - name: rewrite-sensorthings-navigation
+  - name: stac-links
+    types: [OGC_API_STAC]
+    title: Keep links inside the gateway
+    description: >
+      Rewrites the links of the catalog, its collections, and the items a search
+      returns. Asset addresses are left alone: they usually point at object
+      storage the gateway does not sit in front of.
+    match:
+      path: /*
+      methods: [GET]
+    rules:
+      - type: json
+        target: body
+        action: replace
+        path: $.links[*]
+        params: { field: href, find: "{{sourceUrl}}", replace: "{{oryca_gateway_url}}" }
+      - type: json
+        target: body
+        action: replace
+        path: $.collections[*].links[*]
+        params: { field: href, find: "{{sourceUrl}}", replace: "{{oryca_gateway_url}}" }
+      - type: json
+        target: body
+        action: replace
+        path: $.features[*].links[*]
+        params: { field: href, find: "{{sourceUrl}}", replace: "{{oryca_gateway_url}}" }
+
+  - name: tiles-links
+    types: [OGC_API_Tiles]
+    title: Keep links inside the gateway
+    description: >
+      Rewrites the links of the landing page, each tileset, and the tile matrix
+      sets. Tile templates carried in a tileset's links are rewritten with them,
+      so a client fetches tiles through the gateway.
+    match:
+      path: /*
+      methods: [GET]
+    rules:
+      - type: json
+        target: body
+        action: replace
+        path: $.links[*]
+        params: { field: href, find: "{{sourceUrl}}", replace: "{{oryca_gateway_url}}" }
+      - type: json
+        target: body
+        action: replace
+        path: $.tilesets[*].links[*]
+        params: { field: href, find: "{{sourceUrl}}", replace: "{{oryca_gateway_url}}" }
+      - type: json
+        target: body
+        action: replace
+        path: $.tileMatrixSets[*].links[*]
+        params: { field: href, find: "{{sourceUrl}}", replace: "{{oryca_gateway_url}}" }
+
+  - name: styles-links
+    types: [OGC_API_Styles]
+    title: Keep links inside the gateway
+    description: >
+      Rewrites the links of the landing page and of each style, including the
+      stylesheet addresses a style offers.
+    match:
+      path: /*
+      methods: [GET]
+    rules:
+      - type: json
+        target: body
+        action: replace
+        path: $.links[*]
+        params: { field: href, find: "{{sourceUrl}}", replace: "{{oryca_gateway_url}}" }
+      - type: json
+        target: body
+        action: replace
+        path: $.styles[*].links[*]
+        params: { field: href, find: "{{sourceUrl}}", replace: "{{oryca_gateway_url}}" }
+      - type: json
+        target: body
+        action: replace
+        path: $.stylesheets[*].links[*]
+        params: { field: href, find: "{{sourceUrl}}", replace: "{{oryca_gateway_url}}" }
+
+  - name: sensorthings-links
     types: [OGC_API_SensorThings]
     title: Keep navigation links inside the gateway
     description: >
       SensorThings answers carry selfLink and navigationLink fields rather than a
-      links array. This rewrites both, at the top level and per value.
+      links array, and they appear at every level of an entity. This rewrites any
+      value that starts with the upstream address.
     match:
       path: /*
       methods: [GET]
@@ -78,6 +141,21 @@ presets:
         target: body
         action: replace
         path: $..*
-        params:
-          regex: "^{{sourceUrl}}"
-          replace: "{{oryca_gateway_url}}"
+        params: { regex: "^{{sourceUrl}}", replace: "{{oryca_gateway_url}}" }
+
+  - name: absolute-urls
+    types: [General]
+    title: Rewrite any address that points at the upstream
+    description: >
+      For an API whose shape we do not know. It replaces the upstream address
+      wherever it appears in the answer, which is broad: check the result before
+      leaving it on.
+    match:
+      path: /*
+      methods: [GET]
+    rules:
+      - type: json
+        target: body
+        action: replace
+        path: $..*
+        params: { regex: "^{{sourceUrl}}", replace: "{{oryca_gateway_url}}" }
