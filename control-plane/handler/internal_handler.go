@@ -8,6 +8,7 @@ import (
 	"net/http"
 	"strings"
 
+	"github.com/oryca/oryca/control-plane/logger"
 	"github.com/oryca/oryca/control-plane/model"
 
 	"github.com/labstack/echo/v4"
@@ -100,9 +101,21 @@ func (h *InternalHandler) GetServices(c echo.Context) error {
 	}
 
 	result := make([]*gwServicePayload, 0, len(svcs))
-	for _, svc := range svcs {
+	allLinks := make([][]*model.PackageSvcLink, len(svcs))
+	seen := make(map[bson.ObjectID]struct{})
+	for i, svc := range svcs {
 		links, _ := h.packageSvcRepo.FindByServiceID(c.Request().Context(), svc.ID)
-		packageIDs, rateLimitMap := buildRateLimitMap(links)
+		allLinks[i] = links
+		for _, link := range links {
+			seen[link.PackageID] = struct{}{}
+		}
+	}
+
+	// Every package's own limit, fetched once, so a path without a limit of its own can fall back to it
+	packageLimits := h.packageRateLimits(c.Request().Context(), seen)
+
+	for i, svc := range svcs {
+		packageIDs, rateLimitMap := buildRateLimitMap(allLinks[i], packageLimits)
 		result = append(result, buildServicePayload(svc, packageIDs, rateLimitMap))
 	}
 
@@ -111,6 +124,30 @@ func (h *InternalHandler) GetServices(c echo.Context) error {
 		return c.JSON(http.StatusInternalServerError, map[string]string{"error": err.Error()})
 	}
 	return respondWithETag(c, data)
+}
+
+// packageRateLimits reads the limit set on each package itself, keyed by package id. One query for
+// all of them, whatever the number of services.
+func (h *InternalHandler) packageRateLimits(ctx context.Context, ids map[bson.ObjectID]struct{}) map[string]*model.PackageRateLimit {
+	limits := make(map[string]*model.PackageRateLimit, len(ids))
+	if len(ids) == 0 {
+		return limits
+	}
+	list := make([]bson.ObjectID, 0, len(ids))
+	for id := range ids {
+		list = append(list, id)
+	}
+	pkgs, err := h.packageRepo.FindByIDs(ctx, list)
+	if err != nil {
+		logger.Error("internal: could not read package rate limits: " + err.Error())
+		return limits
+	}
+	for _, pkg := range pkgs {
+		if pkg.Policies != nil && pkg.Policies.RateLimit != nil {
+			limits[pkg.ID.Hex()] = pkg.Policies.RateLimit
+		}
+	}
+	return limits
 }
 
 type sourcePayload struct {

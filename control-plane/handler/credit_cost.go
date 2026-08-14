@@ -37,25 +37,38 @@ type gwServicePayload struct {
 	Resources  []*gwResourcePayload `json:"resources"`
 }
 
-// buildRateLimitMap สร้าง packageIDs list และ rate limit map จาก PackageSvcLinks
-func buildRateLimitMap(links []*model.PackageSvcLink) ([]string, map[string]map[string]*gwRateLimitPayload) {
+// buildRateLimitMap turns the package-to-service links into the packageIDs list and the rate limit
+// map the gateway expects. packageLimits carries each package's own limit, used for any path that
+// does not set one of its own — set it once on the package, override it where a path needs
+// something different.
+func buildRateLimitMap(links []*model.PackageSvcLink, packageLimits map[string]*model.PackageRateLimit) ([]string, map[string]map[string]*gwRateLimitPayload) {
 	packageIDs := make([]string, 0, len(links))
 	rateLimitMap := make(map[string]map[string]*gwRateLimitPayload)
 	for _, link := range links {
 		pkgID := link.PackageID.Hex()
 		packageIDs = append(packageIDs, pkgID)
 		for _, pp := range link.Paths {
-			buildPathRateLimit(pp, pkgID, rateLimitMap)
+			buildPathRateLimit(pp, pkgID, packageLimits[pkgID], rateLimitMap)
 		}
 	}
 	return packageIDs, rateLimitMap
 }
 
-func buildPathRateLimit(pp *model.PackagePath, pkgID string, rateLimitMap map[string]map[string]*gwRateLimitPayload) {
-	if pp.Policies == nil || pp.Policies.RateLimit == nil || !pp.Policies.RateLimit.Enabled {
+// effectiveRateLimit is the path's own limit when it has an enabled one, and the package's
+// otherwise. A path that sets enabled=false turns the limit off for itself, rather than falling
+// back to the package.
+func effectiveRateLimit(pp *model.PackagePath, pkgLimit *model.PackageRateLimit) *model.PackageRateLimit {
+	if pp.Policies != nil && pp.Policies.RateLimit != nil {
+		return pp.Policies.RateLimit
+	}
+	return pkgLimit
+}
+
+func buildPathRateLimit(pp *model.PackagePath, pkgID string, pkgLimit *model.PackageRateLimit, rateLimitMap map[string]map[string]*gwRateLimitPayload) {
+	rl := effectiveRateLimit(pp, pkgLimit)
+	if rl == nil || !rl.Enabled {
 		return
 	}
-	rl := pp.Policies.RateLimit
 	if len(rl.Tiers) == 0 {
 		return
 	}
