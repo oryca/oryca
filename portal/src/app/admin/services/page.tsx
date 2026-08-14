@@ -509,6 +509,8 @@ function ServicesManager({
   const [newSourceRow, setNewSourceRow] = useState<number | null>(null);
   const [newSourceAlias, setNewSourceAlias] = useState('');
   const [newSourceUrl, setNewSourceUrl] = useState('');
+  const [newSourceKind, setNewSourceKind] = useState<'api' | 'static'>('api');
+  const [newSourceBody, setNewSourceBody] = useState('');
   const [newSourceError, setNewSourceError] = useState<string | null>(null);
   const [isCreatingSource, setIsCreatingSource] = useState(false);
 
@@ -516,8 +518,16 @@ function ServicesManager({
     setNewSourceError(null);
     const alias = newSourceAlias.trim();
     const url = newSourceUrl.trim();
-    if (!alias || !url) {
-      setNewSourceError('Both an alias and a URL are needed.');
+    if (!alias) {
+      setNewSourceError('The upstream needs a short name.');
+      return;
+    }
+    if (newSourceKind === 'api' && !url) {
+      setNewSourceError('Where should this path go? Give it a URL.');
+      return;
+    }
+    if (newSourceKind === 'static' && !newSourceBody.trim()) {
+      setNewSourceError('A fixed reply needs a body.');
       return;
     }
     if (sources.some((s) => s.alias === alias)) {
@@ -530,9 +540,12 @@ function ServicesManager({
       await api.post('/sources', {
         alias,
         name: alias,
-        type: 'api',
-        protocol: withScheme.toLowerCase().startsWith('http://') ? 'http' : 'https',
-        url: withScheme,
+        type: newSourceKind,
+        protocol: newSourceKind === 'static'
+          ? 'https'
+          : withScheme.toLowerCase().startsWith('http://') ? 'http' : 'https',
+        url: newSourceKind === 'static' ? '' : withScheme,
+        body: newSourceKind === 'static' ? newSourceBody : undefined,
         contentType: 'application/json',
       });
       await queryClient.invalidateQueries({ queryKey: ['admin-sources'] });
@@ -540,6 +553,8 @@ function ServicesManager({
       setNewSourceRow(null);
       setNewSourceAlias('');
       setNewSourceUrl('');
+      setNewSourceBody('');
+      setNewSourceKind('api');
     } catch (err: any) {
       setNewSourceError(err.message || 'Could not create the upstream.');
     } finally {
@@ -915,8 +930,31 @@ function ServicesManager({
 
                       {newSourceRow === index && (
                         <div className="ml-2 mb-2 p-2.5 bg-accent-wash border border-accent/30 rounded-control space-y-2">
+                          <div className="flex items-center gap-3 text-[11px]">
+                            <label className="flex items-center gap-1.5 cursor-pointer">
+                              <input
+                                type="radio"
+                                checked={newSourceKind === 'api'}
+                                onChange={() => setNewSourceKind('api')}
+                                className="accent-accent"
+                              />
+                              Forward to a server
+                            </label>
+                            <label className="flex items-center gap-1.5 cursor-pointer">
+                              <input
+                                type="radio"
+                                checked={newSourceKind === 'static'}
+                                onChange={() => setNewSourceKind('static')}
+                                className="accent-accent"
+                              />
+                              Answer with a fixed body
+                            </label>
+                          </div>
+
                           <p className="text-[11px] text-ink-2">
-                            Where should this path go? Give the server a short name and its address.
+                            {newSourceKind === 'api'
+                              ? 'The whole destination address, not a prefix: this path is sent exactly there.'
+                              : 'Nothing is forwarded. The gateway answers with this body, for an endpoint your server does not have.'}
                           </p>
                           <div className="flex gap-2">
                             <input
@@ -926,13 +964,15 @@ function ServicesManager({
                               placeholder="my-features"
                               className="flex-1 min-w-0 bg-paper border border-rule rounded-control px-2.5 py-1 text-xs text-ink outline-none focus:border-focus font-mono"
                             />
-                            <input
-                              type="text"
-                              value={newSourceUrl}
-                              onChange={(e) => setNewSourceUrl(e.target.value)}
-                              placeholder="https://demo.pygeoapi.io/master"
-                              className="flex-[2] min-w-0 bg-paper border border-rule rounded-control px-2.5 py-1 text-xs text-ink outline-none focus:border-focus font-mono"
-                            />
+                            {newSourceKind === 'api' && (
+                              <input
+                                type="text"
+                                value={newSourceUrl}
+                                onChange={(e) => setNewSourceUrl(e.target.value)}
+                                placeholder="https://demo.pygeoapi.io/master/collections"
+                                className="flex-[2] min-w-0 bg-paper border border-rule rounded-control px-2.5 py-1 text-xs text-ink outline-none focus:border-focus font-mono"
+                              />
+                            )}
                             <button
                               type="button"
                               onClick={() => createInlineSource(index)}
@@ -949,6 +989,25 @@ function ServicesManager({
                               Cancel
                             </button>
                           </div>
+                          {newSourceKind === 'static' && (
+                            <>
+                              <textarea
+                                value={newSourceBody}
+                                onChange={(e) => setNewSourceBody(e.target.value)}
+                                rows={4}
+                                placeholder={'{ "links": [] }'}
+                                className="w-full bg-paper border border-rule rounded-control px-2.5 py-1.5 text-[11px] text-ink outline-none focus:border-focus font-mono"
+                              />
+                              {rp.path.replace(/\/$/, '').endsWith('/conformance') && (
+                                <p className="text-[11px] text-warn">
+                                  A conformance document states which classes a server implements.
+                                  Writing one here declares that on its behalf, so list only what it
+                                  really does.
+                                </p>
+                              )}
+                            </>
+                          )}
+
                           {newSourceError && (
                             <p className="text-[11px] text-danger">{newSourceError}</p>
                           )}

@@ -56,6 +56,17 @@ Two things do get filled in:
 - **A trailing `*`.** A resource path of `/tiles/*` appends the rest of the
   request onto the end of the source URL, so one row covers a whole subtree.
 
+### When the upstream does not have the endpoint
+
+Sometimes a server is missing a path its standard expects. Choose **Answer with a
+fixed body** instead of a URL, and the gateway replies with what you write.
+Nothing is forwarded.
+
+That is genuinely useful for a landing page of links. Be careful with
+`/conformance`: that document declares which conformance classes the server
+implements, so writing one here says that on its behalf. List only what it really
+does, or clients will call features that are not there.
+
 Save. If the service is an OGC type, ORYCA offers to apply its link-rewrite
 preset — say yes, unless you plan to write the rules yourself. See
 [response transforms](response-transforms.md) for what those rules do.
