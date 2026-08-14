@@ -1,40 +1,40 @@
-# Response transforms
+# Response Transforms (Link Rewriter)
 
-A transform edits an answer on its way back from your upstream server, before it
-reaches the caller. The usual reason is links: an API that answers with its own
-address sends clients straight past the gateway, losing the API key, the rate
-limit and the cache along with it.
+A **Response Transform** intercepts responses coming back from your upstream servers and mutates their contents (headers or body) before delivering them to clients. 
 
-If that is all you need, do not read this page. Open the service, apply a preset,
-and you are done. Come back when you want something the presets do not cover.
+This is crucial for geospatial services (e.g. OGC API Features, STAC, WMTS), where responses contain self-referencing hyperlinks. Without transforms, clients would follow those links and bypass the gateway, losing access key authentication and rate limiting.
 
-## What a transform is made of
+> [!TIP]
+> **Use Presets:** If you just want to solve OGC API link rewriting, **do not write custom rules**. Simply select your service in the portal, click **"Apply OGC API Preset"**, and the gateway will handle the rest.
+
+---
+
+## 1. Transform Structure
+
+Each transform is attached to a service and defines which requests it intercepts:
 
 ```json
 {
-  "name": "Keep links inside the gateway",
+  "name": "Geospatial Link Rewriter",
   "serviceId": "6a7e7e3bd894661639f3e19c",
   "enabled": true,
-  "match": { "path": "/*", "methods": ["GET"] },
+  "match": {
+    "path": "/*",
+    "methods": ["GET"]
+  },
   "rules": [ ... ]
 }
 ```
 
-A transform belongs to one service. `match` decides which of that service's
-requests it applies to, and `rules` say what to change.
+- **`match.path`:** The request path pattern. `/*` matches all paths, `/collections/*` matches sub-paths.
+- **`match.methods`:** List of HTTP methods (e.g. `["GET"]`). If empty, matches all methods.
+- **`rules`:** A list of rules that execute sequentially on the response.
 
-### match
+---
 
-| Field | Meaning |
-|---|---|
-| `path` | A resource path of the service. `/*` is everything, `/collections/*` is everything below that prefix, `/collections` is that path only |
-| `methods` | Empty means every method |
+## 2. Rewrite Rules
 
-Only one transform runs per request: the first that matches, most specific path
-first. Two transforms on the same paths is not a way to stack rules — put the
-rules in one transform instead.
-
-## Rules
+Rules describe exactly what to modify inside headers or body payloads:
 
 ```json
 {
@@ -42,72 +42,86 @@ rules in one transform instead.
   "target": "body",
   "action": "replace",
   "path": "$.links[*]",
-  "params": { "field": "href", "find": "https://upstream.example", "replace": "{{oryca_gateway_url}}" }
+  "params": {
+    "field": "href",
+    "find": "https://upstream-server.internal",
+    "replace": "{{oryca_gateway_url}}"
+  }
 }
 ```
 
-| Field | Values |
-|---|---|
-| `type` | `json` or `xml`. Left out, the body's shape decides |
-| `target` | `body` or `headers` |
-| `action` | `replace`, `add`, `append`, `remove`, `rename` |
-| `path` | JSONPath for a body rule. `$.links[*]`, `$.collections[*].links[*]`, `$..*` for everything |
-| `xpath` | XPath, for an XML rule |
-| `headerName` | Which header, for a header rule |
-| `params` | What the action works with, below |
-| `conditions` | Run this rule only when the answer looks a certain way, below |
+### Core Configuration Fields
 
-### params
+| Field | Supported Values | Description |
+| :--- | :--- | :--- |
+| **`type`** | `json` \| `xml` | Document format. If omitted, matching is determined by response content-type. |
+| **`target`** | `body` \| `headers` | Interception target. |
+| **`action`** | `replace` \| `add` \| `append` \| `remove` \| `rename` | Modification command. |
+| **`path`** | JSONPath (e.g. `$.links[*]`) | Target selector inside JSON documents. |
+| **`xpath`** | XPath (e.g. `//*[local-name()='ResourceURL']`) | Target selector inside XML documents. |
+| **`headerName`**| string | Target header key when `target: "headers"`. |
+| **`params`** | object | Configuration parameters for the selected action (see below). |
+| **`conditions`**| array of objects | Restrict rule execution depending on response contents (see below). |
 
-| Field | Used by | Meaning |
-|---|---|---|
-| `find` / `replace` | `replace` | Plain text replacement inside a string |
-| `regex` / `replace` | `replace` | Same, but the match is a regular expression |
-| `field` | `replace` | On an object, only touch this field. Left out, every string field of the object is replaced |
-| `value` | `add`, `append` | The value to write |
-| `from` / `to` | `rename` | Old and new field name |
-| `separator` | `append` | What to join with |
+---
 
-`replace` reads the shape of what it matched: a string is edited directly, an
-object has its `field` edited (or all its string fields), and anything else is
-overwritten with `value`.
+## 3. Action Parameters (`params`)
 
-### Two placeholders
+The structure of `params` depends on the selected `action`:
 
-These are filled in per request, so one rule serves every caller:
+| Parameter | Actions | Description |
+| :--- | :--- | :--- |
+| **`find`** / **`replace`** | `replace` | Plain text substring replacement. |
+| **`regex`** / **`replace`** | `replace` | Regular expression replacement. |
+| **`field`** | `replace` | Specify a single key to modify inside a matched object. If blank, matches all string values inside the object. |
+| **`value`** | `add` \| `append` | The literal value to insert. |
+| **`from`** / **`to`** | `rename` | The old and new key name to rename inside an object. |
+| **`separator`** | `append` | Separator string used to join appended values. |
 
-| Placeholder | Becomes |
-|---|---|
-| `{{oryca_gateway_url}}` | The public address of this service through the gateway, e.g. `https://gateway.example.com/gateway/api/resources/my-service` |
-| `{{oryca_auth}}` | The caller's own credential as a query parameter: `api_key=…` or `token=…` |
+---
 
-`GET /response-transforms/variables` returns the same list.
+## 4. Path Placeholders
 
-### conditions
+You can use dynamic placeholders inside rules that expand per request:
 
-Conditions decide **whether the rule runs at all**, not which matches it edits.
-If any one of the things the path matched satisfies a condition, the rule then
-applies to all of them.
+- **`{{oryca_gateway_url}}`:** Expands to the public URL of the service on the gateway (e.g. `https://gateway.oryca.io/gateway/api/resources/my-service`).
+- **`{{oryca_auth}}`:** Expands to the client's credential query parameter (e.g. `api_key=xyz` or `token=abc`) so subsequent requests stay authenticated.
+
+---
+
+## 5. Execution Conditions (`conditions`)
+
+Conditions allow you to enable a rule only if the matched elements satisfy a filter:
 
 ```json
 {
   "path": "$.links[*]",
-  "conditions": [{ "field": "rel", "equals": ["self", "alternate"] }],
-  "params": { "field": "href", "find": "https://upstream.example", "replace": "{{oryca_gateway_url}}" }
+  "conditions": [
+    { "field": "rel", "equals": ["self", "alternate"] }
+  ],
+  "params": {
+    "field": "href",
+    "find": "https://upstream-server.internal",
+    "replace": "{{oryca_gateway_url}}"
+  }
 }
 ```
+*In the example above, the rewrite rule only executes if the link item's `rel` attribute equals either `"self"` or `"alternate"`.*
 
-Given a links array holding one `self` and one `license`, that rule rewrites
-both: the `self` link satisfied the condition, which switched the rule on for the
-whole array. Read them as "only bother with this rule when the answer looks like
-this", and use the path to say what to edit.
+Use `notEquals` for the opposite (skip the elements listed, act on the rest). Both take a list, and the spelling matters: an unknown key is ignored, which reads as a rule that fires on everything.
 
-`equals` and `notEquals` both take a list, and values are compared as text.
+> [!WARNING]
+> Conditions are a gate, not a filter. Every condition on a rule has to pass on the element being examined; a rule with no matching element simply does nothing, and never reports an error.
 
-## XML
+---
 
-Set `type: xml` and select with `xpath` instead of `path`. Namespaces are the
-usual difficulty, and `local-name()` sidesteps them:
+## 6. XML & Capabilities Docs
+
+When working with XML (e.g. OGC WMTS Capabilities), use `type: "xml"` and specify elements via `xpath`. 
+
+> [!TIP]
+> To ignore XML namespace prefixes, query using `local-name()`:
+> `//*[local-name()='ResourceURL']`
 
 ```json
 {
@@ -115,80 +129,32 @@ usual difficulty, and `local-name()` sidesteps them:
   "target": "body",
   "action": "replace",
   "xpath": "//*[local-name()='ResourceURL']",
-  "params": { "field": "@template", "regex": "api_key=[^&]*", "replace": "{{oryca_auth}}" }
+  "params": {
+    "field": "@template",
+    "regex": "api_key=[^&]*",
+    "replace": "{{oryca_auth}}"
+  }
 }
 ```
 
-In an XML rule, `field` says which part of the element to edit:
+Use `@` in the `field` parameter to specify attribute targets:
+- **(Blank):** Modifies the text content inside the element.
+- **`@href`:** Modifies the value of the `href` attribute.
+- **`@template`:** Modifies the value of the `template` attribute.
 
-| `field` | Edits |
-|---|---|
-| left out | The element's text |
-| `@template` | The attribute named `template` |
-| `@href` | The attribute named `href` |
-| `@xlink:href` | An attribute carrying a namespace prefix |
+---
 
-A WMTS capabilities document is the common case: its `ResourceURL/@template`
-and `ServiceMetadataURL/@href` both carry the upstream address and the upstream's
-own API key, and both need rewriting for a client to keep working through the
-gateway.
+## 7. What is Left Alone
 
-XML is handled with text matching rather than a full parser, so it suits
-straightforward edits — an address, an attribute — and not restructuring a
-document. XPath support is limited to that: element selection, `local-name()`,
-and simple predicates.
+Some responses are passed straight through, whatever your rules say. This is deliberate, and it is usually the answer when a transform "does nothing":
 
-## What is left alone
+- **Non-2xx responses.** An error from the upstream reaches the client untouched.
+- **Non-text bodies.** Binary payloads such as PNG or MVT tiles are never parsed.
+- **Streamed responses.** Anything the gateway forwards without buffering is not rewritten, because rewriting means holding the whole body in memory.
 
-- **A body that did not arrive whole.** Very large answers are streamed straight
-  through and never buffered, so no rule sees them.
-- **Anything that is not text.** Images, tiles and other binary answers are not
-  parsed.
-- **Answers that are not 2xx.** An error from the upstream is passed on as it is.
+---
 
-## Writing one by hand
+## 8. Performance & Memory Cost
 
-Start from a preset and edit it — that is faster than starting from nothing, and
-it comes back filled in with the right upstream address:
-
-```sh
-curl -X POST "$CP/response-transforms/presets/features-links/apply" \
-  -H "Authorization: Bearer $TOKEN" -H 'Content-Type: application/json' \
-  -d '{"serviceId":"…"}'
-```
-
-Then `PUT /response-transforms/:id` with your changes. Saving tells the gateway
-at once, so the next request already sees it.
-
-Check it the way a client would, by reading the answer that comes back through
-the gateway rather than the one your upstream sends:
-
-```sh
-curl -s "$GW/resources/my-service/collections" | python3 -m json.tool | grep href
-```
-
-## When a link keeps pointing at the upstream
-
-Usually correct. A rule only rewrites addresses that start with the upstream
-address behind *this* service, so:
-
-- A link to another site — a licence, a repository, a data file on object
-  storage — is left alone, which is what you want.
-- A link into a part of the upstream server your service does not cover is also
-  left alone. Rewriting it would send clients to a path the gateway answers 404
-  for. Register that path on the service if you want it proxied.
-
-## Reference
-
-- JSONPath is evaluated by [ojg/jp](https://github.com/ohler55/ojg), which
-  follows [RFC 9535](https://www.rfc-editor.org/rfc/rfc9535.html). `$` is the
-  root, `*` matches any element, `[*]` every entry of an array, and `$..` any
-  depth.
-- Regular expressions are Go's, and a backslash needs escaping when the rule is
-  written as JSON.
-
-## Cost
-
-Rules run on every matching request, on a body the gateway has to hold in memory
-to parse. `$..*` walks the whole document, so prefer a path that names what you
-mean. Regular expressions are compiled once and reused.
+- **Buffered, briefly.** A rewritten body is held in memory while the rules run, so the rules should be cheap and the bodies should be documents, not downloads.
+- **Optimized Selectors:** Avoid using deep walk operators like `$..*` if possible; specify exact paths (e.g. `$.links[*]`) to minimize CPU usage.

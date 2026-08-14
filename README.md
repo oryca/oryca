@@ -1,162 +1,159 @@
 # ORYCA
 
-The open-source gateway for geospatial APIs.
+**The friendly, open-source API gateway built specifically for geospatial services.**
 
-Put ORYCA in front of your spatial services and it handles the parts you would
-otherwise build yourself: authentication, rate limiting, caching, and response
-rewriting. It comes with a developer portal, so people can sign up, get an API
-key, and read your docs on their own.
+Put ORYCA in front of your spatial servers (OGC API Features, STAC, Tiles, Styles, SensorThings, or standard REST/JSON APIs) and it instantly handles:
+- **Authentication:** Issues and validates developer API keys.
+- **Rate Limiting:** Protects upstream servers with tier-based rate limit quotas.
+- **Response Rewriting (Link Rewriter):** Translates upstream links so clients stay routed through the gateway.
+- **Developer Portal:** A ready-to-use Next.js web portal where users can register, manage API keys, and test endpoints.
 
-It knows the OGC API shapes (Features, Tiles, Styles, STAC, SensorThings), and
-plain REST and static JSON work too.
+---
 
-### What "knows" means
+## Key Features
 
-ORYCA does not implement these standards. It sits in front of servers that do,
-and understands their shapes well enough to do two things: suggest the paths a
-service of that kind usually exposes, and rewrite the links in its answers so
-clients keep talking to the gateway instead of wandering off to the server
-behind it.
+- **Knows the OGC shapes:** Pick a service type and ORYCA suggests the paths that kind of server usually exposes (`/conformance`, `/collections`), so you are not typing them by hand.
+- **Dynamic Link Rewrites:** Ready-to-use presets rewrite links in geospatial JSON and XML responses (e.g. WMTS Capabilities) on the fly.
+- **Interactive Developer Console:** Offers a **"Try It"** testing tool right in the browser, showing raw rate-limit headers (`RateLimit-Limit`, `RateLimit-Remaining`).
+- **Telemetry Dashboard:** Visual charts and searchable request logs. Each person sees their own traffic, administrators see everyone's.
+- **Self-Service Access:** Developers sign up, retrieve keys, and review documents independently.
 
-| Standard | Version we follow | Note |
-|---|---|---|
+### What "knows the OGC shapes" does not mean
+
+ORYCA **does not implement** these standards. It sits in front of servers that do, and understands their shapes well enough to suggest paths and rewrite links.
+
+| Standard | Version the hints follow | Note |
+| :--- | :--- | :--- |
 | OGC API - Features | Part 1: Core 1.0 | Also published as ISO 19168-1 |
 | OGC API - Tiles | Part 1: Core 1.0 | |
-| OGC API - Styles | Part 1: Core | Still a draft, so our path hints may change with it |
-| SensorThings API | 1.0, 1.1 | Conformance is advertised on the landing page, not at /conformance |
-| STAC API | 1.0 | A community specification, not an OGC standard |
+| OGC API - Styles | Part 1: Core | Still a **draft**, so the hints may change with it |
+| SensorThings API | 1.0, 1.1 | Advertises conformance on the landing page, not at `/conformance` |
+| STAC API | 1.0 | A community specification, **not** an OGC standard |
 
-Each service you register records the version its own upstream implements, which
-is the number that actually matters to a client.
+Each service you register records the version its own upstream implements, which is the number that actually matters to a client.
 
-> **Status: under construction.** The gateway and control plane work today. The
-> portal is not built yet, a placeholder page stands in for it.
+---
 
-## Quickstart
+## How it Works
 
-You need Docker.
+ORYCA consists of two Go microservices and a Next.js web portal:
 
+```
+                  ┌────────────────────────────────────────┐
+                  │            Next.js Portal              │
+                  │   (Dashboard, Keys, Admin Controls)    │
+                  └───────┬────────────────────────┬───────┘
+                          │ browser calls both     │
+                          ▼                        ▼
+             ┌───────────────────┐  polls   ┌────────────────────────┐
+   clients ─►│   ORYCA Gateway   │ ───────► │  ORYCA Control Plane   │
+             │  (Traffic Proxy)  │ ◄─────── │   (Management API)     │
+             └─────────┬─────────┘  events  └───────────┬────────────┘
+                       │                                │ MongoDB
+                       │        ┌──────────────┐        ▼
+                       └───────►│    Redis     │◄──  ┌──────────────────┐
+                    routes,     └──────────────┘     │ Users, Keys,     │
+                    cache,        shared by both     │ Config, Logs     │
+                    rate limit                       └──────────────────┘
+```
+
+1. **ORYCA Gateway:** High-performance proxy handling traffic routing, authentication checks, and rate-limiting. Its configuration comes from the control plane and lives in Redis, so it keeps serving while the control plane restarts. It never opens a database connection of its own.
+2. **ORYCA Control Plane:** Management backend coordinates admin configs, users list, packages, and stores logs in MongoDB. It uses Redis too, to push changes and to read the request logs the gateway writes.
+3. **Developer Portal:** Frontend dashboard for developers and administrators.
+
+The two Go services never import each other. They talk over HTTP and Redis, written down in [sync-contract.md](docs/sync-contract.md).
+
+---
+
+## Quick Start
+
+Start MongoDB, Redis, the gateway, control plane, and portal using Docker Compose:
+
+### 1. Clone & Spin Up
 ```sh
 git clone https://github.com/oryca/oryca.git
 cd oryca
 cp .env.example .env
-docker compose up
+docker compose up -d --build
 ```
 
-That starts MongoDB, Redis, the control plane, the gateway, and the portal.
-
-It builds the three services from source, which needs nothing installed but
-Docker and takes a few minutes the first time. To start from published images
-instead:
-
+That builds the three services from source, which takes a few minutes the first time. To skip the build and use the published images instead:
 ```sh
-docker compose -f docker-compose.yml -f docker-compose.images.yml up -d
+docker compose -f docker-compose.images.yml up -d
 ```
 
-An admin account is created on first start. If you left
-`ORYCA_API_ROOT_PASSWORD` empty, the password is generated and printed once:
-
+### 2. Find Your Admin Credentials
+An administrator account is created on the first start. Run this command to fetch your generated password:
 ```sh
 docker compose logs control-plane | grep -A2 "ROOT ACCOUNT"
 ```
 
-| Service | URL |
-|---|---|
-| Portal | http://localhost:3000 |
-| Gateway | http://localhost:9002/gateway/api/health |
-| Control plane | http://localhost:9001/control-plane/api/v1/health |
+### 3. Access Services
+- **Developer Portal:** [http://localhost:3000](http://localhost:3000) (Log in with `admin@localhost` and the generated password)
+- **Control Plane API:** [http://localhost:9001/control-plane/api/v1/health](http://localhost:9001/control-plane/api/v1/health)
+- **Gateway Server:** [http://localhost:9002/gateway/api/health](http://localhost:9002/gateway/api/health)
 
-## How it fits together
-
-Two Go services and a web portal, on MongoDB and Redis.
-
-```
-portal  ──►  control-plane  ◄──►  gateway  ──►  your upstream services
-                   │                  │
-                MongoDB            Redis
-```
-
-**gateway** handles the traffic. Every request goes through it: find the route,
-check the API key or token, apply rate limits, serve from cache, rewrite the
-response. Its config comes from the control plane and lives in Redis, so it
-keeps serving even while the control plane restarts.
-
-**control-plane** handles the management. Users, services, packages, API keys,
-the portal's API, and the dashboard.
-
-**portal** is one web interface for everyone, with the menu limited by role.
-
-### Layout
-
-```
-cmd/oryca-gateway/         entry point, three lines
-cmd/oryca-control-plane/   entry point, three lines
-gateway/                   the traffic side
-control-plane/             the management side
-portal/                    the web interface
-docs/sync-contract.md      what the two services promise each other
-```
-
-The servers live in `gateway/app` and `control-plane/app`, so another project can
-embed one instead of rebuilding its setup. That is also why nothing sits behind
-`internal/`.
+---
 
 ## Configuration
 
-`.env` at the root configures everything. Every value has a working default
-except the secret the two services share.
+`.env` at the root configures the whole stack. Every value has a working default except:
 
-Starting data (settings, email templates, the first package) sits in
-`control-plane/seed/` as YAML. It loads once, against an empty database. After
-that the database wins: change things in the portal and a restart will not undo
-your work.
+- **`ORYCA_INTERNAL_SECRET`** — the two Go services share it. Change it before anything is reachable from a network you do not control. Rotating it? Put the old value in `ORYCA_INTERNAL_SECRET_PREV` so calls in flight keep working.
+- **`ORYCA_API_REDIS_DB` and `ORYCA_GW_REDIS_DB`** — these must match. Pub/sub ignores the database number, so a mismatch looks like it works until routes stop arriving.
 
-Admin credentials are not in those files. They come from `ORYCA_API_ROOT_EMAIL`
-and `ORYCA_API_ROOT_PASSWORD`.
+Starting data (settings, email templates, the first package) is YAML in `control-plane/seed/`. It loads once, against an empty database. After that the database wins: change things in the portal and a restart will not undo your work. Administrator credentials are deliberately not in those files, they come from `ORYCA_API_ROOT_EMAIL` and `ORYCA_API_ROOT_PASSWORD`.
 
-Two settings behave differently from the rest: `ORYCA_PORTAL_API_URL` and
-`ORYCA_PORTAL_GATEWAY_URL`. The portal calls both services from the visitor's
-browser, so they have to be addresses your users can reach, and Next.js writes
-them into the page bundle while the image is built. Serving the stack from a real
-domain therefore means rebuilding the portal:
-
+**Two settings behave differently.** `ORYCA_PORTAL_API_URL` and `ORYCA_PORTAL_GATEWAY_URL` are the addresses the portal calls **from the visitor's browser**, so your users have to be able to reach them. Next.js writes them into the page bundle while the image is built, so serving the stack from your own domain means rebuilding the portal:
 ```sh
 docker compose build portal && docker compose up -d
 ```
 
-## Development
+---
+
+## Repository Layout
+
+- [`portal/`](portal): Next.js developer dashboard and administrator console.
+- [`gateway/`](gateway): High-speed proxy built in Go.
+- [`control-plane/`](control-plane): Management API built in Go.
+- [`cmd/`](cmd): Entry points, three lines each. The servers themselves live in `gateway/app` and `control-plane/app`, so another project can embed one instead of rebuilding its setup. That is also why nothing is hidden behind `internal/`.
+- [`docs/`](docs): How the pieces agree with each other.
+  - [`response-transforms.md`](docs/response-transforms.md): Custom rewrite rules and parameters.
+  - [`sync-contract.md`](docs/sync-contract.md): Synchronization interface protocol between Gateway and Control Plane.
+
+---
+
+## Local Development & Tests
 
 One Go module, so everything runs from the root:
 
 ```sh
+# Build and run tests
 go build ./...
 go test ./...
 
+# Start control plane
 go run ./cmd/oryca-control-plane
+
+# Start gateway
 go run ./cmd/oryca-gateway
 ```
 
-The two binaries never import each other. They talk over HTTP and Redis, see
-[docs/sync-contract.md](docs/sync-contract.md), which is what lets the gateway
-run without any database credentials. `boundary_test.go` fails the build if that
-ever changes.
+`boundary_test.go` fails the build if one binary ever imports the other.
 
-With the stack up, `tools/smoke-test.sh` walks the whole path: sign in, publish a
-service, issue a key, call it through the gateway, and check it reaches the
-dashboard.
+Once the stack is running, run the automated integration test to verify the complete setup:
+```sh
+./tools/smoke-test.sh
+```
 
-## Docs
+It walks the whole path a person takes: sign in, publish a service, issue a key, call it through the gateway, and check it reaches the dashboard.
 
-- [Response transforms](docs/response-transforms.md) — rewriting an answer on its
-  way back, and the presets that do it for you
-- [The gateway ↔ control plane contract](docs/sync-contract.md) — what the two
-  services promise each other
+---
 
 ## Contributing
 
-Issues and questions are welcome, see [CONTRIBUTING.md](CONTRIBUTING.md). Found a
-security problem? [SECURITY.md](SECURITY.md).
+Issues and questions are welcome, see [CONTRIBUTING.md](CONTRIBUTING.md). Found a security problem? [SECURITY.md](SECURITY.md).
 
 ## License
 
-[Apache 2.0](LICENSE)
+Licensed under the [Apache 2.0 License](LICENSE).
