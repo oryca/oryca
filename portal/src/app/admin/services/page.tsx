@@ -505,6 +505,48 @@ function ServicesManager({
   const [scaffoldSuggestions, setScaffoldSuggestions] = useState<string[]>([]);
   const [isScaffoldingLoading, setIsScaffoldingLoading] = useState(false);
 
+  // Adding an upstream from inside this form, so nobody has to leave for the other tab
+  const [newSourceRow, setNewSourceRow] = useState<number | null>(null);
+  const [newSourceAlias, setNewSourceAlias] = useState('');
+  const [newSourceUrl, setNewSourceUrl] = useState('');
+  const [newSourceError, setNewSourceError] = useState<string | null>(null);
+  const [isCreatingSource, setIsCreatingSource] = useState(false);
+
+  const createInlineSource = async (rowIndex: number) => {
+    setNewSourceError(null);
+    const alias = newSourceAlias.trim();
+    const url = newSourceUrl.trim();
+    if (!alias || !url) {
+      setNewSourceError('Both an alias and a URL are needed.');
+      return;
+    }
+    if (sources.some((s) => s.alias === alias)) {
+      setNewSourceError(`An upstream called "${alias}" already exists.`);
+      return;
+    }
+    const withScheme = /^https?:\/\//i.test(url) ? url : `https://${url}`;
+    setIsCreatingSource(true);
+    try {
+      await api.post('/sources', {
+        alias,
+        name: alias,
+        type: 'api',
+        protocol: withScheme.toLowerCase().startsWith('http://') ? 'http' : 'https',
+        url: withScheme,
+        contentType: 'application/json',
+      });
+      await queryClient.invalidateQueries({ queryKey: ['admin-sources'] });
+      updatePathRow(rowIndex, 'sourceAlias', alias);
+      setNewSourceRow(null);
+      setNewSourceAlias('');
+      setNewSourceUrl('');
+    } catch (err: any) {
+      setNewSourceError(err.message || 'Could not create the upstream.');
+    } finally {
+      setIsCreatingSource(false);
+    }
+  };
+
   useEffect(() => {
     if (editingService) {
       setName(editingService.name || '');
@@ -600,10 +642,29 @@ function ServicesManager({
         resourcePaths,
       };
 
+      let serviceId = editingService?.id;
       if (editingService) {
         await api.put(`/services/${editingService.id}`, payload);
       } else {
-        await api.post('/services', payload);
+        const res = await api.post('/services', payload);
+        serviceId = res.data?.id;
+      }
+
+      // An OGC service almost always needs its links rewritten, so offer it here
+      // rather than leaving it to be discovered on another page.
+      if (serviceId && type !== 'General') {
+        try {
+          const presets = await api.get(`/response-transforms/presets?type=${type}`);
+          const preset = (presets.data.items || [])[0];
+          if (preset && confirm(
+            `${name} answers with links to itself, which would send clients past the gateway.\n\n` +
+            `Apply the "${preset.title || preset.name}" preset to rewrite them?`
+          )) {
+            await api.post(`/response-transforms/presets/${preset.name}/apply`, { serviceId });
+          }
+        } catch (err) {
+          console.error('Could not offer the link-rewrite preset:', err);
+        }
       }
     },
     onSuccess: () => {
@@ -790,7 +851,8 @@ function ServicesManager({
 
                 <div className="space-y-2 max-h-52 overflow-y-auto pr-1">
                   {resourcePaths.map((rp, index) => (
-                    <div key={index} className="flex gap-2 items-center bg-paper-2 p-2 border border-rule rounded-control">
+                    <React.Fragment key={index}>
+                      <div className="flex gap-2 items-center bg-paper-2 p-2 border border-rule rounded-control">
                       <div className="flex-[2] min-w-0">
                         <input
                           type="text"
@@ -819,15 +881,25 @@ function ServicesManager({
                         <select
                           required
                           value={rp.sourceAlias}
-                          onChange={(e) => updatePathRow(index, 'sourceAlias', e.target.value)}
+                          onChange={(e) => {
+                            if (e.target.value === '__new__') {
+                              setNewSourceError(null);
+                              setNewSourceRow(index);
+                              return;
+                            }
+                            updatePathRow(index, 'sourceAlias', e.target.value);
+                          }}
                           className="w-full bg-paper border border-rule rounded-control px-2.5 py-1 text-xs text-ink outline-none"
                         >
-                          <option value="">Map upstream...</option>
+                          <option value="">
+                            {sources.length === 0 ? 'No upstreams yet' : 'Map upstream...'}
+                          </option>
                           {sources.map((src) => (
                             <option key={src.id} value={src.alias}>
                               {src.name} ({src.alias})
                             </option>
                           ))}
+                          <option value="__new__">+ New upstream...</option>
                         </select>
                       </div>
 
@@ -839,7 +911,54 @@ function ServicesManager({
                       >
                         <Trash2 className="w-4 h-4" />
                       </button>
-                    </div>
+                      </div>
+
+                      {newSourceRow === index && (
+                        <div className="ml-2 mb-2 p-2.5 bg-accent-wash border border-accent/30 rounded-control space-y-2">
+                          <p className="text-[11px] text-ink-2">
+                            Where should this path go? Give the server a short name and its address.
+                          </p>
+                          <div className="flex gap-2">
+                            <input
+                              type="text"
+                              value={newSourceAlias}
+                              onChange={(e) => setNewSourceAlias(e.target.value)}
+                              placeholder="my-features"
+                              className="flex-1 min-w-0 bg-paper border border-rule rounded-control px-2.5 py-1 text-xs text-ink outline-none focus:border-focus font-mono"
+                            />
+                            <input
+                              type="text"
+                              value={newSourceUrl}
+                              onChange={(e) => setNewSourceUrl(e.target.value)}
+                              placeholder="https://demo.pygeoapi.io/master"
+                              className="flex-[2] min-w-0 bg-paper border border-rule rounded-control px-2.5 py-1 text-xs text-ink outline-none focus:border-focus font-mono"
+                            />
+                            <button
+                              type="button"
+                              onClick={() => createInlineSource(index)}
+                              disabled={isCreatingSource}
+                              className="px-3 py-1 text-xs font-semibold rounded-control bg-accent text-white disabled:opacity-50"
+                            >
+                              {isCreatingSource ? 'Adding...' : 'Add'}
+                            </button>
+                            <button
+                              type="button"
+                              onClick={() => setNewSourceRow(null)}
+                              className="px-2 py-1 text-xs text-muted hover:text-ink"
+                            >
+                              Cancel
+                            </button>
+                          </div>
+                          {newSourceError && (
+                            <p className="text-[11px] text-danger">{newSourceError}</p>
+                          )}
+                          <p className="text-[11px] text-muted">
+                            More settings, like a static body or a different content type, live under
+                            the Upstream Sources tab.
+                          </p>
+                        </div>
+                      )}
+                    </React.Fragment>
                   ))}
                 </div>
               </div>

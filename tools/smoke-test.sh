@@ -20,6 +20,16 @@ RUN_ID="${RUN_ID:-$(date +%s)}"
 
 CP="${CP:-http://localhost:9001/control-plane/api/v1}"
 GW="${GW:-http://localhost:9002/gateway/api}"
+
+# The upstream the gateway proxies to. It defaults to the control plane's own
+# health endpoint, reachable on the compose network, so the test never depends on
+# a site on the internet being up. Point it anywhere else with UPSTREAM_URL.
+#
+# UPSTREAM_URL is the whole destination address, not a prefix: a source URL is
+# the full upstream endpoint, and UPSTREAM_PATH is only the route the gateway
+# publishes it under.
+UPSTREAM_URL="${UPSTREAM_URL:-http://control-plane:9001/control-plane/api/v1/health}"
+UPSTREAM_PATH="${UPSTREAM_PATH:-/health}"
 ROOT_EMAIL="${ORYCA_API_ROOT_EMAIL:-admin@localhost}"
 
 pass=0
@@ -60,13 +70,13 @@ step "2. publish an upstream as a gateway service"
 
 curl -sS -X POST "$CP/sources" -H "$AUTH" -H "$JSON" -d '{
   "alias":"smoke-upstream-'"$RUN_ID"'","name":"Smoke upstream","type":"api",
-  "protocol":"https","url":"https://httpbin.org","contentType":"application/json"
+  "protocol":"http","url":"'"$UPSTREAM_URL"'","contentType":"application/json"
 }' >/dev/null || fail "could not create the source"
 ok "source created"
 
 SERVICE_ID=$(curl -sS -X POST "$CP/services" -H "$AUTH" -H "$JSON" -d '{
   "name":"Smoke '"$RUN_ID"'","type":"General","basePath":"/smoke-'"$RUN_ID"'","enabled":true,"isPublic":false,
-  "resourcePaths":[{"path":"/get","methods":["GET"],"sourceAlias":"smoke-upstream-'"$RUN_ID"'"}]
+  "resourcePaths":[{"path":"'"$UPSTREAM_PATH"'","methods":["GET"],"sourceAlias":"smoke-upstream-'"$RUN_ID"'"}]
 }' | json id)
 need "$SERVICE_ID" "could not create the service"
 ok "service created"
@@ -96,7 +106,7 @@ ok "account verified by the administrator"
 
 curl -sS -X POST "$CP/packages/$PACKAGE_ID/services" -H "$AUTH" -H "$JSON" -d '{
   "serviceId":"'"$SERVICE_ID"'",
-  "paths":[{"path":"/get","methods":["GET"],
+  "paths":[{"path":"'"$UPSTREAM_PATH"'","methods":["GET"],
             "policies":{"rateLimit":{"enabled":true,"tiers":[{"limit":5,"windowSec":10}]}}}]
 }' >/dev/null || fail "could not grant the package access to the service"
 ok "package granted access, rate limited to 5 per 10s"
@@ -116,18 +126,18 @@ step "4. call the API through the gateway"
 
 sleep 2 # the gateway applies the change from the sync channel
 
-code=$(curl -sS -o /dev/null -w '%{http_code}' "$GW/resources/smoke-$RUN_ID/get")
+code=$(curl -sS -o /dev/null -w '%{http_code}' "$GW/resources/smoke-$RUN_ID$UPSTREAM_PATH")
 [ "$code" = "401" ] || fail "a call with no key returned $code, expected 401"
 ok "unauthenticated call rejected"
 
-code=$(curl -sS -o /dev/null -w '%{http_code}' "$GW/resources/smoke-$RUN_ID/get" -H "X-API-Key: $API_KEY")
+code=$(curl -sS -o /dev/null -w '%{http_code}' "$GW/resources/smoke-$RUN_ID$UPSTREAM_PATH" -H "X-API-Key: $API_KEY")
 [ "$code" = "200" ] || fail "an authenticated call returned $code, expected 200"
 ok "authenticated call proxied"
 
 limited=0
 i=0
 while [ $i -lt 8 ]; do
-	code=$(curl -sS -o /dev/null -w '%{http_code}' "$GW/resources/smoke-$RUN_ID/get" -H "X-API-Key: $API_KEY")
+	code=$(curl -sS -o /dev/null -w '%{http_code}' "$GW/resources/smoke-$RUN_ID$UPSTREAM_PATH" -H "X-API-Key: $API_KEY")
 	[ "$code" = "429" ] && limited=1 && break
 	i=$((i + 1))
 done
