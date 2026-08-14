@@ -24,8 +24,6 @@ const (
 	routeEmailTemplateID   = "/:emailTemplateId"
 	routeUserID            = "/:userId"
 	routeApiKeyID          = "/:apiKeyId"
-	routeGroupID           = "/:groupId"
-	routeSystemThemeID     = "/:systemThemeId"
 	routeSourceID          = "/:sourceId"
 	routeServiceID         = "/:serviceId"
 	routePackageID         = "/:packageId"
@@ -47,8 +45,6 @@ type Services struct {
 	VerifyEmail             *service.VerifyEmailService
 	Account                 *service.AccountService
 	ApiKey                  *service.ApiKeyService
-	Group                   *service.GroupService
-	SystemTheme             *service.SystemThemeService
 	GatewaySource           *service.GatewaySourceService
 	GatewayService          *service.GatewayServiceService
 	GatewaySpec             *service.GatewaySpecService
@@ -67,7 +63,6 @@ type Infra struct {
 	SessionCache    *cache.SessionCache
 	UserRepo        *repository.UserRepository
 	UserSessionRepo *repository.UserSessionRepository
-	GroupUserRepo   *repository.GroupUserRepository
 }
 
 type InternalConfig struct {
@@ -189,7 +184,6 @@ func Setup(e *echo.Echo, infra Infra, svcs Services, internalCfg InternalConfig,
 	// Configuration — GET public (optional auth), PATCH root only
 	configurationHandler := handler.NewConfigurationHandler(svcs.Config)
 	v1.GET("/configuration", configurationHandler.GetConfiguration, jwtMW.OptionalAuthenticate)
-	v1.PATCH("/configuration", configurationHandler.UpdateConfiguration, jwtMW.Authenticate)
 
 	// Mail Servers
 	mailServerHandler := handler.NewMailServerHandler(svcs.MailServer)
@@ -205,9 +199,6 @@ func Setup(e *echo.Echo, infra Infra, svcs Services, internalCfg InternalConfig,
 	emailTemplates := v1.Group("/email-templates", jwtMW.Authenticate)
 	emailTemplates.GET("", emailTemplateHandler.GetEmailTemplates)
 	emailTemplates.GET(routeEmailTemplateID, emailTemplateHandler.GetEmailTemplate)
-	emailTemplates.POST("", emailTemplateHandler.CreateEmailTemplate)
-	emailTemplates.PUT(routeEmailTemplateID, emailTemplateHandler.UpdateEmailTemplate)
-	emailTemplates.DELETE(routeEmailTemplateID, emailTemplateHandler.DeleteEmailTemplate)
 
 	// Users
 	userHandler := handler.NewUserHandler(svcs.User)
@@ -251,28 +242,6 @@ func Setup(e *echo.Echo, infra Infra, svcs Services, internalCfg InternalConfig,
 	dashboard.GET("/stats", dashboardHandler.GetStats)
 	dashboard.GET("/summary", dashboardHandler.GetSummary)
 	dashboard.GET("/logs", dashboardHandler.GetLogs)
-
-	// Groups
-	groupHandler := handler.NewGroupHandler(svcs.Group)
-	groups := v1.Group("/groups", jwtMW.Authenticate)
-	groups.GET("", groupHandler.GetGroups)
-	groups.GET(routeGroupID, groupHandler.GetGroup)
-	groups.POST("", groupHandler.CreateGroup)
-	groups.PUT(routeGroupID, groupHandler.UpdateGroup)
-	groups.DELETE(routeGroupID, groupHandler.DeleteGroup)
-	groups.GET(routeGroupID+"/users", groupHandler.GetGroupUsers)
-	groups.POST(routeGroupID+"/users", groupHandler.AddGroupUsers)
-	groups.DELETE(routeGroupID+"/users", groupHandler.RemoveGroupUsers)
-
-	// System Themes — GET default is public, rest requires root
-	systemThemeHandler := handler.NewSystemThemeHandler(svcs.SystemTheme)
-	v1.GET("/system-themes/default", systemThemeHandler.GetDefaultSystemTheme)
-	systemThemes := v1.Group("/system-themes", jwtMW.Authenticate)
-	systemThemes.GET("", systemThemeHandler.GetSystemThemes)
-	systemThemes.GET(routeSystemThemeID, systemThemeHandler.GetSystemTheme)
-	systemThemes.POST("", systemThemeHandler.CreateSystemTheme)
-	systemThemes.PUT(routeSystemThemeID, systemThemeHandler.UpdateSystemTheme)
-	systemThemes.DELETE(routeSystemThemeID, systemThemeHandler.DeleteSystemTheme)
 
 	// Gateway Sources
 	gatewaySourceHandler := handler.NewGatewaySourceHandler(svcs.GatewaySource)

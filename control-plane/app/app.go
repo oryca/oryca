@@ -85,7 +85,6 @@ func Run() {
 		SessionCache:    caches.session,
 		UserRepo:        repos.user,
 		UserSessionRepo: repos.userSession,
-		GroupUserRepo:   repos.groupUser,
 	}, buildRouterServices(svcs), router.InternalConfig{
 		Secret:                cfg.InternalSecret,
 		SecretPrev:            cfg.InternalSecretPrev,
@@ -255,9 +254,6 @@ type appRepos struct {
 	user            *repository.UserRepository
 	userSession     *repository.UserSessionRepository
 	apiKey          *repository.ApiKeyRepository
-	group           *repository.GroupRepository
-	groupUser       *repository.GroupUserRepository
-	systemTheme     *repository.SystemThemeRepository
 	gatewaySource   *repository.GatewaySourceRepository
 	gatewayService  *repository.GatewayServiceRepository
 	gatewaySpec     *repository.GatewaySpecRepository
@@ -276,7 +272,6 @@ type appCaches struct {
 	setPassword *cache.SetPasswordCache
 	session     *cache.SessionCache
 	verifyEmail *cache.VerifyEmailCache
-	systemTheme *cache.SystemThemeCache
 }
 
 type appServices struct {
@@ -289,8 +284,6 @@ type appServices struct {
 	verifyEmail     *service.VerifyEmailService
 	account         *service.AccountService
 	apiKey          *service.ApiKeyService
-	group           *service.GroupService
-	systemTheme     *service.SystemThemeService
 	gatewaySync     *service.GatewayRedisSync
 	gatewaySource   *service.GatewaySourceService
 	gatewayService  *service.GatewayServiceService
@@ -314,9 +307,6 @@ func buildRepos(db interface { /* *mongo.Database */
 		user:            repository.NewUserRepository(d),
 		userSession:     repository.NewUserSessionRepository(d),
 		apiKey:          repository.NewApiKeyRepository(d),
-		group:           repository.NewGroupRepository(d),
-		groupUser:       repository.NewGroupUserRepository(d),
-		systemTheme:     repository.NewSystemThemeRepository(d),
 		gatewaySource:   repository.NewGatewaySourceRepository(d),
 		gatewayService:  repository.NewGatewayServiceRepository(d),
 		gatewaySpec:     repository.NewGatewaySpecRepository(d),
@@ -337,7 +327,6 @@ func buildCaches(rc *redis.Client, ttl time.Duration) appCaches {
 		setPassword: cache.NewSetPasswordCache(rc),
 		session:     cache.NewSessionCache(rc),
 		verifyEmail: cache.NewVerifyEmailCache(rc),
-		systemTheme: cache.NewSystemThemeCache(rc, ttl),
 	}
 }
 
@@ -363,15 +352,13 @@ func buildServices(r appRepos, c appCaches, rc *redis.Client, routingTTL time.Du
 		verifyEmail:     verifyEmailSvc,
 		account:         service.NewAccountService(r.user, c.session, r.userSession),
 		apiKey:          service.NewApiKeyService(r.apiKey, c.apiKey, r.user, notificationSvc, gwPublisher),
-		group:           service.NewGroupService(r.group, r.groupUser, notificationSvc),
-		systemTheme:     service.NewSystemThemeService(r.systemTheme, c.systemTheme),
 		gatewaySync:     gatewaySync,
 		gatewaySource:   service.NewGatewaySourceService(r.gatewaySource, r.gatewayService, gatewaySync),
 		gatewayService:  service.NewGatewayServiceService(r.gatewayService, r.gatewaySource, gatewaySync),
 		gatewaySpec:     service.NewGatewaySpecService(r.gatewaySpec),
 		pkg:             service.NewPackageService(r.pkg),
 		packageSvcLink:  service.NewPackageSvcLinkService(r.packageSvcLink, r.gatewayService, r.pkg, r.pkg, gatewaySync, r.user, notificationSvc),
-		packageUser:     service.NewPackageUserService(r.user, r.pkg, r.pkg, r.group, r.groupUser, notificationSvc, gwPublisher),
+		packageUser:     service.NewPackageUserService(r.user, r.pkg, r.pkg, notificationSvc, gwPublisher),
 		transformConfig: service.NewTransformConfigService(r.transformConfig),
 		notification:    notificationSvc,
 		apiDoc:          service.NewApiDocService(r.apiDoc),
@@ -390,8 +377,6 @@ func buildRouterServices(s appServices) router.Services {
 		VerifyEmail:             s.verifyEmail,
 		Account:                 s.account,
 		ApiKey:                  s.apiKey,
-		Group:                   s.group,
-		SystemTheme:             s.systemTheme,
 		GatewaySource:           s.gatewaySource,
 		GatewayService:          s.gatewayService,
 		GatewaySpec:             s.gatewaySpec,
@@ -408,14 +393,10 @@ func buildRouterServices(s appServices) router.Services {
 func buildEcho(cfg *config.Config) (*echo.Echo, []string) {
 	e := echo.New()
 	e.HideBanner = true
-	// หมายเหตุ (ยังไม่แก้ — deferred): ไม่ได้ set e.IPExtractor จึงใช้ default ของ Echo ที่เชื่อ
-	// X-Forwarded-For/X-Real-IP โดยไม่ตรวจ trusted proxy — spoof header ได้ ทำให้ rate limiter
-	// (/oauth2/login, /oauth2/token) และ IP restriction ของ API key bypass ได้ ตั้งใจปล่อยไว้ก่อน
-	// เพราะยังไม่รู้ topology จริง (มี/ไม่มี reverse proxy หน้า service) และ FE ใช้งาน flow นี้อยู่บน dev แล้ว
-	// ต้องกลับมาตั้ง e.IPExtractor ให้ถูกตอนรู้ topology จริง (เช่น ExtractIPDirect ถ้าไม่มี proxy,
-	// หรือ ExtractIPFromXFFHeader พร้อม trusted CIDR ถ้ามี)
-	// ตั้ง timeout ของ HTTP server กัน slow/idle client ยึด connection ค้าง
-	// ไม่ตั้ง WriteTimeout เพราะ preview pipeline ใช้เวลาตอบนานได้
+	// ไม่ได้ตั้ง e.IPExtractor จึงใช้ default ของ Echo ที่เชื่อ X-Forwarded-For
+	// ตอนนี้ IP ถูกใช้แค่ใน log ไม่ได้ใช้ตัดสินใจอะไร ถ้าวันหน้ามีอะไรตัดสินใจจาก IP
+	// ต้องตั้ง IPExtractor ให้ตรงกับ topology จริงก่อน
+	// timeout กัน client ช้ายึด connection ค้าง
 	e.Server.ReadHeaderTimeout = envSeconds(cfg.ReadHeaderTimeout, 10)
 	e.Server.ReadTimeout = envSeconds(cfg.ReadTimeout, 60)
 	e.Server.IdleTimeout = envSeconds(cfg.IdleTimeout, 120)

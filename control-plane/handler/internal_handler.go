@@ -168,11 +168,10 @@ func (h *InternalHandler) GetApiKeys(c echo.Context) error {
 	result := make([]*model.ApiKeyCache, 0, len(keys))
 	for _, ak := range keys {
 		payload := &model.ApiKeyCache{
-			ID:          ak.ID.Hex(),
-			ApiKey:      ak.ApiKey,
-			Enabled:     ak.Enabled,
-			ExpiredAt:   ak.ExpiredAt,
-			Restriction: ak.Restriction,
+			ID:        ak.ID.Hex(),
+			ApiKey:    ak.ApiKey,
+			Enabled:   ak.Enabled,
+			ExpiredAt: ak.ExpiredAt,
 		}
 
 		if ak.OwnerBy != nil {

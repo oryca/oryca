@@ -62,13 +62,13 @@ func (m *fakePackageUserRepo) CountByOldPackageIDs(ctx context.Context, userIDs 
 }
 
 func newPackageUserService(repo *fakePackageUserRepo, pkgRepo *mockPackageFinder, pkgCountRepo *mockPackageUserCountRepo, pub *mockPackageUserGatewayPublisher) *PackageUserService {
-	return NewPackageUserService(repo, pkgRepo, pkgCountRepo, nil, nil, nil, pub)
+	return NewPackageUserService(repo, pkgRepo, pkgCountRepo, nil, pub)
 }
 
 // --- AssignUsers / RemoveUsers publish exactly one event ---
 
 func TestPackageUserServiceAssignUsersPublishesOneInvalidateEvent(t *testing.T) {
-	// Regression test: AssignUsers is a bulk operation — a groupID can expand to
+	// Regression test: AssignUsers is a bulk operation — one call can touch
 	// hundreds of users in one BulkSetPackageID call. Publishing must fire exactly
 	// once per call, carrying the full deduped id set, never once per user (that's
 	// the event-storm bug already fixed for reload_services).
@@ -105,7 +105,7 @@ func TestPackageUserServiceAssignUsersPublishesOneInvalidateEvent(t *testing.T) 
 	})).Return()
 
 	svc := newPackageUserService(repo, pkgRepo, pkgCountRepo, pub)
-	assigned, skipped, err := svc.AssignUsers(ctx, pid.Hex(), []string{id1.Hex(), id2.Hex()}, nil, ctxUser)
+	assigned, skipped, err := svc.AssignUsers(ctx, pid.Hex(), []string{id1.Hex(), id2.Hex()}, ctxUser)
 
 	require.NoError(t, err)
 	assert.Equal(t, int64(2), assigned)
@@ -130,7 +130,7 @@ func TestPackageUserServiceRemoveUsersPublishesOneInvalidateEvent(t *testing.T) 
 	pub.On("Publish", SyncEventTypeUserInvalidate, mock.Anything).Return()
 
 	svc := newPackageUserService(repo, pkgRepo, pkgCountRepo, pub)
-	removed, skipped, err := svc.RemoveUsers(ctx, pid.Hex(), []string{id1.Hex(), id2.Hex(), id3.Hex()}, nil, ctxUser)
+	removed, skipped, err := svc.RemoveUsers(ctx, pid.Hex(), []string{id1.Hex(), id2.Hex(), id3.Hex()}, ctxUser)
 
 	require.NoError(t, err)
 	assert.Equal(t, int64(3), removed)
@@ -153,7 +153,7 @@ func TestPackageUserServiceNoPublishWhenNothingChanged(t *testing.T) {
 	repo.On("BulkSetPackageID", ctx, mock.Anything, pid).Return(int64(0), nil)
 
 	svc := newPackageUserService(repo, pkgRepo, pkgCountRepo, pub)
-	assigned, _, err := svc.AssignUsers(ctx, pid.Hex(), []string{bson.NewObjectID().Hex()}, nil, ctxUser)
+	assigned, _, err := svc.AssignUsers(ctx, pid.Hex(), []string{bson.NewObjectID().Hex()}, ctxUser)
 
 	require.NoError(t, err)
 	assert.Equal(t, int64(0), assigned)

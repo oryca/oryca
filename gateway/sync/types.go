@@ -64,18 +64,12 @@ type UserInvalidatePayload struct {
 	UserIDs []string `json:"userIds"`
 }
 
-type ApiKeyRestrictionPayload struct {
-	Type  string   `json:"type"`
-	Items []string `json:"items,omitempty"`
-}
-
 type ApiKeyPayload struct {
-	ID          string                    `json:"id"`
-	ApiKey      string                    `json:"apiKey"`
-	Enabled     *bool                     `json:"enabled,omitempty"`
-	ExpiredAt   *time.Time                `json:"expiredAt,omitempty"`
-	Restriction *ApiKeyRestrictionPayload `json:"restriction,omitempty"`
-	Owner       *ApiKeyOwnerPayload       `json:"owner,omitempty"`
+	ID        string              `json:"id"`
+	ApiKey    string              `json:"apiKey"`
+	Enabled   *bool               `json:"enabled,omitempty"`
+	ExpiredAt *time.Time          `json:"expiredAt,omitempty"`
+	Owner     *ApiKeyOwnerPayload `json:"owner,omitempty"`
 }
 
 type TransformMatchPayload struct {

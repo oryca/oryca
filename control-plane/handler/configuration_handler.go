@@ -46,34 +46,3 @@ func (h *ConfigurationHandler) GetConfiguration(c echo.Context) error {
 		UpdatedAt:     cfg.UpdatedAt,
 	})
 }
-
-func (h *ConfigurationHandler) UpdateConfiguration(c echo.Context) error {
-	user, _ := c.Get("user").(*model.User)
-	if user == nil || user.Role != "root" {
-		return c.JSON(http.StatusForbidden, &model.Exception{
-			Code:   tool.CodeUnauthorizedAccess,
-			Status: http.StatusForbidden,
-			Detail: "No permission",
-		})
-	}
-
-	var body model.ConfigurationUpsert
-	if err := c.Bind(&body); err != nil {
-		return c.JSON(http.StatusBadRequest, &model.Exception{
-			Code:   tool.CodeBodyInvalidFormat,
-			Status: http.StatusBadRequest,
-			Detail: err.Error(),
-		})
-	}
-
-	cfg, err := h.svc.Upsert(c.Request().Context(), &body)
-	if err != nil {
-		return c.JSON(http.StatusUnprocessableEntity, &model.Exception{
-			Code:   tool.CodeOperationFailed,
-			Status: http.StatusUnprocessableEntity,
-			Detail: "Could not update configuration",
-		})
-	}
-
-	return c.JSON(http.StatusOK, cfg)
-}

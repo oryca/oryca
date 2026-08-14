@@ -1,7 +1,6 @@
 package handler
 
 import (
-	"fmt"
 	"github.com/oryca/oryca/gateway/cache"
 	"github.com/oryca/oryca/gateway/model"
 	"net/http"
@@ -38,30 +37,6 @@ func extractApiKey(req *http.Request) string {
 		return v
 	}
 	return req.URL.Query().Get("api_key")
-}
-
-func checkApiKeyRestriction(ak *model.ApiKey, req *http.Request, clientIP string) error {
-	if ak.Restriction == nil || ak.Restriction.Type == "none" || ak.Restriction.Type == "" {
-		return nil
-	}
-	switch ak.Restriction.Type {
-	case "ip_address":
-		for _, ip := range ak.Restriction.Items {
-			if ip == clientIP {
-				return nil
-			}
-		}
-		return fmt.Errorf("IP not allowed")
-	case "http_referer":
-		referer := req.Header.Get("Referer")
-		for _, r := range ak.Restriction.Items {
-			if strings.Contains(referer, r) {
-				return nil
-			}
-		}
-		return fmt.Errorf("referer not allowed")
-	}
-	return nil
 }
 
 func timeNow() time.Time {

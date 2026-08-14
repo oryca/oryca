@@ -39,6 +39,10 @@ func NewUserHandler(svc userService) *UserHandler {
 	return &UserHandler{svc: svc}
 }
 
+func isRootOrAdmin(role string) bool {
+	return role == "root" || role == "admin"
+}
+
 // canSetUserRole คืน true ถ้า actor สามารถสร้าง/แก้ user ที่มี role นั้นได้
 // root → ได้ทุก role | admin → user | อื่น → ไม่ได้
 func canSetUserRole(actorRole, targetRole string) bool {

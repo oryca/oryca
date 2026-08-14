@@ -164,7 +164,6 @@ func NewApiKeyMiddleware(apiKeySvc apiKeyLookup, userRepo userFinder) *ApiKeyMid
 const msgApiKeyInvalid = "API key is invalid"
 
 // Authenticate ตรวจสอบ API key จาก header X-Api-Key หรือ query param api_key
-// พร้อมตรวจ restriction (ip_address / http_referer)
 func (m *ApiKeyMiddleware) Authenticate(next echo.HandlerFunc) echo.HandlerFunc {
 	return func(c echo.Context) error {
 		keyValue := extractApiKey(c)
@@ -221,7 +220,7 @@ func validateApiKey(c echo.Context, ak *model.ApiKey) error {
 		})
 	}
 
-	return checkApiKeyRestriction(c, ak)
+	return nil
 }
 
 func (m *ApiKeyMiddleware) resolveApiKeyUser(c echo.Context, ak *model.ApiKey) (*model.User, error) {
@@ -243,44 +242,6 @@ func (m *ApiKeyMiddleware) resolveApiKeyUser(c echo.Context, ak *model.ApiKey) (
 	}
 
 	return user, nil
-}
-
-func checkApiKeyRestriction(c echo.Context, ak *model.ApiKey) error {
-	r := ak.Restriction
-	if r == nil || r.Type == "" || r.Type == model.RestrictionTypeNone || len(r.Items) == 0 {
-		return nil
-	}
-
-	switch r.Type {
-	case model.RestrictionTypeIpAddress:
-		clientIP := c.RealIP()
-		if !tool.IsIPAllowed(clientIP, r.Items) {
-			return c.JSON(http.StatusForbidden, &model.Exception{
-				Code:   tool.CodeIPNotAllowed,
-				Status: http.StatusForbidden,
-				Detail: "API key is not allowed from this IP address",
-			})
-		}
-
-	case model.RestrictionTypeHttpReferer:
-		referer := c.Request().Header.Get("Referer")
-		if referer == "" {
-			return c.JSON(http.StatusForbidden, &model.Exception{
-				Code:   tool.CodeRefererRequired,
-				Status: http.StatusForbidden,
-				Detail: "API key requires a valid HTTP Referer header",
-			})
-		}
-		if !tool.IsRefererAllowed(referer, r.Items) {
-			return c.JSON(http.StatusForbidden, &model.Exception{
-				Code:   tool.CodeRefererNotAllowed,
-				Status: http.StatusForbidden,
-				Detail: "API key is not allowed from this referer",
-			})
-		}
-	}
-
-	return nil
 }
 
 func extractApiKey(c echo.Context) string {

@@ -72,11 +72,10 @@ func (s *ApiKeyService) publishApiKeyEvent(ak *model.ApiKey, owner *model.User) 
 		return
 	}
 	payload := &model.ApiKeyCache{
-		ID:          ak.ID.Hex(),
-		ApiKey:      ak.ApiKey,
-		Enabled:     ak.Enabled,
-		ExpiredAt:   ak.ExpiredAt,
-		Restriction: ak.Restriction,
+		ID:        ak.ID.Hex(),
+		ApiKey:    ak.ApiKey,
+		Enabled:   ak.Enabled,
+		ExpiredAt: ak.ExpiredAt,
 	}
 	if owner != nil {
 		packageID := ""
@@ -255,7 +254,6 @@ func (s *ApiKeyService) Create(ctx context.Context, body *model.ApiKeyCreate, ct
 		ApiKey:      keyValue,
 		Enabled:     enabled,
 		ExpiredAt:   body.ExpiredAt,
-		Restriction: body.Restriction,
 		OwnerBy:     &ownerID,
 		CreatedAt:   &now,
 		CreatedBy:   &createdBy,
@@ -292,7 +290,6 @@ func (s *ApiKeyService) Update(ctx context.Context, id bson.ObjectID, body *mode
 		"description": body.Description,
 		"enabled":     body.Enabled,
 		"expiredAt":   body.ExpiredAt,
-		"restriction": body.Restriction,
 		"updatedAt":   now,
 		"updatedBy":   ctxUser.ID,
 	}

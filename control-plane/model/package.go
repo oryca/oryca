@@ -152,10 +152,8 @@ type PackageServiceCheckPathsResponse struct {
 
 type PackageUserAssign struct {
 	UserIDs []string `json:"userIds"`
-	GroupID *string  `json:"groupId"`
 }
 
 type PackageUserRemove struct {
 	UserIDs []string `json:"userIds"`
-	GroupID *string  `json:"groupId"`
 }

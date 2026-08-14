@@ -166,15 +166,6 @@ func (h *ApiKeyHandler) CreateApiKey(c echo.Context) error {
 		})
 	}
 
-	// ตรวจสอบ restriction type ถ้าส่งมา
-	if body.Restriction != nil && !isValidRestrictionType(body.Restriction.Type) {
-		return c.JSON(http.StatusBadRequest, &model.Exception{
-			Code:   tool.CodeBodyInvalidFormat,
-			Status: http.StatusBadRequest,
-			Detail: "Body 'restriction.type' is invalid",
-		})
-	}
-
 	// หา targetUser ถ้าระบุ userId
 	var targetUser *model.User
 	if body.UserID != nil {
@@ -233,14 +224,6 @@ func (h *ApiKeyHandler) UpdateApiKey(c echo.Context) error {
 			Code:   tool.CodeBodyInvalidFormat,
 			Status: http.StatusBadRequest,
 			Detail: err.Error(),
-		})
-	}
-
-	if body.Restriction != nil && !isValidRestrictionType(body.Restriction.Type) {
-		return c.JSON(http.StatusBadRequest, &model.Exception{
-			Code:   tool.CodeBodyInvalidFormat,
-			Status: http.StatusBadRequest,
-			Detail: "Body 'restriction.type' is invalid",
 		})
 	}
 
@@ -406,13 +389,4 @@ func maskForViewer(ak *model.ApiKey, viewer *model.User) *model.ApiKey {
 	masked := *ak
 	masked.ApiKey = tool.MaskApiKey(ak.ApiKey)
 	return &masked
-}
-
-func isValidRestrictionType(t string) bool {
-	for _, v := range model.RestrictionTypes {
-		if v == t {
-			return true
-		}
-	}
-	return false
 }

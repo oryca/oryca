@@ -575,25 +575,6 @@ func TestCreateApiKey(t *testing.T) {
 		assert.Equal(t, tool.CodeBodyInvalidFormat, resp.Code)
 	})
 
-	t.Run("restriction type ไม่ถูกต้อง ต้องได้ status 400", func(t *testing.T) {
-		svc := new(mockApiKeyService)
-		userSvc := new(mockApiKeyUserFinder)
-
-		c, rec := newAKPostCtx(e, map[string]any{
-			"name":        "key",
-			"restriction": map[string]any{"type": "invalid_type"},
-		})
-		c.Set("user", normalUser)
-		err := newAKHandler(svc, userSvc).CreateApiKey(c)
-
-		require.NoError(t, err)
-		assert.Equal(t, http.StatusBadRequest, rec.Code)
-
-		var resp model.Exception
-		require.NoError(t, json.NewDecoder(rec.Body).Decode(&resp))
-		assert.Equal(t, tool.CodeBodyInvalidFormat, resp.Code)
-	})
-
 	t.Run("target user ไม่พบ ต้องได้ status 404", func(t *testing.T) {
 		svc := new(mockApiKeyService)
 		userSvc := new(mockApiKeyUserFinder)
@@ -740,25 +721,6 @@ func TestUpdateApiKey(t *testing.T) {
 		c.SetParamValues(validID.Hex())
 		c.Set("user", rootUser)
 
-		err := newAKHandler(svc, userSvc).UpdateApiKey(c)
-
-		require.NoError(t, err)
-		assert.Equal(t, http.StatusBadRequest, rec.Code)
-
-		var resp model.Exception
-		require.NoError(t, json.NewDecoder(rec.Body).Decode(&resp))
-		assert.Equal(t, tool.CodeBodyInvalidFormat, resp.Code)
-	})
-
-	t.Run("restriction type ไม่ถูกต้อง ต้องได้ status 400", func(t *testing.T) {
-		svc := new(mockApiKeyService)
-		userSvc := new(mockApiKeyUserFinder)
-
-		c, rec := newAKPutCtx(e, validID.Hex(), map[string]any{
-			"name":        "key",
-			"restriction": map[string]any{"type": "bad_type"},
-		})
-		c.Set("user", rootUser)
 		err := newAKHandler(svc, userSvc).UpdateApiKey(c)
 
 		require.NoError(t, err)

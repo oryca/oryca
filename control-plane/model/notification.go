@@ -16,7 +16,6 @@ const (
 	NotificationTopicApiKeySuspended        = "apikey_suspended"
 	NotificationTopicPackageChanged         = "package_changed"
 	NotificationTopicPackageServicesUpdated = "package_services_updated"
-	NotificationTopicGroupAdded             = "group_added"
 	NotificationTopicApiKeyExpiring         = "apikey_expiring"
 )
 

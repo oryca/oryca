@@ -23,14 +23,6 @@ type packageUserCountRepo interface {
 	IncrUserCount(ctx context.Context, id bson.ObjectID, delta int64) error
 }
 
-type groupDescendantRepo interface {
-	FindDescendantGroupIDs(ctx context.Context, groupID bson.ObjectID) ([]bson.ObjectID, error)
-}
-
-type groupUserIDsRepo interface {
-	FindUserIDsByGroupIDs(ctx context.Context, groupIDs []bson.ObjectID) ([]bson.ObjectID, error)
-}
-
 type packageUserNotifier interface {
 	Create(ctx context.Context, in *model.NotificationCreate) error
 }
@@ -41,17 +33,15 @@ type packageUserGatewayPublisher interface {
 }
 
 type PackageUserService struct {
-	userRepo      packageUserRepo
-	packageRepo   packageFinder
-	pkgRepo       packageUserCountRepo
-	groupRepo     groupDescendantRepo
-	groupUserRepo groupUserIDsRepo
-	notifier      packageUserNotifier
-	publisher     packageUserGatewayPublisher
+	userRepo    packageUserRepo
+	packageRepo packageFinder
+	pkgRepo     packageUserCountRepo
+	notifier    packageUserNotifier
+	publisher   packageUserGatewayPublisher
 }
 
-func NewPackageUserService(userRepo packageUserRepo, packageRepo packageFinder, pkgRepo packageUserCountRepo, groupRepo groupDescendantRepo, groupUserRepo groupUserIDsRepo, notifier packageUserNotifier, publisher packageUserGatewayPublisher) *PackageUserService {
-	return &PackageUserService{userRepo: userRepo, packageRepo: packageRepo, pkgRepo: pkgRepo, groupRepo: groupRepo, groupUserRepo: groupUserRepo, notifier: notifier, publisher: publisher}
+func NewPackageUserService(userRepo packageUserRepo, packageRepo packageFinder, pkgRepo packageUserCountRepo, notifier packageUserNotifier, publisher packageUserGatewayPublisher) *PackageUserService {
+	return &PackageUserService{userRepo: userRepo, packageRepo: packageRepo, pkgRepo: pkgRepo, notifier: notifier, publisher: publisher}
 }
 
 // publishUserInvalidate fires exactly one thin invalidate event per bulk call, carrying
@@ -69,26 +59,6 @@ func (s *PackageUserService) publishUserInvalidate(ids []bson.ObjectID) {
 	s.publisher.Publish(SyncEventTypeUserInvalidate, &model.UserIDsPayload{UserIDs: hexIDs})
 }
 
-func (s *PackageUserService) resolveGroupUserIDs(ctx context.Context, groupID string) ([]string, error) {
-	gid, err := bson.ObjectIDFromHex(groupID)
-	if err != nil {
-		return nil, err
-	}
-	groupIDs, err := s.groupRepo.FindDescendantGroupIDs(ctx, gid)
-	if err != nil {
-		return nil, err
-	}
-	userOIDs, err := s.groupUserRepo.FindUserIDsByGroupIDs(ctx, groupIDs)
-	if err != nil {
-		return nil, err
-	}
-	result := make([]string, len(userOIDs))
-	for i, id := range userOIDs {
-		result[i] = id.Hex()
-	}
-	return result, nil
-}
-
 func (s *PackageUserService) GetUsers(ctx context.Context, packageID string, params url.Values) ([]*model.User, int64, error) {
 	pid, err := bson.ObjectIDFromHex(packageID)
 	if err != nil {
@@ -100,7 +70,7 @@ func (s *PackageUserService) GetUsers(ctx context.Context, packageID string, par
 	return s.userRepo.FindByPackageID(ctx, pid, params)
 }
 
-func (s *PackageUserService) AssignUsers(ctx context.Context, packageID string, rawIDs []string, groupID *string, ctxUser *model.User) (assigned int64, skipped int, err error) {
+func (s *PackageUserService) AssignUsers(ctx context.Context, packageID string, rawIDs []string, ctxUser *model.User) (assigned int64, skipped int, err error) {
 	pid, err := bson.ObjectIDFromHex(packageID)
 	if err != nil {
 		return 0, 0, ErrPackageNotFound
@@ -108,14 +78,6 @@ func (s *PackageUserService) AssignUsers(ctx context.Context, packageID string, 
 	pkg, err := s.packageRepo.FindByID(ctx, pid)
 	if err != nil {
 		return 0, 0, ErrPackageNotFound
-	}
-
-	if groupID != nil {
-		groupUserIDs, e := s.resolveGroupUserIDs(ctx, *groupID)
-		if e != nil {
-			return 0, 0, e
-		}
-		rawIDs = append(rawIDs, groupUserIDs...)
 	}
 
 	seen := make(map[bson.ObjectID]struct{})
@@ -177,21 +139,13 @@ func (s *PackageUserService) notifyPackageChanged(ctx context.Context, pkg *mode
 	}
 }
 
-func (s *PackageUserService) RemoveUsers(ctx context.Context, packageID string, rawIDs []string, groupID *string, ctxUser *model.User) (removed int64, skipped int, err error) {
+func (s *PackageUserService) RemoveUsers(ctx context.Context, packageID string, rawIDs []string, ctxUser *model.User) (removed int64, skipped int, err error) {
 	pid, err := bson.ObjectIDFromHex(packageID)
 	if err != nil {
 		return 0, 0, ErrPackageNotFound
 	}
 	if _, err := s.packageRepo.FindByID(ctx, pid); err != nil {
 		return 0, 0, ErrPackageNotFound
-	}
-
-	if groupID != nil {
-		groupUserIDs, e := s.resolveGroupUserIDs(ctx, *groupID)
-		if e != nil {
-			return 0, 0, e
-		}
-		rawIDs = append(rawIDs, groupUserIDs...)
 	}
 
 	seen := make(map[bson.ObjectID]struct{})

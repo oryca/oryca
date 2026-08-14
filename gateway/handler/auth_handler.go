@@ -70,18 +70,6 @@ func (h *Handler) resolveApiKey(c echo.Context, keyValue string) (*model.User, e
 		})
 		return nil, errAuthWritten
 	}
-	if restrictErr := checkApiKeyRestriction(ak, req, c.RealIP()); restrictErr != nil {
-		errCode := tool.CodeIPNotAllowed
-		if restrictErr.Error() == "referer not allowed" {
-			errCode = tool.CodeRefererNotAllowed
-		}
-		_ = c.JSON(http.StatusForbidden, model.Exception{
-			Code:   errCode,
-			Status: http.StatusForbidden,
-			Detail: restrictErr.Error(),
-		})
-		return nil, errAuthWritten
-	}
 	c.Set("apiKeyId", ak.ID)
 	return user, nil
 }

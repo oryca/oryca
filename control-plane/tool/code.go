@@ -82,16 +82,6 @@ const (
 	CodeRefererRequired   = "REFERER_REQUIRED"
 	CodeRefererNotAllowed = "REFERER_NOT_ALLOWED"
 
-	// === Group ===
-	CodeGroupNotFound       = "GROUP_NOT_FOUND"
-	CodeGroupAliasDuplicate = "GROUP_ALIAS_DUPLICATE"
-	CodeGroupUserAdded      = "GROUP_USER_ADDED"
-
-	// === System Theme ===
-	CodeSystemThemeNotFound      = "SYSTEM_THEME_NOT_FOUND"
-	CodeSystemThemeCannotDelete  = "SYSTEM_THEME_CANNOT_DELETE"
-	CodeSystemThemeDefaultExists = "SYSTEM_THEME_DEFAULT_EXISTS"
-
 	// === Gateway Source ===
 	CodeGatewaySourceNotFound       = "GATEWAY_SOURCE_NOT_FOUND"
 	CodeGatewaySourceAliasDuplicate = "GATEWAY_SOURCE_ALIAS_DUPLICATE"

@@ -70,13 +70,13 @@ func (m *mockPackageUserSvcForAssign) GetUsers(ctx context.Context, packageID st
 	return nil, 0, args.Error(2)
 }
 
-func (m *mockPackageUserSvcForAssign) AssignUsers(ctx context.Context, packageID string, rawIDs []string, groupID *string, ctxUser *model.User) (int64, int, error) {
-	args := m.Called(ctx, packageID, rawIDs, groupID, ctxUser)
+func (m *mockPackageUserSvcForAssign) AssignUsers(ctx context.Context, packageID string, rawIDs []string, ctxUser *model.User) (int64, int, error) {
+	args := m.Called(ctx, packageID, rawIDs, ctxUser)
 	return args.Get(0).(int64), args.Int(1), args.Error(2)
 }
 
-func (m *mockPackageUserSvcForAssign) RemoveUsers(ctx context.Context, packageID string, rawIDs []string, groupID *string, ctxUser *model.User) (int64, int, error) {
-	args := m.Called(ctx, packageID, rawIDs, groupID, ctxUser)
+func (m *mockPackageUserSvcForAssign) RemoveUsers(ctx context.Context, packageID string, rawIDs []string, ctxUser *model.User) (int64, int, error) {
+	args := m.Called(ctx, packageID, rawIDs, ctxUser)
 	return args.Get(0).(int64), args.Int(1), args.Error(2)
 }
 
@@ -109,7 +109,7 @@ func TestAssignPackageUsers_SelfServiceAllowed(t *testing.T) {
 	pkgSvc := new(mockPackageSvcForAssign)
 	pkgSvc.On("GetByID", mock.Anything, pkgID.Hex()).Return(enabledPackage(pkgID, true), nil)
 	puSvc := new(mockPackageUserSvcForAssign)
-	puSvc.On("AssignUsers", mock.Anything, pkgID.Hex(), []string{userID.Hex()}, (*string)(nil), ctxUser).Return(int64(1), 0, nil)
+	puSvc.On("AssignUsers", mock.Anything, pkgID.Hex(), []string{userID.Hex()}, ctxUser).Return(int64(1), 0, nil)
 
 	h := NewPackageHandler(pkgSvc, nil, puSvc)
 	c, rec := newAssignCtx(t, pkgID.Hex(), `{"userIds":["`+userID.Hex()+`"]}`, ctxUser)
@@ -129,7 +129,7 @@ func TestAssignPackageUsers_SelfServiceRejectsOtherUser(t *testing.T) {
 
 	assert.NoError(t, h.AssignPackageUsers(c))
 	assert.Equal(t, http.StatusForbidden, rec.Code)
-	puSvc.AssertNotCalled(t, "AssignUsers", mock.Anything, mock.Anything, mock.Anything, mock.Anything, mock.Anything)
+	puSvc.AssertNotCalled(t, "AssignUsers", mock.Anything, mock.Anything, mock.Anything, mock.Anything)
 }
 
 func TestAssignPackageUsers_SelfServiceRejectsMultipleIDs(t *testing.T) {
@@ -143,22 +143,7 @@ func TestAssignPackageUsers_SelfServiceRejectsMultipleIDs(t *testing.T) {
 
 	assert.NoError(t, h.AssignPackageUsers(c))
 	assert.Equal(t, http.StatusForbidden, rec.Code)
-	puSvc.AssertNotCalled(t, "AssignUsers", mock.Anything, mock.Anything, mock.Anything, mock.Anything, mock.Anything)
-}
-
-func TestAssignPackageUsers_SelfServiceRejectsGroupID(t *testing.T) {
-	userID := bson.NewObjectID()
-	ctxUser := &model.User{ID: userID, Role: "user"}
-	pkgID := bson.NewObjectID()
-	gid := bson.NewObjectID().Hex()
-
-	puSvc := new(mockPackageUserSvcForAssign)
-	h := NewPackageHandler(new(mockPackageSvcForAssign), nil, puSvc)
-	c, rec := newAssignCtx(t, pkgID.Hex(), `{"userIds":["`+userID.Hex()+`"],"groupId":"`+gid+`"}`, ctxUser)
-
-	assert.NoError(t, h.AssignPackageUsers(c))
-	assert.Equal(t, http.StatusForbidden, rec.Code)
-	puSvc.AssertNotCalled(t, "AssignUsers", mock.Anything, mock.Anything, mock.Anything, mock.Anything, mock.Anything)
+	puSvc.AssertNotCalled(t, "AssignUsers", mock.Anything, mock.Anything, mock.Anything, mock.Anything)
 }
 
 func TestAssignPackageUsers_SelfServiceRejectsDisabledPackage(t *testing.T) {
@@ -175,21 +160,20 @@ func TestAssignPackageUsers_SelfServiceRejectsDisabledPackage(t *testing.T) {
 
 	assert.NoError(t, h.AssignPackageUsers(c))
 	assert.Equal(t, http.StatusNotFound, rec.Code)
-	puSvc.AssertNotCalled(t, "AssignUsers", mock.Anything, mock.Anything, mock.Anything, mock.Anything, mock.Anything)
+	puSvc.AssertNotCalled(t, "AssignUsers", mock.Anything, mock.Anything, mock.Anything, mock.Anything)
 }
 
 func TestAssignPackageUsers_AdminCanAssignOthersAndDisabledPackage(t *testing.T) {
 	pkgID := bson.NewObjectID()
 	ctxUser := &model.User{ID: bson.NewObjectID(), Role: "admin"}
 	targetID := bson.NewObjectID().Hex()
-	gid := bson.NewObjectID().Hex()
 
 	pkgSvc := new(mockPackageSvcForAssign)
 	puSvc := new(mockPackageUserSvcForAssign)
-	puSvc.On("AssignUsers", mock.Anything, pkgID.Hex(), []string{targetID}, &gid, ctxUser).Return(int64(3), 0, nil)
+	puSvc.On("AssignUsers", mock.Anything, pkgID.Hex(), []string{targetID}, ctxUser).Return(int64(3), 0, nil)
 
 	h := NewPackageHandler(pkgSvc, nil, puSvc)
-	c, rec := newAssignCtx(t, pkgID.Hex(), `{"userIds":["`+targetID+`"],"groupId":"`+gid+`"}`, ctxUser)
+	c, rec := newAssignCtx(t, pkgID.Hex(), `{"userIds":["`+targetID+`"]}`, ctxUser)
 
 	assert.NoError(t, h.AssignPackageUsers(c))
 	assert.Equal(t, http.StatusOK, rec.Code)

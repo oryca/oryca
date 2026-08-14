@@ -66,12 +66,6 @@ func toModelApiKey(ak *gwsync.ApiKeyPayload) *model.ApiKey {
 		Enabled:   ak.Enabled,
 		ExpiredAt: ak.ExpiredAt,
 	}
-	if ak.Restriction != nil {
-		m.Restriction = &model.ApiKeyRestriction{
-			Type:  ak.Restriction.Type,
-			Items: ak.Restriction.Items,
-		}
-	}
 	if ak.Owner != nil {
 		m.Owner = &model.User{
 			ID:        ak.Owner.ID,

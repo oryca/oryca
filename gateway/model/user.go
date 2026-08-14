@@ -12,15 +12,9 @@ type User struct {
 }
 
 type ApiKey struct {
-	ID          string             `json:"id"`
-	ApiKey      string             `json:"apiKey"`
-	Enabled     *bool              `json:"enabled,omitempty"`
-	ExpiredAt   *time.Time         `json:"expiredAt,omitempty"`
-	Restriction *ApiKeyRestriction `json:"restriction,omitempty"`
-	Owner       *User              `json:"owner,omitempty"`
-}
-
-type ApiKeyRestriction struct {
-	Type  string   `json:"type"`
-	Items []string `json:"items,omitempty"`
+	ID        string     `json:"id"`
+	ApiKey    string     `json:"apiKey"`
+	Enabled   *bool      `json:"enabled,omitempty"`
+	ExpiredAt *time.Time `json:"expiredAt,omitempty"`
+	Owner     *User      `json:"owner,omitempty"`
 }

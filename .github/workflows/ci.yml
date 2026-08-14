@@ -61,7 +61,7 @@ jobs:
       - name: Start the stack
         run: |
           cp .env.example .env
-          docker compose up -d --wait --wait-timeout 180
+          docker compose up -d --wait
 
       - name: Run the smoke test
         run: ./tools/smoke-test.sh

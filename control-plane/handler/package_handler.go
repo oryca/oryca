@@ -40,8 +40,8 @@ type packageSvcLinkService interface {
 
 type packageUserService interface {
 	GetUsers(ctx context.Context, packageID string, params url.Values) ([]*model.User, int64, error)
-	AssignUsers(ctx context.Context, packageID string, rawIDs []string, groupID *string, ctxUser *model.User) (assigned int64, skipped int, err error)
-	RemoveUsers(ctx context.Context, packageID string, rawIDs []string, groupID *string, ctxUser *model.User) (removed int64, skipped int, err error)
+	AssignUsers(ctx context.Context, packageID string, rawIDs []string, ctxUser *model.User) (assigned int64, skipped int, err error)
+	RemoveUsers(ctx context.Context, packageID string, rawIDs []string, ctxUser *model.User) (removed int64, skipped int, err error)
 }
 
 type PackageHandler struct {
@@ -671,9 +671,9 @@ func (h *PackageHandler) GetPackageUsers(c echo.Context) error {
 	})
 }
 
-// isSelfAssignOnly ตรวจว่า body เป็นการย้าย package ของตัวเองเท่านั้น (ห้าม groupId, ห้ามคนอื่น)
+// isSelfAssignOnly ตรวจว่า body เป็นการย้าย package ของตัวเองเท่านั้น (ห้ามคนอื่น)
 func isSelfAssignOnly(body *model.PackageUserAssign, ctxUser *model.User) bool {
-	if body.GroupID != nil || len(body.UserIDs) != 1 {
+	if len(body.UserIDs) != 1 {
 		return false
 	}
 	return body.UserIDs[0] == ctxUser.ID.Hex()
@@ -723,11 +723,11 @@ func (h *PackageHandler) AssignPackageUsers(c echo.Context) error {
 			Detail: err.Error(),
 		})
 	}
-	if len(body.UserIDs) == 0 && body.GroupID == nil {
+	if len(body.UserIDs) == 0 {
 		return c.JSON(http.StatusBadRequest, &model.Exception{
 			Code:   tool.CodeBodyInvalidFormat,
 			Status: http.StatusBadRequest,
-			Detail: "Body must contain 'userIds' or 'groupId'",
+			Detail: "Body must contain 'userIds'",
 		})
 	}
 
@@ -735,7 +735,7 @@ func (h *PackageHandler) AssignPackageUsers(c echo.Context) error {
 		return c.JSON(ex.Status, ex)
 	}
 
-	assigned, skipped, err := h.packageUserSvc.AssignUsers(c.Request().Context(), c.Param("packageId"), body.UserIDs, body.GroupID, ctxUser)
+	assigned, skipped, err := h.packageUserSvc.AssignUsers(c.Request().Context(), c.Param("packageId"), body.UserIDs, ctxUser)
 	if err != nil {
 		if errors.Is(err, service.ErrPackageNotFound) {
 			return c.JSON(http.StatusNotFound, &model.Exception{
@@ -781,15 +781,15 @@ func (h *PackageHandler) RemovePackageUsers(c echo.Context) error {
 			Detail: err.Error(),
 		})
 	}
-	if len(body.UserIDs) == 0 && body.GroupID == nil {
+	if len(body.UserIDs) == 0 {
 		return c.JSON(http.StatusBadRequest, &model.Exception{
 			Code:   tool.CodeBodyInvalidFormat,
 			Status: http.StatusBadRequest,
-			Detail: "Body must contain 'userIds' or 'groupId'",
+			Detail: "Body must contain 'userIds'",
 		})
 	}
 
-	removed, skipped, err := h.packageUserSvc.RemoveUsers(c.Request().Context(), c.Param("packageId"), body.UserIDs, body.GroupID, ctxUser)
+	removed, skipped, err := h.packageUserSvc.RemoveUsers(c.Request().Context(), c.Param("packageId"), body.UserIDs, ctxUser)
 	if err != nil {
 		if errors.Is(err, service.ErrPackageNotFound) {
 			return c.JSON(http.StatusNotFound, &model.Exception{

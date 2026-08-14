@@ -40,10 +40,9 @@ func (c *ApiKeyCache) Get(ctx context.Context, keyValue string) (*model.ApiKey, 
 		return nil, err
 	}
 	ak := &model.ApiKey{
-		ApiKey:      cached.ApiKey,
-		Enabled:     cached.Enabled,
-		ExpiredAt:   cached.ExpiredAt,
-		Restriction: cached.Restriction,
+		ApiKey:    cached.ApiKey,
+		Enabled:   cached.Enabled,
+		ExpiredAt: cached.ExpiredAt,
 	}
 	return ak, nil
 }
@@ -51,10 +50,9 @@ func (c *ApiKeyCache) Get(ctx context.Context, keyValue string) (*model.ApiKey, 
 // Set เก็บ ApiKey ลง cache โดยใช้ key value เป็น lookup key พร้อม embed owner info
 func (c *ApiKeyCache) Set(ctx context.Context, ak *model.ApiKey, owner *model.User) error {
 	payload := &model.ApiKeyCache{
-		ID:          ak.ID.Hex(),
-		Enabled:     ak.Enabled,
-		ExpiredAt:   ak.ExpiredAt,
-		Restriction: ak.Restriction,
+		ID:        ak.ID.Hex(),
+		Enabled:   ak.Enabled,
+		ExpiredAt: ak.ExpiredAt,
 	}
 	if owner != nil {
 		packageID := ""
@@ -110,10 +108,9 @@ func (c *ApiKeyCache) setBatchChunk(ctx context.Context, chunk []ApiKeyEntry) (f
 	cmds := make([]*redis.StatusCmd, len(chunk))
 	for i, e := range chunk {
 		payload := &model.ApiKeyCache{
-			ID:          e.ApiKey.ID.Hex(),
-			Enabled:     e.ApiKey.Enabled,
-			ExpiredAt:   e.ApiKey.ExpiredAt,
-			Restriction: e.ApiKey.Restriction,
+			ID:        e.ApiKey.ID.Hex(),
+			Enabled:   e.ApiKey.Enabled,
+			ExpiredAt: e.ApiKey.ExpiredAt,
 		}
 		if e.Owner != nil {
 			packageID := ""
