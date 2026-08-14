@@ -157,4 +157,4 @@ Some responses are passed straight through, whatever your rules say. This is del
 ## 8. Performance & Memory Cost
 
 - **Buffered, briefly.** A rewritten body is held in memory while the rules run, so the rules should be cheap and the bodies should be documents, not downloads.
-- **Optimized Selectors:** Avoid using deep walk operators like `$..*` if possible; specify exact paths (e.g. `$.links[*]`) to minimize CPU usage.
+- **Selectors cost what they walk.** A deep walk such as `$..*` visits the whole document; `$.links[*]` visits one array. Name the path you mean.
