@@ -58,7 +58,7 @@ func Run() {
 
 	svcs := buildServices(repos, caches, redisClient, routingTTL, gwPublisher)
 
-	// Seed ก่อนรับ traffic — first-boot only, ของที่มีอยู่แล้วไม่ถูกทับ (ดู package seed)
+	// Seed before any traffic arrives — first boot only, nothing existing is overwritten (see package seed)
 	runSeed(cfg, repos)
 
 	// Separate quiet GatewayRedisSync (nil publisher) for the boot-time bulk resync
@@ -69,10 +69,11 @@ func Run() {
 	quietGatewaySync := service.NewGatewayRedisSync(redisClient, routingTTL, nil)
 	go startBackgroundJobs(repos, caches, svcs, quietGatewaySync)
 
-	// Log consumer — ย้าย access log ของ gateway จาก Redis stream ลง Mongo ให้ dashboard ใช้
+	// Log consumer — moves the gateway's access logs from the Redis stream into Mongo, for the dashboard
 	logConsumer := startLogConsumer(cfg, repos, redisClient)
 
-	// Cron รายวันสำหรับแจ้งเตือนแบบ scheduled (apikey ใกล้หมดอายุ ฯลฯ) — distributed lock ให้ pod เดียวรัน
+	// Daily cron for scheduled notifications (an API key about to expire, and so on). A distributed
+	// lock keeps it to one pod.
 	notifyCron := service.NewNotificationCron(repos.apiKey, cache.NewDistributedLock(redisClient), svcs.notification)
 	if err := notifyCron.Start(); err != nil {
 		logger.Error("Failed to start notification cron: " + err.Error())
@@ -120,19 +121,19 @@ func Run() {
 		logger.Info("Server shutdown error: " + err.Error())
 	}
 
-	// หยุด cron แล้วรอ job ที่รันอยู่ให้จบก่อนปิด connection
+	// stop the cron and let a running job finish before any connection closes
 	cronShutCtx, cronCancel := context.WithTimeout(context.Background(), 10*time.Second)
 	notifyCron.Stop(cronShutCtx)
 	cronCancel()
 
-	// หยุด consumer ก่อนปิด Mongo/Redis — batch ที่ค้างต้องได้เขียนลง Mongo ให้จบ
+	// stop the consumer before Mongo and Redis close — a pending batch still has to be written
 	if logConsumer != nil {
 		consumerShutCtx, consumerCancel := context.WithTimeout(context.Background(), 15*time.Second)
 		logConsumer.Stop(consumerShutCtx)
 		consumerCancel()
 	}
 
-	// รอ background notification goroutine ให้เสร็จก่อนปิด Mongo/Redis (กัน insert/publish ค้างกลางคัน)
+	// wait for the background notification goroutine, so no insert or publish is cut off midway
 	notifyShutCtx, notifyCancel := context.WithTimeout(context.Background(), 10*time.Second)
 	service.WaitForBackgroundNotifications(notifyShutCtx)
 	notifyCancel()
@@ -185,8 +186,9 @@ func connectRedis(cfg *config.Config) (*redis.Client, time.Duration, time.Durati
 	return client, time.Duration(redisExpires) * time.Second, time.Duration(redisRoutingTTL) * time.Second
 }
 
-// loadJWTKeys โหลดคีย์ RSA ของ internal JWT ครั้งเดียวตอน startup
-// startLogConsumer เตรียม index (รวม TTL) แล้วเริ่ม consumer — คืน nil ถ้าปิดไว้ผ่าน env
+// loadJWTKeys reads the internal JWT's RSA keys once, at startup
+// startLogConsumer prepares the indexes (the TTL one included) and starts the consumer. Returns nil
+// when it is switched off by env.
 func startLogConsumer(cfg *config.Config, r appRepos, rc *redis.Client) *consumer.LogConsumer {
 	ctx, cancel := context.WithTimeout(context.Background(), 30*time.Second)
 	defer cancel()
@@ -201,12 +203,12 @@ func startLogConsumer(cfg *config.Config, r appRepos, rc *redis.Client) *consume
 		return nil
 	}
 
-	// ชื่อ consumer ต้องไม่ซ้ำกันข้าม pod — hostname คือของที่มีอยู่แล้วและไม่ซ้ำใน container
+	// consumer names have to be unique across pods, and a container's hostname already is
 	name, err := os.Hostname()
 	if err != nil || name == "" {
 		name = "control-plane"
 	}
-	// ctx ของ loop ต้องอยู่ยาวเท่า process — ctx ข้างบนมี timeout ไว้สำหรับ setup เท่านั้น
+	// the loop's ctx has to live as long as the process — the one above times out, and is for setup only
 	lc := consumer.NewLogConsumer(rc, r.accessLog, name)
 	if err := lc.Start(context.Background()); err != nil {
 		logger.Error("log consumer: start failed, dashboard will have no data: " + err.Error())
@@ -215,13 +217,13 @@ func startLogConsumer(cfg *config.Config, r appRepos, rc *redis.Client) *consume
 	return lc
 }
 
-// seedLogger ต่อ logger กลางเข้ากับ interface แคบๆ ของ package seed
+// seedLogger adapts the shared logger to the narrow interface package seed asks for
 type seedLogger struct{}
 
 func (seedLogger) Info(msg string)  { logger.Info(msg) }
 func (seedLogger) Error(msg string) { logger.Error(msg) }
 
-// runSeed เติมข้อมูลตั้งต้นจากไฟล์ YAML — idempotent ปลอดภัยที่จะรันทุก boot
+// runSeed loads the starting data from the YAML files. Idempotent, so it is safe on every boot.
 func runSeed(cfg *config.Config, r appRepos) {
 	ctx, cancel := context.WithTimeout(context.Background(), 30*time.Second)
 	defer cancel()
@@ -393,15 +395,15 @@ func buildRouterServices(s appServices) router.Services {
 func buildEcho(cfg *config.Config) (*echo.Echo, []string) {
 	e := echo.New()
 	e.HideBanner = true
-	// ไม่ได้ตั้ง e.IPExtractor จึงใช้ default ของ Echo ที่เชื่อ X-Forwarded-For
-	// ตอนนี้ IP ถูกใช้แค่ใน log ไม่ได้ใช้ตัดสินใจอะไร ถ้าวันหน้ามีอะไรตัดสินใจจาก IP
-	// ต้องตั้ง IPExtractor ให้ตรงกับ topology จริงก่อน
-	// timeout กัน client ช้ายึด connection ค้าง
+	// e.IPExtractor is left unset, so Echo's default applies and X-Forwarded-For is trusted. The IP is
+	// only written to the log today, and nothing is decided from it. Should anything ever decide from
+	// it, set an IPExtractor that matches the real topology first.
+	// The timeouts stop a slow client from holding a connection open.
 	e.Server.ReadHeaderTimeout = envSeconds(cfg.ReadHeaderTimeout, 10)
 	e.Server.ReadTimeout = envSeconds(cfg.ReadTimeout, 60)
 	e.Server.IdleTimeout = envSeconds(cfg.IdleTimeout, 120)
 
-	// จำกัดขนาด request body
+	// cap the request body
 	e.Use(middleware.BodyLimit(cfg.BodyLimit))
 	allowOrigins := strings.Split(cfg.AllowOrigin, ",")
 	e.Use(middleware.CORSWithConfig(middleware.CORSConfig{
@@ -418,7 +420,7 @@ func buildEcho(cfg *config.Config) (*echo.Echo, []string) {
 	return e, allowOrigins
 }
 
-// envSeconds แปลงค่า env (วินาที) เป็น Duration ถ้า parse ไม่ได้ใช้ default
+// envSeconds reads an env value in seconds as a Duration, falling back to the default
 func envSeconds(val string, defaultSec int) time.Duration {
 	if sec, err := strconv.Atoi(val); err == nil && sec > 0 {
 		return time.Duration(sec) * time.Second
@@ -426,8 +428,9 @@ func envSeconds(val string, defaultSec int) time.Duration {
 	return time.Duration(defaultSec) * time.Second
 }
 
-// envTrue แปลง env เป็น bool แบบยอม "1"/"TRUE"/"True" ด้วย — สวิตช์ความปลอดภัยไม่ควรเงียบเพราะพิมพ์ต่างเคส
-// ค่าที่ parse ไม่ได้ = false (observe mode) ปลอดภัยกว่าเปิดบังคับโดยไม่ได้ตั้งใจ
+// envTrue reads an env value as a bool, accepting "1", "TRUE" and "True" as well — a safety switch
+// should not fall silent over capitalisation. Anything it cannot parse is false (observe mode),
+// which is safer than enforcing something nobody asked for.
 func envTrue(val string) bool {
 	b, err := strconv.ParseBool(strings.TrimSpace(val))
 	return err == nil && b
@@ -476,7 +479,7 @@ func syncApiKeysToRedis(ctx context.Context, r appRepos, c appCaches) {
 		return
 	}
 
-	// ดึง owner ทั้งหมดใน 1 query แทนการเรียก FindByID ทีละ api-key (N+1)
+	// fetch every owner in one query, rather than a FindByID per api-key (N+1)
 	seen := make(map[bson.ObjectID]struct{})
 	ownerIDs := make([]bson.ObjectID, 0, len(keys))
 	for _, ak := range keys {
@@ -499,8 +502,8 @@ func syncApiKeysToRedis(ctx context.Context, r appRepos, c appCaches) {
 		ownerByID[o.ID] = o
 	}
 
-	// เขียน Redis ผ่าน pipeline เป็น chunk แทนยิงทีละ key — ลดจาก O(n) round-trip
-	// เหลือ O(n/500) ตรงกับที่แก้ไปแล้วใน oryca-gateway
+	// write to Redis in pipelined chunks instead of one key at a time, taking the round trips from
+	// O(n) to O(n/500)
 	entries := make([]cache.ApiKeyEntry, len(keys))
 	for i, ak := range keys {
 		var owner *model.User

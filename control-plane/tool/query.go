@@ -20,15 +20,15 @@ const (
 	opOptions = "$options"
 )
 
-// CommonIgnoredParams คือ query params ที่ไม่นำไปใช้เป็น filter field
+// CommonIgnoredParams are the query params that never become filter fields
 var CommonIgnoredParams = []string{"sort", "offset", "limit", "search"}
 
-// SearchWildcard สร้าง MongoDB regex filter สำหรับ case-insensitive search
+// SearchWildcard builds a case-insensitive MongoDB regex filter
 func SearchWildcard(search, key string) bson.M {
 	return bson.M{key: bson.M{opRegex: search, opOptions: "i"}}
 }
 
-// ParseLimit แปลงและ validate query param limit
+// ParseLimit reads and validates the limit query param
 func ParseLimit(v string) (int, error) {
 	n, err := strconv.Atoi(v)
 	if err != nil {
@@ -40,7 +40,7 @@ func ParseLimit(v string) (int, error) {
 	return n, nil
 }
 
-// ParseOffset แปลงและ validate query param offset
+// ParseOffset reads and validates the offset query param
 func ParseOffset(v string) (int, error) {
 	n, err := strconv.Atoi(v)
 	if err != nil {
@@ -52,7 +52,7 @@ func ParseOffset(v string) (int, error) {
 	return n, nil
 }
 
-// IsStringInSlice ตรวจว่า s อยู่ใน slice หรือไม่
+// IsStringInSlice reports whether s is in the slice
 func IsStringInSlice(s string, slice []string) bool {
 	for _, v := range slice {
 		if v == s {
@@ -62,7 +62,7 @@ func IsStringInSlice(s string, slice []string) bool {
 	return false
 }
 
-// EscapeRegexPattern escape อักขระพิเศษ regex ใน pattern
+// EscapeRegexPattern escapes the regex metacharacters in a pattern
 func EscapeRegexPattern(pattern string) string {
 	specialChars := []string{"\\", ".", "+", "*", "?", "(", ")", "[", "]", "{", "}", "^", "$", "|"}
 	for _, char := range specialChars {
@@ -71,7 +71,7 @@ func EscapeRegexPattern(pattern string) string {
 	return pattern
 }
 
-// OptionSortBson แปลง query param sort เช่น "name:asc,createdAt:desc" เป็น bson.D
+// OptionSortBson turns a sort query param such as "name:asc,createdAt:desc" into a bson.D
 func OptionSortBson(value string) (bson.D, error) {
 	order := bson.D{}
 
@@ -110,14 +110,14 @@ func OptionSortBson(value string) (bson.D, error) {
 	return order, nil
 }
 
-// DatetimeInterval เก็บช่วงเวลาที่ parse จาก OGC datetime format
+// DatetimeInterval holds a range parsed from the OGC datetime format
 type DatetimeInterval struct {
 	Start *time.Time
 	End   *time.Time
 }
 
 // ParseDatetimeInterval parse OGC API Features datetime value
-// รูปแบบที่รองรับ: "instant", "start/end", "../end", "start/.."
+// Accepted shapes: "instant", "start/end", "../end", "start/.."
 func ParseDatetimeInterval(value string) (DatetimeInterval, error) {
 	if !strings.Contains(value, "/") {
 		t, err := time.Parse(time.RFC3339, value)
@@ -145,7 +145,7 @@ func ParseDatetimeInterval(value string) (DatetimeInterval, error) {
 	return interval, nil
 }
 
-// DatetimeIntervalFilter สร้าง MongoDB range filter สำหรับ field และ interval ที่กำหนด
+// DatetimeIntervalFilter builds a MongoDB range filter for the given field and interval
 func DatetimeIntervalFilter(field string, interval DatetimeInterval) bson.M {
 	cond := bson.M{}
 	if interval.Start != nil {
@@ -160,8 +160,8 @@ func DatetimeIntervalFilter(field string, interval DatetimeInterval) bson.M {
 	return bson.M{field: cond}
 }
 
-// ParseDatetimeParams parse OGC-style datetime query params สำหรับ fields ที่อนุญาต
-// คืน []bson.M พร้อม merge เข้า $and filter (แบบเดียวกับ GenerateFilterBson)
+// ParseDatetimeParams reads OGC-style datetime query params for the allowed fields. It returns
+// []bson.M ready to merge into an $and filter, the same shape GenerateFilterBson returns.
 func ParseDatetimeParams(params url.Values, allowedFields []string) ([]bson.M, error) {
 	var filters []bson.M
 	for _, field := range allowedFields {
@@ -180,9 +180,9 @@ func ParseDatetimeParams(params url.Values, allowedFields []string) ([]bson.M, e
 	return filters, nil
 }
 
-// GenerateFilterBson แปลง URL query params เป็น []bson.M สำหรับใช้ใน $and
-// รองรับ: regex (*), null, exclude (!), multi-value OR (comma-separated)
-// ignoredParams — params ที่ข้ามไม่นำมาเป็น filter เช่น sort, skip, limit
+// GenerateFilterBson turns URL query params into the []bson.M of an $and filter. It understands
+// regex (*), null, exclude (!) and comma-separated multi-value OR.
+// ignoredParams are the params to skip, such as sort, skip and limit.
 func GenerateFilterBson(queryParams url.Values, ignoredParams []string) ([]bson.M, error) {
 	and := []bson.M{}
 
@@ -191,7 +191,7 @@ func GenerateFilterBson(queryParams url.Values, ignoredParams []string) ([]bson.
 			continue
 		}
 
-		// map id → _id และ .id → ._id ให้ตรงกับ bson field
+		// map id to _id, and .id to ._id, to match the bson field names
 		if key == "id" {
 			key = "_id"
 		} else {
@@ -201,7 +201,7 @@ func GenerateFilterBson(queryParams url.Values, ignoredParams []string) ([]bson.
 		or := []bson.M{}
 		for _, v := range values {
 			valueSlices := strings.Split(v, ",")
-			// ถ้ามีหลายค่าให้เพิ่มค่าดิบ (กรณี comma เป็นส่วนหนึ่งของค่า) ด้วย
+			// with several values, also keep the raw one, in case the comma belongs to the value
 			if len(valueSlices) > 1 {
 				valueSlices = append(valueSlices, v)
 			}

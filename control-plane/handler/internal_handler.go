@@ -79,7 +79,7 @@ func NewInternalHandler(cfg InternalHandlerConfig) *InternalHandler {
 	}
 }
 
-// respondWithETag คำนวณ ETag จาก JSON payload แล้วตอบ 304 ถ้า client มีของเดิม
+// respondWithETag computes an ETag over the JSON payload and answers 304 when the client has it already
 func respondWithETag(c echo.Context, data []byte) error {
 	h := fnv.New64a()
 	h.Write(data)
@@ -158,8 +158,8 @@ func (h *InternalHandler) GetApiKeys(c echo.Context) error {
 		return c.JSON(http.StatusInternalServerError, map[string]string{"error": err.Error()})
 	}
 
-	// ดึง owner ทั้งหมดใน 1 query แทนการเรียก FindByID ทีละ api-key (N+1) —
-	// ที่ 60k+ users/keys การ query ทีละคนคือ 60,000+ round-trip ต่อ request เดียว
+	// fetch every owner in one query, rather than a FindByID per api-key (N+1). At 60k users and keys,
+	// one at a time means 60,000 round trips for a single request.
 	ownerByID, err := ownerMapForApiKeys(ctx, h.userRepo, keys)
 	if err != nil {
 		return c.JSON(http.StatusInternalServerError, map[string]string{"error": err.Error()})
@@ -201,8 +201,8 @@ func (h *InternalHandler) GetApiKeys(c echo.Context) error {
 	return respondWithETag(c, data)
 }
 
-// ownerMapForApiKeys รวบรวม OwnerBy ID ที่ไม่ซ้ำกันจาก api-key ทั้งหมด แล้ว fetch owner
-// ผ่าน FindByIDs ครั้งเดียว คืนเป็น map[id]*model.User สำหรับ lookup แบบ O(1) ต่อ key
+// ownerMapForApiKeys collects the distinct OwnerBy ids across every api-key, fetches them with one
+// FindByIDs, and returns a map[id]*model.User so each key costs O(1) to resolve.
 func ownerMapForApiKeys(ctx context.Context, userRepo internalUserRepo, keys []*model.ApiKey) (map[bson.ObjectID]*model.User, error) {
 	seen := make(map[bson.ObjectID]struct{})
 	ids := make([]bson.ObjectID, 0, len(keys))
@@ -228,8 +228,8 @@ func ownerMapForApiKeys(ctx context.Context, userRepo internalUserRepo, keys []*
 	return ownerByID, nil
 }
 
-// ResolveNamesRequest รับ id หลายชนิดพร้อมกัน — ผู้เรียก (เช่น analytics) ส่ง id ที่ dedupe
-// มาแล้วเข้ามาในคำขอเดียว แทนการยิงทีละ id หรือทีละชนิดหลายรอบ
+// ResolveNamesRequest takes ids of several kinds at once. A caller such as analytics sends its
+// already-deduplicated ids in a single request, instead of one call per id or per kind.
 type ResolveNamesRequest struct {
 	UserIDs    []string `json:"userIds,omitempty"`
 	ServiceIDs []string `json:"serviceIds,omitempty"`
@@ -244,8 +244,8 @@ type ResolveNamesResponse struct {
 	ApiKeys  map[string]string `json:"apiKeys,omitempty"`
 }
 
-// parseObjectIDs แปลง string เป็น bson.ObjectID โดย "ข้าม" ตัวที่ parse ไม่ได้แทนที่จะ fail
-// ทั้ง request — id ตัวเดียวที่เพี้ยนไม่ควรทำให้ id อื่นๆ ที่ resolve ได้ปกติพลอยหายไปด้วย
+// parseObjectIDs converts strings to bson.ObjectID, skipping any it cannot parse rather than
+// failing the whole request: one malformed id should not cost the caller every other one.
 func parseObjectIDs(raw []string) []bson.ObjectID {
 	ids := make([]bson.ObjectID, 0, len(raw))
 	for _, s := range raw {
@@ -333,9 +333,9 @@ func (h *InternalHandler) resolveApiKeyNames(ctx context.Context, rawIDs []strin
 	return names, nil
 }
 
-// ResolveNames คืนชื่อของ user/service/package/api-key จาก id หลายตัวพร้อมกัน แบบ batch
-// ($in query ต่อชนิด id ไม่ใช่ loop ทีละตัว) — ให้ผู้เรียก (เช่น analytics) resolve id→name
-// ในคำขอเดียวแทนที่จะยิงกลับมาทีละตัวหรือทีละชนิด
+// ResolveNames returns the names behind user, service, package and api-key ids, in one batch: an
+// $in query per kind, not a loop per id. A caller such as analytics resolves every id to a name in
+// a single request.
 func (h *InternalHandler) ResolveNames(c echo.Context) error {
 	var req ResolveNamesRequest
 	if err := c.Bind(&req); err != nil {

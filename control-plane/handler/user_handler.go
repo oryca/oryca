@@ -43,8 +43,8 @@ func isRootOrAdmin(role string) bool {
 	return role == "root" || role == "admin"
 }
 
-// canSetUserRole คืน true ถ้า actor สามารถสร้าง/แก้ user ที่มี role นั้นได้
-// root → ได้ทุก role | admin → user | อื่น → ไม่ได้
+// canSetUserRole reports whether the actor may create or change a user with that role.
+// root may do any role, admin only user, and nobody else may.
 func canSetUserRole(actorRole, targetRole string) bool {
 	switch actorRole {
 	case "root":
@@ -56,8 +56,8 @@ func canSetUserRole(actorRole, targetRole string) bool {
 	}
 }
 
-// canDeleteUser คืน true ถ้า actor สามารถลบ target ได้
-// ห้ามลบตัวเอง, ห้ามลบ root | root → ได้ทุกคน | admin → user
+// canDeleteUser reports whether the actor may delete the target. Nobody deletes themselves, and
+// nobody deletes root; otherwise root may delete anyone and admin may delete a user.
 func canDeleteUser(actor, target *model.User) bool {
 	if actor.ID == target.ID {
 		return false
@@ -113,7 +113,7 @@ func (h *UserHandler) GetUsers(c echo.Context) error {
 		list = []*model.User{}
 	}
 
-	// user role เห็นแค่ UserPublic ทุกคนในลิสต์
+	// the user role sees everyone in the list as UserPublic only
 	if ctxUser != nil && ctxUser.Role == "user" {
 		public := make([]*model.UserPublic, len(list))
 		for i, u := range list {
@@ -164,7 +164,7 @@ func (h *UserHandler) GetUser(c echo.Context) error {
 
 	ctxUser, _ := c.Get("user").(*model.User)
 
-	// non-root ไม่เห็น root user
+	// anyone who is not root does not see the root user
 	if u.Role == "root" && (ctxUser == nil || ctxUser.Role != "root") {
 		return c.JSON(http.StatusNotFound, &model.Exception{
 			Code:   tool.CodeUserNotFound,
@@ -173,7 +173,7 @@ func (h *UserHandler) GetUser(c echo.Context) error {
 		})
 	}
 
-	// user role เห็นตัวเองเต็ม คนอื่นเห็นแค่ UserPublic
+	// the user role sees itself in full, and everyone else as UserPublic
 	if ctxUser != nil && ctxUser.Role == "user" && ctxUser.ID != u.ID {
 		return c.JSON(http.StatusOK, &model.UserPublic{
 			ID:          u.ID,
@@ -267,7 +267,7 @@ func (h *UserHandler) CreateUser(c echo.Context) error {
 		return c.JSON(ex.Status, ex)
 	}
 
-	// ตรวจสอบว่า ctxUser มีสิทธิ์สร้าง user ด้วย role ที่ระบุ
+	// may ctxUser create a user with the role it asked for?
 	targetRole := body.Role
 	if targetRole == "" {
 		targetRole = "user"
@@ -317,7 +317,7 @@ func userCreateErrResponse(err error) (int, *model.Exception) {
 
 // canUpdateTarget returns false if the actor is not allowed to update the target user.
 func canUpdateTarget(ctxUser, target *model.User) bool {
-	// admin ไม่สามารถแก้ไข admin คนอื่นได้
+	// an admin cannot change another admin
 	if ctxUser.Role == "admin" && target.Role == "admin" && target.ID != ctxUser.ID {
 		return false
 	}

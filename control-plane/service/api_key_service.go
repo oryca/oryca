@@ -94,13 +94,13 @@ func (s *ApiKeyService) publishApiKeyEvent(ak *model.ApiKey, owner *model.User) 
 	s.publisher.Publish(SyncEventTypeApiKey, payload)
 }
 
-// wasEnabled คืน true ถ้า enabled เดิมถือว่าเปิดใช้งานอยู่ (nil = default enabled)
+// wasEnabled reports whether the previous value counted as enabled (nil means it was)
 func wasEnabled(enabled *bool) bool {
 	return enabled == nil || *enabled
 }
 
-// canManageForUser คืน true ถ้า actor สามารถสร้าง/จัดการ key ให้ target role ได้
-// root → ได้ทุก role | admin → user
+// canManageForUser reports whether the actor may create or manage keys for the target role.
+// root may do so for any role, admin only for user.
 func (s *ApiKeyService) canManageForUser(ctx context.Context, actor *model.User, targetRole string) bool {
 	switch actor.Role {
 	case "root":
@@ -112,7 +112,7 @@ func (s *ApiKeyService) canManageForUser(ctx context.Context, actor *model.User,
 	}
 }
 
-// canViewOtherKeys คืน true ถ้า actor สามารถดู key ของ user อื่นได้
+// canViewOtherKeys reports whether the actor may see another user's keys
 func (s *ApiKeyService) canViewOtherKeys(ctx context.Context, actor *model.User) bool {
 	if actor.Role == "root" || actor.Role == "admin" {
 		return true
@@ -120,13 +120,13 @@ func (s *ApiKeyService) canViewOtherKeys(ctx context.Context, actor *model.User)
 	return false
 }
 
-// isOwner คืน true ถ้า actor เป็นเจ้าของ key
+// isOwner reports whether the actor owns the key
 func isOwner(actor *model.User, ak *model.ApiKey) bool {
 	return ak.OwnerBy != nil && *ak.OwnerBy == actor.ID
 }
 
-// canModifyKey คืน true ถ้า actor สามารถแก้ไข key นี้ได้
-// root/admin → ทุก key | user → เฉพาะ ownerBy ตัวเอง
+// canModifyKey reports whether the actor may change this key.
+// root and admin may change any; a user only their own.
 func (s *ApiKeyService) canModifyKey(actor *model.User, ak *model.ApiKey) bool {
 	if actor.Role == "root" || actor.Role == "admin" {
 		return true
@@ -142,13 +142,13 @@ func (s *ApiKeyService) List(ctx context.Context, params url.Values, ctxUser *mo
 	return s.repo.FindAll(ctx, params, ownerIDs, excludeOwnerIDs)
 }
 
-// resolveOwnerFilter แปลง ownerBy query params เป็น ownerIDs และ excludeOwnerIDs
+// resolveOwnerFilter turns the ownerBy query params into ownerIDs and excludeOwnerIDs
 func (s *ApiKeyService) resolveOwnerFilter(ctx context.Context, rawValues []string, ctxUser *model.User) (ownerIDs, excludeOwnerIDs []bson.ObjectID, err error) {
 	includeRaw, excludeRaw := parseOwnerByValues(rawValues)
 	hasFilter := len(includeRaw) > 0 || len(excludeRaw) > 0
 
 	if !hasFilter {
-		// ไม่ระบุ ownerBy — root/admin ดูทั้งหมด, user ดูเฉพาะของตัวเอง
+		// no ownerBy given — root and admin see everything, a user only their own
 		if !s.canViewOtherKeys(ctx, ctxUser) {
 			ownerIDs = []bson.ObjectID{ctxUser.ID}
 		}
@@ -176,7 +176,7 @@ func (s *ApiKeyService) resolveOwnerFilter(ctx context.Context, rawValues []stri
 	return ownerIDs, excludeOwnerIDs, nil
 }
 
-// parseOwnerByValues แยก include (id) และ exclude (!id) จาก raw query values
+// parseOwnerByValues splits the raw query values into includes (id) and excludes (!id)
 func parseOwnerByValues(rawValues []string) (include, exclude []string) {
 	for _, v := range rawValues {
 		for _, part := range strings.Split(v, ",") {
@@ -300,7 +300,7 @@ func (s *ApiKeyService) Update(ctx context.Context, id bson.ObjectID, body *mode
 		return nil, err
 	}
 
-	// อัปเดต cache เดิม (ลบออก — จะถูก set ใหม่เมื่อ GetByKey ถูกเรียก)
+	// drop the old cache entry; GetByKey will put it back
 	_ = s.cache.Delete(ctx, []string{ak.ApiKey})
 
 	updated, err := s.repo.FindByID(ctx, id)
@@ -315,7 +315,7 @@ func (s *ApiKeyService) Update(ctx context.Context, id bson.ObjectID, body *mode
 	_ = s.cache.Set(ctx, updated, owner)
 	s.publishApiKeyEvent(updated, owner)
 
-	// Commit -> Notify: แจ้งเตือนหลัง commit สำเร็จเท่านั้น
+	// commit, then notify — never the other way round
 	if wasSuspended && updated.OwnerBy != nil && s.notifier != nil {
 		runNotifyBackground(ctx, 30*time.Second, func(bgCtx context.Context) {
 			s.notifyApiKeySuspended(bgCtx, updated, body.Reason, ctxUser.ID)
@@ -417,7 +417,7 @@ func (s *ApiKeyService) BulkDelete(ctx context.Context, body *model.ApiKeyBulkDe
 	for _, id := range body.ApiKeyIDs {
 		ak, err := s.repo.FindByID(ctx, id)
 		if err != nil {
-			continue // ถ้าไม่เจอก็ข้ามไป
+			continue // not found, so skip it
 		}
 		if !s.canModifyKey(ctxUser, ak) {
 			return ErrApiKeyForbidden

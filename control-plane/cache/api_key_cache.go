@@ -25,7 +25,7 @@ func apiKeyCacheKey(rawKey string) string {
 	return keyPrefixApiKey + ":" + tool.HashApiKey(rawKey)
 }
 
-// Get คืน ApiKey จาก cache โดยใช้ key value เป็น lookup key
+// Get returns an ApiKey from the cache, looked up by the key value itself
 func (c *ApiKeyCache) Get(ctx context.Context, keyValue string) (*model.ApiKey, error) {
 	val, err := c.client.Get(ctx, apiKeyCacheKey(keyValue)).Result()
 	if err == redis.Nil {
@@ -47,7 +47,7 @@ func (c *ApiKeyCache) Get(ctx context.Context, keyValue string) (*model.ApiKey, 
 	return ak, nil
 }
 
-// Set เก็บ ApiKey ลง cache โดยใช้ key value เป็น lookup key พร้อม embed owner info
+// Set stores an ApiKey under the key value, with the owner details embedded
 func (c *ApiKeyCache) Set(ctx context.Context, ak *model.ApiKey, owner *model.User) error {
 	payload := &model.ApiKeyCache{
 		ID:        ak.ID.Hex(),
@@ -75,19 +75,19 @@ func (c *ApiKeyCache) Set(ctx context.Context, ak *model.ApiKey, owner *model.Us
 	return c.client.Set(ctx, apiKeyCacheKey(ak.ApiKey), b, c.ttl).Err()
 }
 
-// apiKeyCacheBatchSize จำนวน key ต่อ Redis pipeline round-trip เดียวตอน full sync —
-// เหตุผลเดียวกับ oryca-gateway/cache/api_key_cache.go: ลด round-trip จาก O(n) เหลือ
-// O(n/batchSize) แทนการยิงทีละ key (ที่ 60k+ keys คือต่างกันหลักวินาทีกับหลักนาที)
+// apiKeyCacheBatchSize is how many keys go into one pipelined Redis round trip during a full sync.
+// Same reasoning as the gateway's own api-key cache: it takes the round trips from O(n) to
+// O(n/batchSize), which at 60k keys is the difference between seconds and minutes.
 const apiKeyCacheBatchSize = 500
 
-// ApiKeyEntry คู่ ApiKey+owner หนึ่งรายการสำหรับ SetBatch
+// ApiKeyEntry is one ApiKey and its owner, as SetBatch takes them
 type ApiKeyEntry struct {
 	ApiKey *model.ApiKey
 	Owner  *model.User
 }
 
-// SetBatch เขียน api-key หลายตัวผ่าน Redis pipeline เป็น chunk แทนการยิงทีละตัว
-// คืนจำนวนรายที่ set ไม่สำเร็จ (ถ้ามี) โดยรายอื่นใน batch เดียวกันยังสำเร็จตามปกติ
+// SetBatch writes many api-keys through pipelined Redis chunks rather than one at a time. It
+// returns how many failed, if any; the rest of the batch still lands.
 func (c *ApiKeyCache) SetBatch(ctx context.Context, entries []ApiKeyEntry) (failed int, err error) {
 	for start := 0; start < len(entries); start += apiKeyCacheBatchSize {
 		end := start + apiKeyCacheBatchSize
@@ -145,7 +145,7 @@ func (c *ApiKeyCache) setBatchChunk(ctx context.Context, chunk []ApiKeyEntry) (f
 	return failed, err
 }
 
-// Delete ลบ ApiKey ออกจาก cache
+// Delete removes an ApiKey from the cache
 func (c *ApiKeyCache) Delete(ctx context.Context, keyValues []string) error {
 	if len(keyValues) == 0 {
 		return nil

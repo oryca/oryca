@@ -12,7 +12,7 @@ import (
 	"golang.org/x/sync/singleflight"
 )
 
-// ErrDeleteDefaultMailServer คืนเมื่อพยายามลบ mail server ที่เป็น default
+// ErrDeleteDefaultMailServer is returned when something tries to delete the default mail server
 var ErrDeleteDefaultMailServer = errors.New("cannot delete default mail server")
 
 type mailServerRepo interface {
@@ -50,22 +50,22 @@ func (s *MailServerService) GetByID(ctx context.Context, id bson.ObjectID) (*mod
 	return s.repo.FindByID(ctx, id)
 }
 
-// GetDefault คืน default mail server โดยใช้ cache-first + singleflight
+// GetDefault returns the default mail server, from the cache first, behind singleflight
 func (s *MailServerService) GetDefault(ctx context.Context) (*model.MailServer, error) {
-	// ถ้ามีใน cache คืนค่าทันที
+	// a hit answers straight away
 	cached, err := s.cache.Get(ctx)
 	if err == nil && cached != nil {
 		return cached, nil
 	}
 
-	// cache miss — singleflight ป้องกันไม่ให้ยิง DB ซ้ำซ้อน
-	// request ที่เข้ามาพร้อมกันจะ block รอผลจาก request แรกแทน
+	// on a miss, singleflight keeps the database to one query: everything arriving at the same time
+	// waits on the first request instead
 	v, err, _ := s.cache.SF().Do("get_default_mail_server", func() (any, error) {
 		ms, err := s.repo.FindDefault(ctx)
 		if err != nil {
 			return nil, err
 		}
-		_ = s.cache.Set(ctx, ms) // cache error ไม่ถือเป็น fatal
+		_ = s.cache.Set(ctx, ms) // a cache error is not fatal
 		return ms, nil
 	})
 	if err != nil {
@@ -76,15 +76,14 @@ func (s *MailServerService) GetDefault(ctx context.Context) (*model.MailServer, 
 }
 
 func (s *MailServerService) Update(ctx context.Context, id bson.ObjectID, body *model.MailServerUpdate) (*model.MailServer, error) {
-	// ระบบมี default mail server ได้แค่ 1 ตัวเท่านั้น
-	// ถ้า set default=true ต้องล้าง default ของตัวเก่าก่อน
+	// there can only be one default mail server, so setting default=true has to clear the old one
 	if body.Default {
 		if err := s.repo.UnsetDefault(ctx); err != nil {
 			return nil, err
 		}
 	}
 
-	// ล้าง cache ทุกครั้งที่ update เพื่อให้ได้ข้อมูลล่าสุดเสมอ
+	// drop the cache on every update, so the next read is current
 	_ = s.cache.Delete(ctx)
 
 	now := tool.NowUTC()
@@ -109,7 +108,7 @@ func (s *MailServerService) Update(ctx context.Context, id bson.ObjectID, body *
 		return nil, err
 	}
 
-	// write-through cache เฉพาะ default
+	// only the default is written through to the cache
 	if updated.Default {
 		_ = s.cache.Set(ctx, updated)
 	}
@@ -117,8 +116,8 @@ func (s *MailServerService) Update(ctx context.Context, id bson.ObjectID, body *
 	return updated, nil
 }
 
-// Delete ลบ mail server แบบ soft (default) หรือ hard ถ้า forever=true
-// ไม่อนุญาตให้ลบ mail server ที่เป็น default
+// Delete removes a mail server, softly by default and for good when forever=true.
+// The default mail server cannot be deleted.
 func (s *MailServerService) Delete(ctx context.Context, id bson.ObjectID, forever bool, deletedBy bson.ObjectID) error {
 	ms, err := s.repo.FindByID(ctx, id)
 	if err != nil {
@@ -137,14 +136,13 @@ func (s *MailServerService) Delete(ctx context.Context, id bson.ObjectID, foreve
 }
 
 func (s *MailServerService) Create(ctx context.Context, body *model.MailServerCreate) (*model.MailServer, error) {
-	// ระบบมี default mail server ได้แค่ 1 ตัวเท่านั้น
-	// ถ้า set default=true ต้องล้าง default ของตัวเก่าก่อน
-	// ถ้า default=false ไม่ต้องแตะ record อื่น
+	// there can only be one default mail server, so setting default=true has to clear the old one
+	// default=false leaves every other record alone
 	if body.Default {
 		if err := s.repo.UnsetDefault(ctx); err != nil {
 			return nil, err
 		}
-		// ล้าง cache เดิมก่อน set ใหม่
+		// clear the old entry before setting the new one
 		_ = s.cache.Delete(ctx)
 	}
 
@@ -166,7 +164,7 @@ func (s *MailServerService) Create(ctx context.Context, body *model.MailServerCr
 		return nil, err
 	}
 
-	// write-through cache เฉพาะ default
+	// only the default is written through to the cache
 	if body.Default {
 		_ = s.cache.Set(ctx, doc)
 	}
