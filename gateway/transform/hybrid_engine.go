@@ -6,7 +6,7 @@ import (
 	"strings"
 )
 
-// HybridEngine - engine ที่รองรับทั้ง JSON และ XML
+// HybridEngine handles both JSON and XML
 type HybridEngine struct {
 	Config     *model.TransformConfig
 	Context    *model.TransformContext
@@ -14,7 +14,7 @@ type HybridEngine struct {
 	xmlEngine  *XMLStdEngine
 }
 
-// NewHybridEngine - สร้าง hybrid engine ใหม่
+// NewHybridEngine builds a new hybrid engine
 func NewHybridEngine(config *model.TransformConfig, context *model.TransformContext) *HybridEngine {
 	return &HybridEngine{
 		Config:     config,
@@ -24,7 +24,7 @@ func NewHybridEngine(config *model.TransformConfig, context *model.TransformCont
 	}
 }
 
-// Apply - ประมวลผลการ transform โดยตรวจสอบ content type
+// Apply picks an engine by content type, then transforms
 func (he *HybridEngine) Apply(body []byte) (*model.TransformResult, error) {
 
 	if len(body) == 0 {
@@ -36,7 +36,7 @@ func (he *HybridEngine) Apply(body []byte) (*model.TransformResult, error) {
 		}, nil
 	}
 
-	// ตรวจสอบว่ามี rules สำหรับ XML หรือไม่
+	// are there XML rules at all?
 	hasXMLRules := false
 	hasJSONRules := false
 
@@ -50,9 +50,9 @@ func (he *HybridEngine) Apply(body []byte) (*model.TransformResult, error) {
 		}
 	}
 
-	// ถ้าไม่มี rules เฉพาะเลย ให้ตรวจสอบจาก content
+	// no rule says which format it is, so look at the body
 	if !hasXMLRules && !hasJSONRules {
-		// ใช้ heuristic ตรวจสอบ content type
+		// guess from the first bytes
 		contentType := he.detectContentType(body)
 		if contentType == "xml" {
 			hasXMLRules = true
@@ -64,7 +64,7 @@ func (he *HybridEngine) Apply(body []byte) (*model.TransformResult, error) {
 	var result *model.TransformResult
 	var err error
 
-	// ประมวลผล XML ก่อน (ถ้ามี)
+	// XML first, when there is any
 	if hasXMLRules {
 		result, err = he.xmlEngine.Apply(body)
 		if err != nil {
@@ -76,11 +76,11 @@ func (he *HybridEngine) Apply(body []byte) (*model.TransformResult, error) {
 			result.Body = body
 		}
 
-		body = result.Body // ใช้ผลลัพธ์จาก XML สำหรับ JSON ต่อ
+		body = result.Body // the JSON pass continues from the XML result
 		result.Found = true
 	}
 
-	// ประมวลผล JSON (ถ้ามี)
+	// then JSON, when there is any
 	if hasJSONRules {
 		jsonResult, err := he.jsonEngine.Apply(body)
 		if err != nil {
@@ -90,11 +90,11 @@ func (he *HybridEngine) Apply(body []byte) (*model.TransformResult, error) {
 		if len(jsonResult.Body) == 0 {
 			fmt.Println("JSON transform resulted in empty body")
 			if len(body) > 0 {
-				jsonResult.Body = body // ใช้ body เดิม
+				jsonResult.Body = body // keep the body as it was
 			}
 		}
 
-		// รวม headers จาก XML และ JSON
+		// merge the header changes from both passes
 		if result != nil {
 			for k, v := range result.Headers {
 				jsonResult.Headers[k] = v
@@ -105,7 +105,7 @@ func (he *HybridEngine) Apply(body []byte) (*model.TransformResult, error) {
 		result.Found = true
 	}
 
-	// ถ้าไม่มี rules เลย
+	// no rules matched at all
 	if result == nil {
 		result = &model.TransformResult{
 			Found:   false,
@@ -117,26 +117,26 @@ func (he *HybridEngine) Apply(body []byte) (*model.TransformResult, error) {
 	return result, nil
 }
 
-// detectContentType - ตรวจสอบ content type จาก body
+// detectContentType guesses the format from the body
 func (he *HybridEngine) detectContentType(body []byte) string {
 	content := strings.TrimSpace(string(body))
 
-	// ตรวจสอบ XML
+	// XML
 	if strings.HasPrefix(content, "<") && strings.HasSuffix(content, ">") {
 		return "xml"
 	}
 
-	// ตรวจสอบ XML with declaration
+	// XML with declaration
 	if strings.HasPrefix(content, "<?xml") {
 		return "xml"
 	}
 
-	// ตรวจสอบ JSON
+	// JSON
 	if (strings.HasPrefix(content, "{") && strings.HasSuffix(content, "}")) ||
 		(strings.HasPrefix(content, "[") && strings.HasSuffix(content, "]")) {
 		return "json"
 	}
 
-	// default เป็น json
+	// default to json
 	return "json"
 }

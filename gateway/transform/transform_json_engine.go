@@ -9,13 +9,13 @@ import (
 	"github.com/ohler55/ojg/jp"
 )
 
-// Engine - transform engine สำหรับการแปลงข้อมูล
+// Engine transforms a JSON document
 type Engine struct {
 	Config  *model.TransformConfig
 	Context *model.TransformContext
 }
 
-// NewEngine - สร้าง transform engine ใหม่
+// NewEngine builds a new transform engine
 func NewEngine(config *model.TransformConfig, context *model.TransformContext) *Engine {
 	return &Engine{
 		Config:  config,
@@ -23,7 +23,7 @@ func NewEngine(config *model.TransformConfig, context *model.TransformContext) *
 	}
 }
 
-// Apply - ประมวลผลการ transform กับ body JSON
+// Apply runs the transform over a JSON body
 func (e *Engine) Apply(body []byte) (*model.TransformResult, error) {
 	if len(body) == 0 {
 		return &model.TransformResult{
@@ -41,11 +41,11 @@ func (e *Engine) Apply(body []byte) (*model.TransformResult, error) {
 	vars := e.Context.TemplateVars()
 	headers := map[string]string{}
 
-	//เพิ่ม counter เพื่อดูว่ามี rule ที่ใช้หรือไม่
+	// counts the rules that actually changed something
 	appliedRules := 0
 
 	for _, rule := range e.Config.Rules {
-		// เฉพาะ JSON rules
+		// JSON rules only
 		if rule.GetRuleType() != "json" {
 			continue
 		}
@@ -86,7 +86,7 @@ func (e *Engine) Apply(body []byte) (*model.TransformResult, error) {
 	}, nil
 }
 
-// shouldApplyRule - ตรวจสอบว่าควรใช้กฎนี้หรือไม่
+// shouldApplyRule reports whether this rule runs on this element
 func (e *Engine) shouldApplyRule(rule model.TransformRule, data interface{}) bool {
 	if len(rule.Conditions) == 0 {
 		return true
@@ -102,7 +102,7 @@ func (e *Engine) shouldApplyRule(rule model.TransformRule, data interface{}) boo
 		return false
 	}
 
-	// ตรวจสอบเงื่อนไข
+	// every condition has to pass
 	for _, match := range matches {
 		if obj, ok := match.(map[string]interface{}); ok {
 			for _, condition := range rule.Conditions {
@@ -118,11 +118,11 @@ func (e *Engine) shouldApplyRule(rule model.TransformRule, data interface{}) boo
 	return false
 }
 
-// evaluateCondition - ประเมินเงื่อนไข
+// evaluateCondition checks one condition
 func (e *Engine) evaluateCondition(cond model.TransformCondition, value interface{}) bool {
 	strVal := fmt.Sprintf("%v", value)
 
-	// ตรวจสอบ Equals
+	// Equals
 	if len(cond.Equals) > 0 {
 		match := false
 		for _, eq := range cond.Equals {
@@ -136,7 +136,7 @@ func (e *Engine) evaluateCondition(cond model.TransformCondition, value interfac
 		}
 	}
 
-	// ตรวจสอบ NotEquals
+	// NotEquals
 	if len(cond.NotEquals) > 0 {
 		for _, neq := range cond.NotEquals {
 			if strVal == fmt.Sprintf("%v", neq) {
@@ -148,7 +148,7 @@ func (e *Engine) evaluateCondition(cond model.TransformCondition, value interfac
 	return true
 }
 
-// applyBodyRule - แปลง JSON body
+// applyBodyRule rewrites the JSON body
 func (e *Engine) applyBodyRule(rule model.TransformRule, data *interface{}, vars map[string]string) error {
 	if rule.Path == "" {
 		return fmt.Errorf("path is required for body target")
@@ -178,21 +178,21 @@ func (e *Engine) applyBodyRule(rule model.TransformRule, data *interface{}, vars
 	return nil
 }
 
-// replaceValues - แทนที่ค่าใน JSON แบบ smart replace
+// replaceValues replaces values in the JSON, matching on shape
 func (e *Engine) replaceValues(expr jp.Expr, data *interface{}, rule model.TransformRule, vars map[string]string) error {
 	matches := expr.Get(*data)
 
 	for _, match := range matches {
 		switch v := match.(type) {
 		case string:
-			// ถ้าเป็น string ให้ทำ string replacement
+			// a string is replaced directly
 			newVal := e.performStringReplace(v, rule, vars)
 			e.updateStringValue(expr, data, v, newVal)
 
 		case map[string]interface{}:
-			// ถ้าเป็น object ให้ replace ตาม field ที่ระบุ หรือทุก string fields
+			// an object takes the named field, or every string field when none is named
 			if rule.Params.Field != "" {
-				// ระบุ field เฉพาะ
+				// one named field
 				if value, exists := v[rule.Params.Field]; exists {
 					if strValue, ok := value.(string); ok {
 						newValue := e.performStringReplace(strValue, rule, vars)
@@ -200,7 +200,7 @@ func (e *Engine) replaceValues(expr jp.Expr, data *interface{}, rule model.Trans
 					}
 				}
 			} else {
-				// ไม่ระบุ field ให้ replace ทุก string fields
+				// no field named — every string field
 				for key, value := range v {
 					if strValue, ok := value.(string); ok {
 						newValue := e.performStringReplace(strValue, rule, vars)
@@ -210,7 +210,7 @@ func (e *Engine) replaceValues(expr jp.Expr, data *interface{}, rule model.Trans
 			}
 
 		default:
-			// ถ้าไม่ใช่ string หรือ object ให้แทนที่ทั้งค่า
+			// anything else is replaced whole
 			val := e.resolveValue(rule.Params, vars)
 			expr.Set(*data, val)
 		}
@@ -219,11 +219,11 @@ func (e *Engine) replaceValues(expr jp.Expr, data *interface{}, rule model.Trans
 	return nil
 }
 
-// performStringReplace - ทำ string replacement ตาม params
+// performStringReplace applies the rule's find/replace or regex
 func (e *Engine) performStringReplace(original string, rule model.TransformRule, vars map[string]string) string {
 	result := original
 
-	// ถ้ามี regex ใช้ regex replace — cache compiled regex เพราะ rule เดิมถูกใช้ซ้ำทุก request
+	// regex wins when set — the compiled regex is cached, as the same rule runs on every request
 	if rule.Params.Regex != "" {
 		replaceValue := e.replaceTemplateVars(rule.Params.Replace, vars)
 		re, err := cachedRegexp(rule.Params.Regex)
@@ -232,7 +232,7 @@ func (e *Engine) performStringReplace(original string, rule model.TransformRule,
 		}
 	}
 
-	// ถ้ามี find/replace ใช้ string replace
+	// otherwise plain find/replace
 	if rule.Params.Find != "" {
 		findValue := e.replaceTemplateVars(rule.Params.Find, vars)
 		replaceValue := e.replaceTemplateVars(rule.Params.Replace, vars)
@@ -242,7 +242,7 @@ func (e *Engine) performStringReplace(original string, rule model.TransformRule,
 	return result
 }
 
-// updateStringValue - อัปเดตค่า string ใน JSON (workaround)
+// updateStringValue writes a string back into the JSON
 func (e *Engine) updateStringValue(expr jp.Expr, data *interface{}, oldVal, newVal string) {
 	jsonBytes, _ := json.Marshal(*data)
 	jsonStr := string(jsonBytes)
@@ -251,14 +251,14 @@ func (e *Engine) updateStringValue(expr jp.Expr, data *interface{}, oldVal, newV
 	oldValJSON, _ := json.Marshal(oldVal)
 	newValJSON, _ := json.Marshal(newVal)
 
-	// แทนที่ใน JSON string
+	// replace inside the encoded JSON
 	newJsonStr := strings.ReplaceAll(jsonStr, string(oldValJSON), string(newValJSON))
 
-	// Parse กลับ
+	// parse it back
 	json.Unmarshal([]byte(newJsonStr), data)
 }
 
-// appendValues - ต่อท้ายค่า
+// appendValues appends to a value
 func (e *Engine) appendValues(expr jp.Expr, data *interface{}, rule model.TransformRule, vars map[string]string) error {
 	matches := expr.Get(*data)
 
@@ -281,7 +281,7 @@ func (e *Engine) appendValues(expr jp.Expr, data *interface{}, rule model.Transf
 	return nil
 }
 
-// renameField - เปลี่ยนชื่อ field ใน object
+// renameField renames a field on an object
 func (e *Engine) renameField(expr jp.Expr, data *interface{}, rule model.TransformRule) error {
 	from := rule.Params.From
 	to := rule.Params.To
@@ -294,11 +294,11 @@ func (e *Engine) renameField(expr jp.Expr, data *interface{}, rule model.Transfo
 
 	for _, match := range matches {
 		if obj, ok := match.(map[string]interface{}); ok {
-			// ตรวจสอบว่ามี field ที่ต้องการเปลี่ยนชื่อหรือไม่
+			// nothing to do when the field is absent
 			if value, exists := obj[from]; exists {
-				// เพิ่ม field ใหม่
+				// add the new name
 				obj[to] = value
-				// ลบ field เก่า
+				// drop the old one
 				delete(obj, from)
 			}
 		}
@@ -307,7 +307,7 @@ func (e *Engine) renameField(expr jp.Expr, data *interface{}, rule model.Transfo
 	return nil
 }
 
-// applyHeaderRule - แปลง headers
+// applyHeaderRule rewrites headers
 func (e *Engine) applyHeaderRule(rule model.TransformRule, headers map[string]string, vars map[string]string) error {
 	if rule.HeaderName == "" {
 		return fmt.Errorf("header_name is required for headers target")
@@ -333,7 +333,7 @@ func (e *Engine) applyHeaderRule(rule model.TransformRule, headers map[string]st
 	return nil
 }
 
-// resolveValue - คืนค่าจริงจาก Params
+// resolveValue returns the concrete value from Params
 func (e *Engine) resolveValue(params model.TransformParams, vars map[string]string) interface{} {
 	var val string
 
@@ -351,7 +351,7 @@ func (e *Engine) resolveValue(params model.TransformParams, vars map[string]stri
 	return e.replaceTemplateVars(val, vars)
 }
 
-// replaceTemplateVars - แทนค่า template variables
+// replaceTemplateVars expands the {{...}} placeholders
 func (e *Engine) replaceTemplateVars(text string, vars map[string]string) string {
 	result := text
 

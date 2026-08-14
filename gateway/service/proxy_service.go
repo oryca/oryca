@@ -20,7 +20,7 @@ type ProxyRequest struct {
 	Method      string
 	UpstreamURL string
 	Headers     http.Header
-	Host        string // host จริงของ client request — Go ย้ายออกจาก header map ไปไว้ที่ req.Host
+	Host        string // the client request's real host — Go moves it out of the header map onto req.Host
 	Body        io.Reader
 	Source      *model.Source
 }
@@ -74,7 +74,8 @@ type ProxyConfig struct {
 	KeepAlive             time.Duration
 }
 
-// MaxErrorBodyBytes เพดาน error body (5xx/408/429) ที่ buffer เข้า RAM — error page ยักษ์ถูกตัดทิ้ง
+// MaxErrorBodyBytes caps how much of an error body (5xx/408/429) is buffered into RAM — a huge
+// error page is truncated
 const MaxErrorBodyBytes = 64 << 10 // 64KB
 
 var hopByHopHeaders = []string{
@@ -84,16 +85,17 @@ var hopByHopHeaders = []string{
 
 var reSourceURLParam = regexp.MustCompile(`\{([^}]+)\}`)
 
-// resolveSourcePath แทน {param} ใน path ของ source URL ด้วยค่าจริงจาก trie match
-// แล้วต่อ remaining path (suffix wildcard) — trim trailing slash เฉพาะตอนมี remaining
-// เพื่อกัน double slash เท่านั้น ถ้าไม่มี remaining ต้องคง trailing slash ของ source URL ไว้
-// เพราะ upstream บางตัว (เช่น Kong) แยก route ตาม trailing slash จริง (ไม่มี slash = 404)
+// resolveSourcePath fills the {param} placeholders in the source URL's path from the trie match,
+// then appends the remaining path (the suffix wildcard). The trailing slash is trimmed only when
+// there is a remaining path, purely to avoid a double slash; with no remaining path the source
+// URL's trailing slash has to stay, because some upstreams (Kong, for one) route on it and answer
+// 404 without it.
 func resolveSourcePath(sourcePath string, pathParams map[string]string, remaining string) string {
 	resolvedPath := sourcePath
 	for name, val := range pathParams {
 		resolvedPath = strings.ReplaceAll(resolvedPath, "{"+name+"}", val)
 	}
-	// แทน {param} ที่ยังเหลือด้วยค่าจาก pathParams ตาม order (fallback)
+	// any {param} still left is filled from pathParams in order, as a fallback
 	resolvedPath = reSourceURLParam.ReplaceAllStringFunc(resolvedPath, func(s string) string {
 		name := s[1 : len(s)-1]
 		if v, ok := pathParams[name]; ok {
@@ -107,8 +109,8 @@ func resolveSourcePath(sourcePath string, pathParams map[string]string, remainin
 	return strings.TrimRight(resolvedPath, "/") + "/" + remaining
 }
 
-// mergeUpstreamQuery รวม query string ของ source URL (ก่อน) กับ client query (หลัง)
-// strip auth params จาก client query เพราะ upstream ใช้ auth ของ source URL เท่านั้น
+// mergeUpstreamQuery joins the source URL's query string (first) with the client's (second). The
+// client's auth params are stripped, because the upstream only ever uses the source URL's auth.
 func mergeUpstreamQuery(sourceQ, rawQuery string) string {
 	stripped := stripAuthParams(rawQuery)
 	if stripped == "" {
@@ -120,12 +122,13 @@ func mergeUpstreamQuery(sourceQ, rawQuery string) string {
 	return sourceQ + "&" + stripped
 }
 
-// BuildUpstreamURL สร้าง URL ปลายทางจาก source URL + path params + remaining
-// Source URL อาจมี query string ติดมา (เช่น ?api_key=xxx) — ต้องแยกออกก่อนต่อ path
+// BuildUpstreamURL builds the target URL from the source URL, the path params and the remaining
+// path. The source URL may carry a query string of its own (?api_key=xxx), which has to be split
+// off before the path is appended.
 func BuildUpstreamURL(source *model.Source, resource *model.ResourcePath, pathParams map[string]string, remaining string, rawQuery string) string {
 	parsed, err := url.Parse(source.URL)
 	if err != nil {
-		// fallback: ใช้ source URL ตรง ๆ
+		// fallback: use the source URL as it is
 		u := strings.TrimRight(source.URL, "/")
 		if remaining != "" {
 			u += "/" + remaining
@@ -153,7 +156,7 @@ func (s *ProxyService) Do(req *ProxyRequest, clientIP, requestID string) (*Proxy
 			return err
 		}
 
-		// copy headers จาก client ก่อน (strip hop-by-hop + auth headers ที่ไม่ควร forward)
+		// copy the client's headers first (hop-by-hop and auth headers are stripped)
 		for k, vv := range req.Headers {
 			upReq.Header[k] = vv
 		}
@@ -164,7 +167,7 @@ func (s *ProxyService) Do(req *ProxyRequest, clientIP, requestID string) (*Proxy
 		upReq.Header.Del("X-Api-Key")
 		upReq.Header.Del("Accept-Encoding")
 
-		// inject upstream auth จาก source (ใช้ direct assignment ไม่ normalize case)
+		// then the source's own auth (assigned directly, so the case is not normalised)
 		for _, kv := range req.Source.Headers {
 			upReq.Header[kv.Key] = []string{kv.Value}
 		}
@@ -175,7 +178,7 @@ func (s *ProxyService) Do(req *ProxyRequest, clientIP, requestID string) (*Proxy
 		upReq.Header["X-Real-Ip"] = []string{clientIP}
 		upReq.Header["X-Request-Id"] = []string{requestID}
 
-		// ป้องกัน Go ส่ง Host header ผิด
+		// stop Go sending the wrong Host header
 		upReq.Host = ""
 
 		upResp, err := s.client.Do(upReq)
@@ -183,12 +186,14 @@ func (s *ProxyService) Do(req *ProxyRequest, clientIP, requestID string) (*Proxy
 			return err
 		}
 
-		// นับ failure: 5xx, 408, 429 — buffer body แบบมีเพดานเพื่อคืน connection ให้ pool
-		// แล้ว pass-through ให้ caller ส่งต่อ client ตามจริง (RFC 9110 — gateway ไม่ rewrite status)
+		// counts as a failure: 5xx, 408, 429. The body is buffered up to a ceiling so the connection
+		// goes back to the pool, then passed through unchanged (RFC 9110 — a gateway does not rewrite
+		// the status)
 		if breaker.IsUpstreamFailure(upResp.StatusCode) {
 			body, _ := io.ReadAll(io.LimitReader(upResp.Body, MaxErrorBodyBytes))
 			upResp.Body.Close()
-			// body อาจถูกตัดที่เพดาน — Content-Length ต้องตรงกับ bytes จริง ไม่งั้น client ค้างรอ
+			// the body may have been truncated — Content-Length has to match the bytes actually sent, or
+			// the client waits forever
 			upResp.Header.Set("Content-Length", strconv.Itoa(len(body)))
 			resp = &ProxyResponse{
 				StatusCode:    upResp.StatusCode,
@@ -213,7 +218,7 @@ func (s *ProxyService) Do(req *ProxyRequest, clientIP, requestID string) (*Proxy
 		return nil, err
 	}
 
-	// upstream error — resp ยังมีข้อมูลให้ pass-through
+	// upstream error — resp still holds something worth passing through
 	if _, ok := err.(*breaker.UpstreamError); ok {
 		return resp, err
 	}
@@ -225,7 +230,7 @@ func (s *ProxyService) Do(req *ProxyRequest, clientIP, requestID string) (*Proxy
 	return resp, nil
 }
 
-// stripHopByHop strip headers ก่อน copy ไปยัง client response
+// stripHopByHop removes headers that must not reach the client response
 var corsHeaders = []string{
 	"Access-Control-Allow-Origin",
 	"Access-Control-Allow-Methods",
@@ -245,7 +250,7 @@ func StripHopByHop(h http.Header) {
 	for _, k := range hopByHopHeaders {
 		h.Del(k)
 	}
-	// strip headers ที่ระบุใน Connection header
+	// also strip whatever the Connection header names
 	if conn := h.Get("Connection"); conn != "" {
 		for _, f := range strings.Split(conn, ",") {
 			h.Del(strings.TrimSpace(f))
@@ -253,15 +258,15 @@ func StripHopByHop(h http.Header) {
 	}
 }
 
-// upstreamInternalHeaders คือ headers ที่เปิดเผยข้อมูล internal ของ upstream proxy/server
-// ไม่ควร forward ไปถึง client เพราะเป็น implementation detail ไม่ใช่ข้อมูลของ GW
+// upstreamInternalHeaders are headers that give away the upstream proxy or server's internals.
+// They should not reach the client: they are its implementation detail, not the gateway's.
 var upstreamInternalHeaders = []string{"Server", "Via", "Age"}
 
-// StripUpstreamInternalHeaders ลบ headers ที่ไม่ควรเปิดเผยให้ client เห็น:
-// - Server/Via: ข้อมูล upstream infrastructure (nginx, kong)
-// - Vary: GW จัดการ CORS Vary เองผ่าน Echo middleware — ลบป้องกัน duplicate
-// - Age: GW คำนวณและ set เองหลังจาก strip
-// - X-Kong-*: internal headers ของ Kong ที่ไม่เกี่ยวกับ client
+// StripUpstreamInternalHeaders removes what the client has no business seeing:
+// - Server/Via: which infrastructure is upstream (nginx, kong)
+// - Vary: the gateway sets the CORS Vary itself through Echo middleware, so this avoids a duplicate
+// - Age: the gateway computes and sets it after the strip
+// - X-Kong-*: Kong's internal headers, of no use to a client
 func StripUpstreamInternalHeaders(h http.Header) {
 	for _, k := range upstreamInternalHeaders {
 		h.Del(k)
@@ -274,7 +279,7 @@ func StripUpstreamInternalHeaders(h http.Header) {
 	}
 }
 
-// stripAuthParams ลบ auth query params ที่ไม่ควรส่งไปยัง upstream
+// stripAuthParams removes the auth query params that must not reach the upstream
 func stripAuthParams(rawQuery string) string {
 	q, err := url.ParseQuery(rawQuery)
 	if err != nil {
@@ -285,7 +290,7 @@ func stripAuthParams(rawQuery string) string {
 	return q.Encode()
 }
 
-// ResolvedHost คืน host จาก X-Forwarded-Host หรือ Host header
+// ResolvedHost returns the host from X-Forwarded-Host, or from the Host header
 func ResolvedHost(r *http.Request) string {
 	if h := r.Header.Get("X-Forwarded-Host"); h != "" {
 		return h
@@ -293,7 +298,7 @@ func ResolvedHost(r *http.Request) string {
 	return r.Host
 }
 
-// resolveForwardedProto ตรวจสอบ proto จาก request
+// resolveForwardedProto works out the scheme from the request
 func ResolvedProto(r *http.Request) string {
 	if proto := r.Header.Get("X-Forwarded-Proto"); proto != "" {
 		return proto
@@ -304,7 +309,7 @@ func ResolvedProto(r *http.Request) string {
 	return "http"
 }
 
-// parseUpstreamHost คืน host จาก upstream URL สำหรับ circuit breaker
+// parseUpstreamHost returns the upstream URL's host, for the circuit breaker
 func ParseUpstreamHost(upstreamURL string) string {
 	u, err := url.Parse(upstreamURL)
 	if err != nil {

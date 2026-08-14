@@ -11,28 +11,28 @@ import (
 
 func nowUnixMs() int64 { return time.Now().UnixMilli() }
 
-// RateLimitTier คือ 1 tier ของ sliding window rate limit — ใช้ทั้งใน cache และ handler
+// RateLimitTier is one tier of the sliding window rate limit, shared by the cache and the handler
 type RateLimitTier struct {
 	Limit     int
 	WindowSec int
 }
 
-// RateLimitKey สร้าง Redis key สำหรับ sliding window ต่อ user/package/service/path/window
-// รวม packageID เพื่อแยก counter เมื่อ user อยู่ใน package ต่างกัน
-// รวม windowSec เพื่อให้ tier ต่างกัน (window ต่างกัน) ใช้ key ต่างกันโดยอัตโนมัติ
+// RateLimitKey builds the Redis key for one sliding window, per user, package, service, path and
+// window. packageID is in the key so the counter splits when a user moves package; windowSec is in
+// it so tiers with different windows get different keys on their own.
 func RateLimitKey(userID, packageID, serviceID, resourcePath string, windowSec int) string {
 	return fmt.Sprintf("ratelimit:%s:%s:%s:%s:%d", userID, packageID, serviceID, resourcePath, windowSec)
 }
 
-// slidingWindowScript ตรวจสอบและเพิ่ม request เข้า sliding window แบบ atomic
-// ตรวจ BEFORE add เพื่อหลีกเลี่ยง rollback
+// slidingWindowScript checks and adds a request to the sliding window atomically.
+// It checks before adding, so nothing has to be rolled back.
 // KEYS[1] = rate limit key
 // ARGV[1] = now (unix ms)
 // ARGV[2] = window (ms)
 // ARGV[3] = max requests
 // ARGV[4] = unique member (request identifier)
 // Returns: {allowed (1/0), current_count, reset_ms}
-// reset_ms = เวลา (ms) ที่เหลือจนกว่า oldest entry จะหมดอายุออกจาก window
+// reset_ms = milliseconds left until the oldest entry falls out of the window
 var slidingWindowScript = redis.NewScript(`
 local now    = tonumber(ARGV[1])
 local window = tonumber(ARGV[2])
@@ -43,7 +43,7 @@ local ttlSec = math.ceil(window / 1000) + 1
 redis.call('ZREMRANGEBYSCORE', KEYS[1], '-inf', now - window)
 local count = tonumber(redis.call('ZCARD', KEYS[1]))
 
--- คำนวณ reset_ms จาก oldest entry ที่ยังอยู่ใน window
+-- reset_ms comes from the oldest entry still inside the window
 local function reset_ms_from_oldest()
   local oldest = redis.call('ZRANGE', KEYS[1], 0, 0, 'WITHSCORES')
   if #oldest > 0 then
@@ -65,8 +65,8 @@ redis.call('EXPIRE', KEYS[1], ttlSec)
 return {1, count + 1, reset_ms_from_oldest()}
 `)
 
-// AllowRequest ตรวจสอบ 1 tier ของ sliding window บน Redis
-// คืน allowed=true ถ้า request ผ่าน, current count, และ resetMs (ms ที่เหลือจนกว่า oldest entry หมดอายุ)
+// AllowRequest checks one tier of the sliding window in Redis. It returns allowed=true when the
+// request passes, the current count, and resetMs (how long until the oldest entry expires).
 func (c *Cache) AllowRequest(ctx context.Context, key string, limit, windowSec int, member string) (allowed bool, current int64, resetMs int64, err error) {
 	nowMs := strconv.FormatInt(nowUnixMs(), 10)
 	windowMs := strconv.FormatInt(int64(windowSec)*1000, 10)
@@ -79,9 +79,9 @@ func (c *Cache) AllowRequest(ctx context.Context, key string, limit, windowSec i
 	return res[0] == 1, res[1], res[2], nil
 }
 
-// Allow implements handler.RateLimiter — ตรวจทุก tier, deny ถ้า tier ใด tier หนึ่งเกิน limit
-// memberHint ควรเป็น requestID (UUID) เพื่อให้ member ใน sorted set unique ทุก request
-// fail-open: Redis error → allow (caller จัดการ)
+// Allow implements handler.RateLimiter: it checks every tier and denies if any one is over its
+// limit. memberHint should be the requestID (a UUID), so each request is a unique member of the
+// sorted set. Fail-open: on a Redis error it allows, and the caller decides what to do.
 func (c *Cache) Allow(ctx context.Context, userID, packageID, serviceID, resourcePath, memberHint string, tiers []RateLimitTier) (allowed bool, limit int, remaining int, retryAfterSec int, resetSec int, err error) {
 	if len(tiers) == 0 {
 		return true, 0, 0, 0, 0, nil
@@ -96,7 +96,7 @@ func (c *Cache) Allow(ctx context.Context, userID, packageID, serviceID, resourc
 		if rerr != nil {
 			return true, 0, 0, 0, 0, rerr // fail-open
 		}
-		// resetMs → วินาที ปัดขึ้นเสมอ (อย่างน้อย 1 วินาที)
+		// resetMs to seconds, always rounded up, never below 1
 		rs := int((resetMs + 999) / 1000)
 		if rs < 1 {
 			rs = 1

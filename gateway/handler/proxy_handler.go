@@ -46,11 +46,12 @@ const (
 	resourcesBasePath  = "/gateway/api/resources"
 )
 
-// copyUpstreamHeader คัดลอก header จาก upstream เข้า response — X-Content-Type-Options กับ
-// Referrer-Policy เป็น singleton header ที่ SecureWithConfig middleware เซ็ต default ไว้ก่อน
-// handler นี้ทำงานเสมอ ถ้า upstream ส่งค่าของตัวเองมาด้วยต้อง Set() ทับ (ไม่ใช่ Add()) ไม่งั้น
-// client จะได้ header ซ้ำสองบรรทัด/สองค่าขัดกันในบรรทัดเดียว ผิด HTTP spec — ให้ค่าที่ upstream
-// ตั้งใจกำหนดเองชนะเสมอ (เช่น Referrer-Policy: no-referrer ของ service ที่เข้มกว่า default)
+// copyUpstreamHeader copies upstream headers into the response. X-Content-Type-Options and
+// Referrer-Policy are singleton headers, and the SecureWithConfig middleware has set a default for
+// both by the time this runs. If the upstream sends its own value we have to Set() over it, not
+// Add(), or the client gets the header twice, or two conflicting values on one line, against the
+// HTTP spec. Whatever the upstream deliberately chose wins (a service asking for a stricter
+// Referrer-Policy: no-referrer, for example).
 func copyUpstreamHeader(dst http.Header, k, v string) {
 	if strings.EqualFold(k, echo.HeaderXContentTypeOptions) || strings.EqualFold(k, echo.HeaderReferrerPolicy) {
 		dst.Set(k, v)
@@ -59,12 +60,14 @@ func copyUpstreamHeader(dst http.Header, k, v string) {
 	dst.Add(k, v)
 }
 
-// RateLimiter เช็ค sliding window ทุก tier — memberHint ใช้เป็น member ใน Redis zset กัน request พร้อมกันชนกัน
+// RateLimiter checks the sliding window for every tier. memberHint becomes the member in the Redis
+// zset, so simultaneous requests do not overwrite each other.
 type RateLimiter interface {
 	Allow(ctx context.Context, userID, packageID, serviceID, resourcePath, memberHint string, tiers []cache.RateLimitTier) (allowed bool, limit int, remaining int, retryAfterSec int, resetSec int, err error)
 }
 
-// bounded pool สำหรับ publish log/usage หลังส่ง response — กัน retry-sleep ปน TotalMs และกัน goroutine พุ่งตอน Redis ช้า
+// bounded pool for publishing log/usage after the response is sent. Keeps retry-sleep out of
+// TotalMs, and stops goroutines piling up when Redis is slow.
 const (
 	asyncPublishWorkers   = 8
 	asyncPublishQueueSize = 2000
@@ -74,15 +77,15 @@ type Handler struct {
 	hybridTrie    *trie.HybridTrie
 	proxySvc      *service.ProxyService
 	authSvc       *service.AuthService
-	publisher     event.Publisher // port สำหรับส่ง access log
+	publisher     event.Publisher // port for sending access logs
 	rateLimiter   RateLimiter     // nil = rate limiting disabled
 	publicURL     string
 	upstreamCache *cache.UpstreamCache // nil = upstream caching disabled
 	sf            singleflight.Group
 
-	// asyncPublishCh — queue งาน publish ที่ห้าม block request path
+	// asyncPublishCh — queue of publish work that must never block the request path
 	asyncPublishCh chan func()
-	// pendingPublish นับงานค้างคิว — shutdown ต้อง drain ก่อนปิด Redis ไม่งั้น event หายเงียบ
+	// pendingPublish counts queued work — shutdown must drain it before closing Redis, or events vanish
 	pendingPublish sync.WaitGroup
 }
 
@@ -119,7 +122,7 @@ func runPublishJob(job func()) {
 	job()
 }
 
-// enqueueAsyncPublish ส่งงานเข้า queue แบบ non-blocking — queue เต็มให้ drop + log แทน block request
+// enqueueAsyncPublish queues work without blocking — a full queue drops and logs instead of holding the request
 func (h *Handler) enqueueAsyncPublish(job func()) {
 	h.pendingPublish.Add(1)
 	wrapped := func() {
@@ -134,7 +137,8 @@ func (h *Handler) enqueueAsyncPublish(job func()) {
 	}
 }
 
-// DrainAsyncPublish รองาน publish ค้างคิวจนจบหรือ ctx timeout — เรียกตอน shutdown หลังหยุดรับ request ก่อนปิด Redis
+// DrainAsyncPublish waits for queued publishes to finish, or for ctx to expire. Call it at
+// shutdown, after the server stops accepting requests and before Redis closes.
 func (h *Handler) DrainAsyncPublish(ctx context.Context) {
 	done := make(chan struct{})
 	go func() {
@@ -154,7 +158,7 @@ func (h *Handler) WithRateLimiter(rl RateLimiter) *Handler {
 	return h
 }
 
-// WithUpstreamCache เปิดใช้ response cache สำหรับ upstream proxy path
+// WithUpstreamCache enables the response cache on the upstream proxy path
 func (h *Handler) WithUpstreamCache(uc *cache.UpstreamCache) *Handler {
 	h.upstreamCache = uc
 	return h
@@ -164,7 +168,7 @@ func (h *Handler) Proxy(c echo.Context) error {
 	req := c.Request()
 	handlerStart := timeNow()
 
-	// log fields — เติมระหว่างทาง flush ใน defer
+	// log fields — filled in along the way, flushed in the defer
 	var (
 		requestID      string
 		userID         string
@@ -176,9 +180,9 @@ func (h *Handler) Proxy(c echo.Context) error {
 		responseSize   int64
 		upstreamStatus int
 		upstreamMs     int64
-		cacheStatus    = "BYPASS" // BYPASS=ไม่เข้าเงื่อนไข cache, MISS=เข้าเงื่อนไขแต่ไม่ hit, HIT=ตอบจาก cache
+		cacheStatus    = "BYPASS" // BYPASS=not eligible for cache, MISS=eligible but no hit, HIT=served from cache
 
-		// step-level timing — ไล่ว่า duration หลังหัก upstream ไปอยู่ step ไหน
+		// step-level timing — shows where the duration went once upstream is subtracted
 		authMs         int64
 		rateLimitMs    int64
 		cacheCheckMs   int64
@@ -189,7 +193,7 @@ func (h *Handler) Proxy(c echo.Context) error {
 
 	clientIP := c.RealIP()
 
-	// defer รับประกันว่าทุก request ถูก log ไม่ว่าจะออกทาง return ไหน
+	// the defer guarantees every request is logged, whichever return it leaves by
 	defer func() {
 		logFields := logger.ProxyLogFields{
 			TraceID:        requestID,
@@ -217,7 +221,7 @@ func (h *Handler) Proxy(c echo.Context) error {
 		}
 		logger.ProxyLog(logFields)
 
-		// publish ลง stream:usage-log — async เพราะ retry-sleep ห้ามปนกับ TotalMs ที่คำนวณไปแล้ว
+		// publish to stream:usage-log — async, because retry-sleep must not land in the TotalMs already computed
 		if logJSON, err := logger.BuildProxyLogJSON(logFields); err == nil {
 			h.enqueueAsyncPublish(func() {
 				h.publishWithRetry("publish usage-log failed", func(ctx context.Context) error {
@@ -265,7 +269,7 @@ func (h *Handler) Proxy(c echo.Context) error {
 		})
 	}
 
-	// Step 3-6: Auth + user validation (ข้ามถ้า service เป็น public)
+	// Step 3-6: Auth + user validation (skipped when the service is public)
 	authStart := timeNow()
 	var user *model.User
 	if !svc.IsPublic {
@@ -285,7 +289,7 @@ func (h *Handler) Proxy(c echo.Context) error {
 	}
 	apiKeyID, _ = c.Get("apiKeyId").(string)
 
-	// Request ID — ต้องมีก่อน rate limit เพื่อใช้เป็น unique member ใน sliding window
+	// Request ID — needed before the rate limit, as the unique member in the sliding window
 	requestID = req.Header.Get(headerRequestID)
 	requestID = strings.Map(func(r rune) rune {
 		if r == '\r' || r == '\n' {
@@ -313,7 +317,7 @@ func (h *Handler) Proxy(c echo.Context) error {
 			)
 			if err != nil {
 				logger.Error("rate limit check failed: " + err.Error())
-				// fail-open: ถ้า Redis error ยังให้ผ่านเพื่อไม่กระทบ availability
+				// fail-open: on a Redis error, let it through rather than take availability down
 			} else if !allowed {
 				rateLimitMs = timeNow().Sub(rateLimitStart).Milliseconds()
 				statusCode = http.StatusTooManyRequests
@@ -346,7 +350,7 @@ func (h *Handler) Proxy(c echo.Context) error {
 		})
 	}
 
-	// Static source — return body จาก config โดยตรง ไม่ proxy
+	// Static source — return the body straight from config, no proxying
 	if source.Type == "static" {
 		if source.Body == "" {
 			statusCode = http.StatusServiceUnavailable
@@ -368,10 +372,11 @@ func (h *Handler) Proxy(c echo.Context) error {
 
 	upstreamURL = service.BuildUpstreamURL(source, resource, match.PathParams, match.Remaining, req.URL.RawQuery)
 
-	// Step 7.5: Upstream cache check (GET/HEAD only) — cacheKey ใช้ต่อที่ singleflight Step 8
+	// Step 7.5: Upstream cache check (GET/HEAD only) — cacheKey is reused by singleflight at Step 8
 	cd := parseCacheDirective(req.Header.Get(headerCacheControl))
 	var cacheKey string
-	// Range request ต้อง bypass cache+singleflight — key ไม่รวม Range จะ coalesce ผิดช่วง (เคส PMTiles)
+	// Range requests bypass cache and singleflight — the key ignores Range, so it would coalesce the
+	// wrong span (the PMTiles case)
 	if h.upstreamCache != nil && cache.IsCacheableRequest(req.Method) && req.Header.Get("Range") == "" {
 		cacheKey = cache.UpstreamCacheKey(req.Method, upstreamURL)
 	}
@@ -382,15 +387,15 @@ func (h *Handler) Proxy(c echo.Context) error {
 			entry, entryAge, hit := h.upstreamCache.Get(req.Context(), cacheKey)
 			cacheCheckMs = timeNow().Sub(cacheCheckStart).Milliseconds()
 			if hit {
-				// client max-age directive: ถ้า cache เก่าเกินที่ client ยอมรับ ให้ miss
+				// client max-age directive: an entry older than the client accepts counts as a miss
 				if cd.maxAge < 0 || entryAge <= cd.maxAge {
-					// remaining freshness เหลือเท่าไหร่ — RFC 9111 §5.1 — ใช้ทั้งกิ่ง 304 และกิ่งปกติ
+					// how much freshness is left — RFC 9111 §5.1 — used by both the 304 and the normal branch
 					remaining := entry.TTLSec - entryAge
 					if remaining < 0 {
 						remaining = 0
 					}
 
-					// 304 ตอบก่อน — client ไม่ได้รับข้อมูลจริงสักไบต์เดียว (RFC 9110 §15.4.5)
+					// answer 304 first — the client receives not one byte of the body (RFC 9110 §15.4.5)
 					if req.Header.Get(headerIfNoneMatch) != "" && req.Header.Get(headerIfNoneMatch) == entry.ETag {
 						statusCode = http.StatusNotModified
 						upstreamStatus = entry.StatusCode
@@ -435,7 +440,7 @@ func (h *Handler) Proxy(c echo.Context) error {
 						}
 					}
 
-					// gzip ตอนเขียนเท่านั้น — cache เก็บดิบเสมอ; responseSize = bytes ก่อนบีบ
+					// gzip only on the way out — the cache always holds it raw; responseSize = bytes before compression
 					if shouldGzipResponse(req, c.Response().Header(), entry.StatusCode, int64(len(hitBody))) {
 						prepareGzipHeaders(c.Response().Header())
 						c.Response().WriteHeader(entry.StatusCode)
@@ -453,8 +458,8 @@ func (h *Handler) Proxy(c echo.Context) error {
 		}
 	}
 
-	// Step 8: Proxy via circuit breaker — singleflight coalesce ได้เฉพาะ cacheKey != "" (GET/HEAD)
-	// lookup transform config ครั้งเดียว ใช้ทั้งตัดสิน buffer mode และตอน apply
+	// Step 8: Proxy via circuit breaker — singleflight can only coalesce when cacheKey != "" (GET/HEAD)
+	// look the transform config up once, for both the buffer-mode decision and the apply
 	tcfg := h.hybridTrie.FindTransformConfig(svc.ID, resource.Path, req.Method)
 
 	proxyCallStart := timeNow()
@@ -464,7 +469,8 @@ func (h *Handler) Proxy(c echo.Context) error {
 			return h.fetchFromUpstream(req, upstreamURL, clientIP, requestID, source, maxBufferedUpstreamBytes), nil
 		})
 		ur = v.(upstreamResult)
-		// stream ใช้ได้คนเดียว — follower ที่จองไม่ทันต้อง fetch ใหม่แบบ stream ตรง (เคส body ใหญ่ ซึ่งเกิดน้อย)
+		// a stream has one reader — a follower that missed the claim refetches as a plain stream (large
+		// bodies, which are rare)
 		if ur.stream != nil && !ur.claimStream() {
 			ur = h.fetchFromUpstream(req, upstreamURL, clientIP, requestID, source, 0)
 			if ur.stream != nil {
@@ -472,17 +478,18 @@ func (h *Handler) Proxy(c echo.Context) error {
 			}
 		}
 	} else if tcfg != nil {
-		// มี transform ต้องใช้ทั้ง body — buffer แบบมีเพดาน
+		// a transform needs the whole body — buffer it, with a ceiling
 		ur = h.fetchFromUpstream(req, upstreamURL, clientIP, requestID, source, maxBufferedUpstreamBytes)
 		ur.claimStream()
 	} else {
-		// ไม่ cache ไม่ transform — stream ตรง memory คงที่ไม่ขึ้นกับขนาด response
+		// no cache and no transform — stream straight through, memory flat whatever the response size
 		ur = h.fetchFromUpstream(req, upstreamURL, clientIP, requestID, source, 0)
 		ur.claimStream()
 	}
 	upstreamMs = ur.ms
 	bodyReadMs = ur.readMs
-	// singleflightMs = เวลา step นี้หัก upstreamMs/bodyReadMs — เหลือ overhead sf.Do/CB หรือ follower รอ leader
+	// singleflightMs = this step minus upstreamMs/bodyReadMs — what is left is sf.Do/CB overhead, or a
+	// follower waiting on the leader
 	singleflightMs = timeNow().Sub(proxyCallStart).Milliseconds() - upstreamMs - bodyReadMs
 	if singleflightMs < 0 {
 		singleflightMs = 0
@@ -505,12 +512,12 @@ func (h *Handler) Proxy(c echo.Context) error {
 		})
 	}
 
-	// Step 9: Process and write response — postUpstreamMs ครอบ transform + cache.Set จนก่อน WriteHeader
+	// Step 9: Process and write response — postUpstreamMs covers transform + cache.Set up to WriteHeader
 	postUpstreamStart := timeNow()
 	statusCode = ur.statusCode
 	upstreamStatus = ur.statusCode
 
-	// ur.headers แชร์ผ่าน singleflight — ห้าม mutate (strip ทำแล้วใน fetchFromUpstream)
+	// ur.headers is shared through singleflight — do not mutate it (the strip happened in fetchFromUpstream)
 	for k, vv := range ur.headers {
 		for _, v := range vv {
 			copyUpstreamHeader(c.Response().Header(), k, v)
@@ -520,7 +527,7 @@ func (h *Handler) Proxy(c echo.Context) error {
 	c.Response().Header().Set("X-Upstream-Latency-Ms", strconv.FormatInt(upstreamMs, 10))
 	c.Response().Header().Set(headerXCache, "MISS")
 
-	// transform เฉพาะ body ที่ buffer ครบและเป็น text — stream mode/binary ข้ามเสมอ
+	// only transform a fully buffered text body — stream mode and binary always skip
 	rawBody := ur.body
 	if ur.stream == nil && ur.statusCode >= 200 && ur.statusCode < 300 {
 		if tcfg != nil && transformableCT(ur.headers.Get("Content-Type")) {
@@ -543,12 +550,13 @@ func (h *Handler) Proxy(c echo.Context) error {
 		}
 	}
 
-	// store ลง cache — stream mode หรือ body เกินเพดานไม่เก็บ (ก้อนใหญ่ทำ Redis บล็อกทั้งระบบ)
-	// varyBlocksCache: upstream ทำ content negotiation จริง (Vary อื่นนอกจาก Accept-Encoding)
-	// ไม่เก็บเลยแทนที่จะเสี่ยง serve variant ผิดให้ client อื่น
+	// store in the cache — stream mode, or a body over the ceiling, is not stored (one large blob
+	// blocks all of Redis)
+	// varyBlocksCache: the upstream really does content negotiation (a Vary beyond Accept-Encoding),
+	// so store nothing rather than risk serving the wrong variant to another client
 	if ur.stream == nil && cacheKey != "" && !cd.noStore && !ur.varyBlocksCache && cache.IsCacheableSize(len(ur.body)) && h.upstreamCache.IsCacheableResponse(ur.statusCode, ur.headers) {
 		ttl := h.upstreamCache.ExtractTTL(ur.headers)
-		// upstream ไม่ส่ง ETag → สร้างเองจาก body เพื่อให้ browser ใช้ If-None-Match/304 ได้ทุก service
+		// no ETag from the upstream → build one from the body, so browsers get If-None-Match/304 on every service
 		etag := ur.headers.Get("ETag")
 		if etag == "" {
 			etag = cache.SyntheticETag(ur.body)
@@ -563,7 +571,7 @@ func (h *Handler) Proxy(c echo.Context) error {
 		if setErr := h.upstreamCache.Set(req.Context(), cacheKey, entry, ttl); setErr != nil {
 			logger.Info("upstream cache set failed: " + setErr.Error())
 		} else {
-			// store สำเร็จ — บอก client ว่า entry นี้ fresh จาก origin และ cache ได้อีกนานเท่าไหร่
+			// stored — tell the client this entry is fresh from origin, and how long it stays cacheable
 			c.Response().Header().Set("Age", "0")
 			if c.Response().Header().Get(headerCacheControl) == "" {
 				c.Response().Header().Set(headerCacheControl, publicCacheControl(int(ttl.Seconds())))
@@ -572,10 +580,11 @@ func (h *Handler) Proxy(c echo.Context) error {
 	}
 	postUpstreamMs = timeNow().Sub(postUpstreamStart).Milliseconds()
 
-	// gzip เฉพาะ text CT + client รองรับ — n ที่ได้กลับเป็น bytes ก่อนบีบเสมอ (log ใช้ค่านี้)
+	// gzip only for text content types the client accepts — n always comes back as bytes before
+	// compression (the log uses it)
 	bodyLen := int64(len(rawBody))
 	if ur.stream != nil {
-		bodyLen = -1 // stream mode ไม่รู้ขนาดล่วงหน้า
+		bodyLen = -1 // stream mode — the size is not known up front
 	}
 	useGzip := shouldGzipResponse(req, c.Response().Header(), ur.statusCode, bodyLen)
 	if useGzip {
@@ -585,7 +594,7 @@ func (h *Handler) Proxy(c echo.Context) error {
 	var n int64
 	switch {
 	case ur.stream != nil:
-		// เขียน prefix ที่ buffer ไว้ (ถ้ามี) แล้ว stream ส่วนที่เหลือ — memory คงที่
+		// write the buffered prefix (if any), then stream the rest — memory stays flat
 		n = writeStreamedBody(c, rawBody, ur.stream, useGzip)
 	case useGzip:
 		n = writeGzip(c, rawBody)
@@ -599,14 +608,14 @@ func (h *Handler) Proxy(c echo.Context) error {
 	return nil
 }
 
-// cacheDirective เก็บ directive จาก Cache-Control header ของ request
+// cacheDirective holds the directives from the request's Cache-Control header
 type cacheDirective struct {
 	noCache bool
 	noStore bool
-	maxAge  int // -1 = ไม่ได้ระบุ
+	maxAge  int // -1 = not specified
 }
 
-// parseCacheDirective แปลง Cache-Control request header เป็น cacheDirective
+// parseCacheDirective turns a Cache-Control request header into a cacheDirective
 func parseCacheDirective(h string) cacheDirective {
 	d := cacheDirective{maxAge: -1}
 	for _, part := range strings.Split(h, ",") {
@@ -627,13 +636,14 @@ func parseCacheDirective(h string) cacheDirective {
 
 const cacheMaxAgeDirective = "max-age="
 
-// publicCacheControl สร้าง Cache-Control header สำหรับ shared cache (upstream path)
+// publicCacheControl builds the Cache-Control header for a shared cache (upstream path)
 func publicCacheControl(sec int) string {
 	return "public, " + cacheMaxAgeDirective + strconv.Itoa(sec)
 }
 
-// resolvedOrigin คืน scheme+host สำหรับ {{oryca_gateway_url}} — ใช้ publicURL จาก config ก่อน
-// เพราะ X-Forwarded-Proto จาก LB อาจตั้งไม่ครบ, ไม่มีค่อยเดาจาก request
+// resolvedOrigin returns the scheme+host for {{oryca_gateway_url}}. It prefers publicURL from
+// config, because X-Forwarded-Proto from a load balancer may not be set; without it, guess from
+// the request.
 func (h *Handler) resolvedOrigin(req *http.Request) string {
 	if h.publicURL != "" {
 		return strings.TrimRight(h.publicURL, "/")
@@ -641,7 +651,7 @@ func (h *Handler) resolvedOrigin(req *http.Request) string {
 	return service.ResolvedProto(req) + "://" + service.ResolvedHost(req)
 }
 
-// applyTransform รัน transform engine กับ rawBody — คืน nil ถ้าไม่มี config หรือไม่ match
+// applyTransform runs the transform engine over rawBody — returns nil when there is no config, or nothing matches
 func (h *Handler) applyTransform(rawBody []byte, req *http.Request, svcID, basePath, resourcePath, method string) (body []byte, headers map[string]string) {
 	tcfg := h.hybridTrie.FindTransformConfig(svcID, resourcePath, method)
 	if tcfg == nil {
@@ -663,26 +673,28 @@ func (h *Handler) applyTransform(rawBody []byte, req *http.Request, svcID, baseP
 	return result.Body, result.Headers
 }
 
-// maxBufferedUpstreamBytes เพดาน buffer ใน RAM เพื่อ cache/transform — เกินนี้ stream ตรงถึง client แทน
+// maxBufferedUpstreamBytes is the RAM ceiling for buffering to cache or transform — past it, stream
+// straight to the client instead
 const maxBufferedUpstreamBytes = 32 << 20 // 32MB
 
 type upstreamResult struct {
 	statusCode int
 	headers    http.Header
-	body       []byte // body ทั้งก้อน หรือ prefix เมื่อ stream != nil
-	// stream != nil — ห้าม cache/transform และใช้ได้คนเดียว (claimStream ก่อนเสมอ)
+	body       []byte // the whole body, or the prefix when stream != nil
+	// stream != nil — must not be cached or transformed, and has a single reader (claimStream first)
 	stream  io.ReadCloser
 	claimed *int32
 	ms      int64
-	readMs  int64 // เวลาอ่าน body เข้า buffer — แยกจาก ms ที่นับถึงแค่ได้ headers
+	readMs  int64 // time spent reading the body into the buffer — separate from ms, which stops at the headers
 	err     error
-	// varyBlocksCache = upstream ส่ง Vary ที่ไม่ใช่แค่ Accept-Encoding มา (เช่น Accept,
-	// Accept-Language) ต้องเช็คจาก header ดิบก่อน strip เพราะ headers ด้านบนถูก
-	// StripUpstreamInternalHeaders ลบ Vary ทิ้งไปแล้วเสมอ (กัน duplicate กับ CORS's Vary: Origin)
+	// varyBlocksCache = the upstream sent a Vary that is more than Accept-Encoding (Accept,
+	// Accept-Language). It has to be read off the raw header before the strip, because
+	// StripUpstreamInternalHeaders always removes Vary (to avoid duplicating CORS's Vary: Origin).
 	varyBlocksCache bool
 }
 
-// claimStream จอง stream แบบ atomic — singleflight แชร์ result แต่ stream อ่านได้ครั้งเดียว
+// claimStream claims the stream atomically — singleflight shares the result, but a stream can only
+// be read once
 func (r *upstreamResult) claimStream() bool {
 	return r.claimed != nil && atomicCASInt32(r.claimed)
 }
@@ -691,11 +703,11 @@ func atomicCASInt32(p *int32) bool {
 	return atomic.CompareAndSwapInt32(p, 0, 1)
 }
 
-// varyBlocksCache ตรวจว่า Vary header จาก upstream มีค่าอื่นนอกจาก Accept-Encoding ไหม —
-// Accept-Encoding ไม่กระทบเพราะ gateway gzip เองต่อ request อยู่แล้ว (cache เก็บ body ดิบเสมอ)
-// ส่วน Vary อื่น (เช่น Accept, Accept-Language) แปลว่า upstream ทำ content negotiation จริง —
-// cache key ของเราไม่ได้แยกตาม request header เลย ถ้ายัง cache ต่อไปจะ serve variant ผิดให้
-// client คนอื่นที่ส่ง header ต่างกัน จึงต้องกัน (ไม่ cache) แทนที่จะเสี่ยง
+// varyBlocksCache reports whether the upstream's Vary header names anything beyond Accept-Encoding.
+// Accept-Encoding does not matter, because the gateway gzips per request itself (the cache always
+// holds the body raw). Any other Vary (Accept, Accept-Language) means the upstream really does
+// negotiate content, and our cache key does not vary by request header at all — caching on would
+// serve the wrong variant to a client that sent different headers, so we decline to cache.
 func varyBlocksCache(varyHeader string) bool {
 	if varyHeader == "" {
 		return false
@@ -708,7 +720,8 @@ func varyBlocksCache(varyHeader string) bool {
 	return false
 }
 
-// fetchFromUpstream ยิง upstream — maxBuffer > 0 buffer เข้า memory (เกิน limit คืน prefix + stream), <= 0 stream ล้วน
+// fetchFromUpstream calls the upstream. maxBuffer > 0 buffers into memory (over the limit it returns
+// prefix + stream); <= 0 streams throughout
 func (h *Handler) fetchFromUpstream(req *http.Request, upstreamURL, clientIP, requestID string, source *model.Source, maxBuffer int64) upstreamResult {
 	start := timeNow()
 	proxyResp, err := h.proxySvc.Do(&service.ProxyRequest{
@@ -723,7 +736,8 @@ func (h *Handler) fetchFromUpstream(req *http.Request, upstreamURL, clientIP, re
 	ms := timeNow().Sub(start).Milliseconds()
 
 	if err != nil {
-		// UpstreamError = upstream ตอบ error status จริง — pass-through ต่อ (CB นับ failure แล้วใน Do)
+		// UpstreamError = the upstream really answered with an error status — pass it through (Do already
+		// counted the CB failure)
 		var ue *breaker.UpstreamError
 		if !errors.As(err, &ue) || proxyResp == nil {
 			return upstreamResult{err: err, ms: ms}
@@ -733,12 +747,12 @@ func (h *Handler) fetchFromUpstream(req *http.Request, upstreamURL, clientIP, re
 		return upstreamResult{ms: ms}
 	}
 
-	// เช็คจาก Vary ดิบก่อน strip เสมอ — StripUpstreamInternalHeaders (ด้านล่าง) ลบ Vary ทิ้ง
-	// ทุกครั้งกันชนกับ CORS's Vary: Origin ถ้าไม่เช็คตอนนี้จะไม่มีทางรู้ทีหลังเลยว่า upstream
-	// เคยทำ content negotiation จริงไหม
+	// read Vary off the raw header, always before the strip. StripUpstreamInternalHeaders (below)
+	// removes Vary every time so it cannot collide with CORS's Vary: Origin, and if we do not look
+	// now there is no way to find out later whether the upstream negotiated content at all.
 	hasNonEncodingVary := varyBlocksCache(proxyResp.Headers.Get("Vary"))
 
-	// strip ครั้งเดียวก่อน share ผ่าน singleflight — หลังจากนี้ห้าม mutate headers
+	// strip once, before sharing through singleflight — after this, headers must not be mutated
 	service.StripHopByHop(proxyResp.Headers)
 	service.StripCORSHeaders(proxyResp.Headers)
 	service.StripUpstreamInternalHeaders(proxyResp.Headers)
@@ -763,7 +777,7 @@ func (h *Handler) fetchFromUpstream(req *http.Request, upstreamURL, clientIP, re
 	if proxyResp.ContentLength > 0 && proxyResp.ContentLength <= maxBuffer {
 		buf.Grow(int(proxyResp.ContentLength))
 	} else {
-		buf.Grow(32 * 1024) // chunked/ไม่รู้ขนาด — จอง 32KB กัน realloc ช่วงแรก
+		buf.Grow(32 * 1024) // chunked, size unknown — reserve 32KB to avoid early reallocs
 	}
 	tmpBuf := bufPool.Get().(*[]byte)
 	_, readErr = io.CopyBuffer(&buf, limitReader, *tmpBuf)
@@ -777,7 +791,7 @@ func (h *Handler) fetchFromUpstream(req *http.Request, upstreamURL, clientIP, re
 		return upstreamResult{err: readErr, ms: ms, readMs: readMs}
 	}
 	if int64(len(body)) > maxBuffer {
-		// body ใหญ่เกิน buffer limit — คืน prefix + stream ส่วนที่เหลือ (ไม่ปิด body)
+		// body over the buffer limit — return the prefix and stream the rest (do not close body)
 		return upstreamResult{
 			statusCode:      proxyResp.StatusCode,
 			headers:         proxyResp.Headers,
@@ -800,7 +814,8 @@ func (h *Handler) fetchFromUpstream(req *http.Request, upstreamURL, clientIP, re
 	}
 }
 
-// writeStreamedBody เขียน prefix แล้ว stream ส่วนที่เหลือ — คืน bytes ก่อนบีบ (log ใช้ค่านี้), ปิด stream ให้เสมอ
+// writeStreamedBody writes the prefix then streams the rest. Returns bytes before compression (the
+// log uses it), and always closes the stream.
 func writeStreamedBody(c echo.Context, prefix []byte, rest io.ReadCloser, useGzip bool) int64 {
 	defer rest.Close()
 
@@ -834,10 +849,10 @@ func writeStreamedBody(c echo.Context, prefix []byte, rest io.ReadCloser, useGzi
 	return total + n
 }
 
-// publishWithRetry รัน publishFn พร้อม retry สูงสุด 3 ครั้ง (backoff 0, 500ms, 1s) — เดิมโค้ดนี้
-// ถูกคัดลอกซ้ำ 3 จุด (access log + proxy/cache-HIT usage event) รวมไว้ที่เดียวเพื่อไม่ให้
-// retry policy เพี้ยนกันระหว่างจุด — logPrefix ต้องคงข้อความเดิมของแต่ละจุดไว้เป๊ะ เผื่อมี
-// log-based alert/dashboard ที่ grep string นั้นอยู่แล้ว
+// publishWithRetry runs publishFn with up to 3 attempts (backoff 0, 500ms, 1s). This used to be
+// copied in three places (access log, plus the proxy and cache-HIT usage events); it lives here so
+// the retry policy cannot drift between them. logPrefix has to keep each call site's original
+// wording exactly, in case a log-based alert or dashboard already greps for that string.
 func (h *Handler) publishWithRetry(logPrefix string, publishFn func(ctx context.Context) error) {
 	delays := []time.Duration{0, 500 * time.Millisecond, time.Second}
 	for i, d := range delays {

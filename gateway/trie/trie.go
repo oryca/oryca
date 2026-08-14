@@ -10,16 +10,16 @@ import (
 type TrieNode struct {
 	children   map[string]*TrieNode
 	paramChild *TrieNode
-	paramName  string // ชื่อ path param ของ paramChild เช่น "collectionId"
+	paramName  string // name of paramChild's path param, "collectionId" for example
 	isEnd      bool
 	service    *model.GatewayService
 	resource   *model.ResourcePath
 
-	// wildcard suffix (path ลงท้ายด้วย /*) ที่ anchor อยู่ node นี้ — เก็บแยกจาก
-	// isEnd/service/resource ด้านบนเสมอ เพราะ exact match ที่จบพอดีตรงนี้ (เช่น "/items")
-	// กับ wildcard ที่เริ่มจากตรงนี้ (เช่น "/items/*") เป็นคนละ resource กัน ถ้าใช้ field
-	// ร่วมกันตัวที่ insert ทีหลังจะเขียนทับอีกตัวไปเลย (เคยเป็นบั๊กจริง — ราคา/ปลายทาง
-	// ของ resource หนึ่งถูกอีก resource หนึ่งที่ path segment ซ้อนกันเขียนทับ)
+	// A wildcard suffix (a path ending in /*) anchored at this node. Always kept apart from the
+	// isEnd/service/resource fields above, because an exact match that ends here ("/items") and a
+	// wildcard that starts here ("/items/*") are different resources. Sharing the fields would let
+	// whichever was inserted second overwrite the other — this was a real bug, where one resource's
+	// destination was overwritten by another whose path segments overlapped.
 	hasWildcard      bool
 	wildcardService  *model.GatewayService
 	wildcardResource *model.ResourcePath
@@ -69,8 +69,8 @@ func (pt *PathTrie) insertResource(svc *model.GatewayService, res *model.Resourc
 		if seg == "" {
 			continue
 		}
-		// wildcard suffix — mark เป็น wildcard anchor ที่ node ปัจจุบัน แยกจาก exact-match
-		// ของ node เดียวกัน (ถ้ามี resource อื่นจบพอดีที่ path เดียวกันนี้) แล้วหยุด
+		// wildcard suffix — mark this node as a wildcard anchor, separately from any exact match on
+		// the same node (another resource may end exactly here), then stop
 		if seg == "*" {
 			current.hasWildcard = true
 			current.wildcardService = svc
@@ -157,10 +157,10 @@ func (pt *PathTrie) search(node *TrieNode, segments []string, idx int, params ma
 				PathParams: paramsCopy,
 			}
 		}
-		// ไม่มี exact resource ที่ node นี้ แต่ถ้ามี wildcard anchor อยู่ (เช่น resource ถูก
-		// กำหนดเป็น "/*" ล้วนๆ ไม่มี path อื่นแยกต่างหาก) bare path ที่ตรงกับ parent ของ "*"
-		// พอดีก็ควร match ด้วย — exact ยัง priority สูงกว่าเสมอ (เช็คก่อนหน้านี้แล้ว) กรณีนี้
-		// เป็น fallback เฉพาะตอนไม่มี exact แข่งอยู่ที่ node เดียวกันเท่านั้น
+		// No exact resource on this node, but if a wildcard is anchored here (a resource declared as
+		// plain "/*", with no other path of its own) then a bare path matching the parent of "*"
+		// should match too. Exact still wins — that was checked above — so this is only a fallback
+		// for when no exact match competes on the same node.
 		if node.hasWildcard {
 			paramsCopy := copyParams(params)
 			return &PathMatch{
@@ -174,18 +174,18 @@ func (pt *PathTrie) search(node *TrieNode, segments []string, idx int, params ma
 
 	seg := segments[idx]
 
-	// กรณี 1: exact match — priority สูงสุด
+	// case 1: exact match, highest priority
 	if child, ok := node.children[seg]; ok {
 		if m := pt.search(child, segments, idx+1, params, resourcePath); m != nil {
 			return m
 		}
 	}
 
-	// กรณี 2: pattern match เช่น {y}.png
+	// case 2: pattern match, {y}.png for example
 	for childSeg, child := range node.children {
 		if strings.Contains(childSeg, "{") && strings.Contains(childSeg, ".") {
 			if matchesPattern(seg, childSeg) {
-				// copy เฉพาะเมื่อ pattern match แล้วเท่านั้น
+				// only copy once the pattern has matched
 				newParams := copyParams(params)
 				newParams[extractPatternParamName(childSeg)] = extractParamFromPattern(seg)
 				if m := pt.search(child, segments, idx+1, newParams, resourcePath); m != nil {
@@ -195,7 +195,7 @@ func (pt *PathTrie) search(node *TrieNode, segments []string, idx int, params ma
 		}
 	}
 
-	// กรณี 3: path param {name}
+	// case 3: path param {name}
 	if node.paramChild != nil {
 		newParams := copyParams(params)
 		key := node.paramName
@@ -208,7 +208,7 @@ func (pt *PathTrie) search(node *TrieNode, segments []string, idx int, params ma
 		}
 	}
 
-	// กรณี 4: suffix wildcard
+	// case 4: suffix wildcard
 	if node.hasWildcard {
 		paramsCopy := copyParams(params)
 		return &PathMatch{

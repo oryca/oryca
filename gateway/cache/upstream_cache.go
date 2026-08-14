@@ -20,7 +20,7 @@ const upstreamCacheKeyPrefix = "upstream:cache:"
 
 const contentTypeHeader = "Content-Type"
 
-// upstreamCacheableStatus คือ status code ที่ cache ได้ตาม RFC 9111 Section 3
+// upstreamCacheableStatus lists the status codes RFC 9111 Section 3 allows caching
 var upstreamCacheableStatus = map[int]bool{
 	http.StatusOK:               true,
 	http.StatusMovedPermanently: true,
@@ -32,7 +32,7 @@ type UpstreamCacheEntry struct {
 	Headers    map[string][]string `json:"h"`
 	Body       []byte              `json:"b,omitempty"`
 	ETag       string              `json:"et,omitempty"`
-	TTLSec     int                 `json:"ttl"` // original TTL สำหรับคำนวณ Age
+	TTLSec     int                 `json:"ttl"` // the original TTL, used to compute Age
 }
 
 // Magic header to distinguish custom binary format from JSON
@@ -137,31 +137,32 @@ func (c *UpstreamCache) WithMemory(memoryMB int) *UpstreamCache {
 	return c
 }
 
-// UpstreamCacheKey สร้าง SHA-256 key จาก method + upstream URL
+// UpstreamCacheKey builds a SHA-256 key from the method and the upstream URL
 func UpstreamCacheKey(method, upstreamURL string) string {
 	h := sha256.Sum256([]byte(method + ":" + upstreamURL))
 	return upstreamCacheKeyPrefix + fmt.Sprintf("%x", h)
 }
 
-// IsCacheableRequest ตรวจว่า HTTP method นี้ cache ได้ตาม RFC 9111
+// IsCacheableRequest reports whether RFC 9111 allows caching this method
 func IsCacheableRequest(method string) bool {
 	return method == http.MethodGet || method == http.MethodHead
 }
 
-// MaxCacheableBodyBytes เพดานขนาด body ต่อ entry ใน Redis — ก้อนใหญ่ทำ Redis บล็อก
-// กระทบ auth/rate-limit ที่ใช้ Redis เดียวกัน ของใหญ่ให้ passthrough แทน
-// 10MB รองรับ geo response ขนาดกลาง — ของใหญ่กว่านี้รอ gzip cache + S3-backed
+// MaxCacheableBodyBytes caps the body size of one Redis entry. A large blob blocks Redis, which
+// takes auth and rate limiting down with it, since they share the instance — so anything larger is
+// passed through instead. 10MB covers a mid-sized geo response; beyond that would want a gzip cache
+// backed by object storage.
 const MaxCacheableBodyBytes = 10 << 20 // 10MB
 
-// IsCacheableSize ตรวจว่า body เล็กพอที่จะเก็บใน Redis
+// IsCacheableSize reports whether the body is small enough to store in Redis
 func IsCacheableSize(bodyLen int) bool {
 	return bodyLen <= MaxCacheableBodyBytes
 }
 
-// nonCacheableContentTypes คือ Content-Type ที่ไม่ควร cache — tile/binary formats
-// ที่มี URL unique ต่อ z/x/y ทำให้ entries สะสมเยอะมากและกิน memory Redis
-// image/* ครอบ png/jpeg/webp/tiff/gif ทั้งหมด
-// protobuf variants ครอบ vector tile format ที่ไม่ใช่ mapbox standard
+// nonCacheableContentTypes are the content types not worth caching: tile and binary formats whose
+// URL is unique per z/x/y, so entries pile up and eat Redis memory.
+// image/* covers png, jpeg, webp, tiff and gif.
+// The protobuf variants cover the vector tile formats that are not the mapbox standard.
 var nonCacheableContentTypes = map[string]bool{
 	"application/vnd.mapbox-vector-tile": true,
 	"application/x-protobuf":             true,
@@ -170,14 +171,15 @@ var nonCacheableContentTypes = map[string]bool{
 
 const nonCacheableContentTypeImagePrefix = "image/"
 
-// isImageOrTileContentType ตรวจว่า Content-Type เป็น image หรือ vector tile format
+// isImageOrTileContentType reports whether the content type is an image or a vector tile
 func isImageOrTileContentType(contentType string) bool {
 	ct := strings.ToLower(strings.SplitN(contentType, ";", 2)[0])
 	return strings.HasPrefix(ct, nonCacheableContentTypeImagePrefix) || nonCacheableContentTypes[ct]
 }
 
-// IsCacheableResponse ตรวจว่า upstream response นี้ควร cache หรือไม่
-// ไม่ cache ถ้า: status ไม่อยู่ใน default cacheable set, มี no-store, private, หรือเป็น tile/image
+// IsCacheableResponse reports whether this upstream response should be cached. It should not be
+// when the status is outside the default cacheable set, when it says no-store or private, or when
+// it is a tile or an image.
 func (c *UpstreamCache) IsCacheableResponse(statusCode int, headers http.Header) bool {
 	if !upstreamCacheableStatus[statusCode] {
 		return false
@@ -186,15 +188,15 @@ func (c *UpstreamCache) IsCacheableResponse(statusCode int, headers http.Header)
 	if strings.Contains(cc, "no-store") || strings.Contains(cc, "private") {
 		return false
 	}
-	// ไม่ cache tile และ image — URL unique ต่อ z/x/y ทำให้ Redis entries เยอะเกินไป
+	// no tiles and no images — a URL unique per z/x/y means far too many Redis entries
 	if isImageOrTileContentType(headers.Get(contentTypeHeader)) {
 		return false
 	}
 	return true
 }
 
-// ExtractTTL อ่าน s-maxage → max-age จาก response Cache-Control, fallback defaultTTL
-// s-maxage มี priority สูงกว่า max-age สำหรับ shared cache (RFC 9111 Section 5.2.2.9)
+// ExtractTTL reads s-maxage, then max-age, from the response Cache-Control, falling back to
+// defaultTTL. For a shared cache s-maxage wins over max-age (RFC 9111 Section 5.2.2.9).
 func (c *UpstreamCache) ExtractTTL(headers http.Header) time.Duration {
 	cc := headers.Get("Cache-Control")
 	if v := cacheControlInt(cc, "s-maxage"); v >= 0 {
@@ -219,8 +221,8 @@ func cacheControlInt(cc, directive string) int {
 	return -1
 }
 
-// Get ดึง cache entry คืน (entry, age, hit)
-// age = จำนวนวินาทีที่ entry อยู่ใน cache แล้ว
+// Get returns the cache entry, its age, and whether it was a hit.
+// age is how many seconds the entry has been in the cache.
 func (c *UpstreamCache) Get(ctx context.Context, key string) (*UpstreamCacheEntry, int, bool) {
 	// L0 memory cache check
 	if c.mem != nil {
@@ -274,10 +276,11 @@ func (c *UpstreamCache) saveL0(key string, entry *UpstreamCacheEntry, age int) {
 	c.mem.set(key, l0, time.Duration(entry.TTLSec-age)*time.Second)
 }
 
-// headersToStripOnStore คือ headers ที่ GW จัดการเองหรือเปิดเผยข้อมูล internal — ไม่ควรเก็บไว้ใน entry
+// headersToStripOnStore are headers the gateway sets itself, or that leak internals — not worth
+// keeping in the entry
 var headersToStripOnStore = []string{"Age", "Date", "Via", "Server", "Vary"}
 
-// Set เก็บ entry ลง Redis พร้อม mirror ลง L0 memory cache
+// Set stores the entry in Redis and mirrors it into the L0 memory cache
 func (c *UpstreamCache) Set(ctx context.Context, key string, entry *UpstreamCacheEntry, ttl time.Duration) error {
 	if ttl <= 0 {
 		ttl = c.defaultTTL
@@ -303,7 +306,7 @@ func (c *UpstreamCache) Set(ctx context.Context, key string, entry *UpstreamCach
 	return nil
 }
 
-// SyntheticETag คำนวณ ETag แบบรวดเร็วโดยใช้ SHA-256 จากข้อมูลดิบ
+// SyntheticETag computes a cheap ETag as a SHA-256 over the raw bytes
 func SyntheticETag(body []byte) string {
 	h := sha256.Sum256(body)
 	return fmt.Sprintf(`W/"gw-%x"`, h)

@@ -5,11 +5,12 @@ import (
 	"sync"
 )
 
-// regexCache cache compiled regex ตาม pattern string — compile ครั้งเดียวต่อ pattern
-// *regexp.Regexp ใช้ข้าม goroutine ได้ปลอดภัย; pattern มาจาก transform config จึงมีจำนวนจำกัด
+// regexCache holds compiled regexes keyed by their pattern — one compile per pattern.
+// *regexp.Regexp is safe to share across goroutines, and patterns come from the transform
+// config, so the set stays small.
 var regexCache sync.Map
 
-// cachedRegexp คืน compiled regex จาก cache หรือ compile ใหม่ถ้ายังไม่มี
+// cachedRegexp returns the compiled regex, compiling it on first use
 func cachedRegexp(pattern string) (*regexp.Regexp, error) {
 	if v, ok := regexCache.Load(pattern); ok {
 		return v.(*regexp.Regexp), nil

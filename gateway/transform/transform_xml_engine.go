@@ -7,16 +7,16 @@ import (
 	"strings"
 )
 
-// reLocalName pattern คงที่ — compile ครั้งเดียวตอน start
+// reLocalName is a fixed pattern — compiled once at start
 var reLocalName = regexp.MustCompile(`local-name\(\)=['"]([^'"]+)['"]`)
 
-// XMLStdEngine - XML engine ที่ใช้ string-based approach แบบ generic
+// XMLStdEngine is a generic, string-based XML engine
 type XMLStdEngine struct {
 	Config  *model.TransformConfig
 	Context *model.TransformContext
 }
 
-// NewXMLStdEngine - สร้าง XML engine ใหม่
+// NewXMLStdEngine builds a new XML engine
 func NewXMLStdEngine(config *model.TransformConfig, context *model.TransformContext) *XMLStdEngine {
 	return &XMLStdEngine{
 		Config:  config,
@@ -24,7 +24,7 @@ func NewXMLStdEngine(config *model.TransformConfig, context *model.TransformCont
 	}
 }
 
-// Apply - ประมวลผล XML transform แบบ string-based
+// Apply runs the XML transform over the body, as strings
 func (xe *XMLStdEngine) Apply(body []byte) (*model.TransformResult, error) {
 	if len(body) == 0 {
 		return &model.TransformResult{
@@ -38,7 +38,7 @@ func (xe *XMLStdEngine) Apply(body []byte) (*model.TransformResult, error) {
 	headers := map[string]string{}
 
 	xmlContent := string(body)
-	appliedRules := 0 // เพิ่ม counter
+	appliedRules := 0 // how many rules actually changed something
 
 	for _, rule := range xe.Config.Rules {
 		if rule.GetRuleType() != "xml" {
@@ -73,11 +73,11 @@ func (xe *XMLStdEngine) Apply(body []byte) (*model.TransformResult, error) {
 	return &model.TransformResult{
 		Body:    resultBody,
 		Headers: headers,
-		Found:   appliedRules > 0, // เพิ่ม Found flag
+		Found:   appliedRules > 0, // Found tells the caller whether anything changed
 	}, nil
 }
 
-// applyXMLRule - ประมวลผล XML rule แบบ generic
+// applyXMLRule runs one rule against the document
 func (xe *XMLStdEngine) applyXMLRule(rule model.TransformRule, content string, vars map[string]string) (string, error) {
 	xpath := rule.GetPathSelector()
 	if xpath == "" {
@@ -96,45 +96,44 @@ func (xe *XMLStdEngine) applyXMLRule(rule model.TransformRule, content string, v
 	}
 }
 
-// replaceByXPath - แทนที่ค่าตาม XPath แบบ generic
-// replaceByXPath - แทนที่ค่าตาม XPath แบบ generic (แก้ไขแล้ว)
+// replaceByXPath replaces whatever the XPath selects
 func (xe *XMLStdEngine) replaceByXPath(content string, rule model.TransformRule, vars map[string]string) string {
 	xpath := rule.GetPathSelector()
 	field := rule.Params.Field
 
-	// แยก element name จาก xpath
+	// pull the element name out of the xpath
 	elementName := xe.extractElementName(xpath)
 	if elementName == "" {
 		return content
 	}
 
-	// ตรวจสอบว่าเป็น attribute หรือ text content
+	// an @ prefix means an attribute, otherwise it is text content
 	if strings.HasPrefix(field, "@") {
-		// เป็น attribute
+		// attribute
 		attrName := strings.TrimPrefix(field, "@")
 
-		// สำหรับ local-name() ให้ใช้วิธีพิเศษ
+		// local-name() needs its own path, namespaces are not matched literally
 		if strings.Contains(xpath, "local-name()") {
 			return xe.replaceAttributeWithLocalName(content, elementName, attrName, rule, vars)
 		} else {
 			return xe.replaceAttributeGeneric(content, elementName, attrName, rule, vars)
 		}
 	} else {
-		// เป็น text content
+		// text content
 		return xe.replaceTextContent(content, elementName, rule, vars)
 	}
 }
 
-// replaceAttributeWithLocalName - แทนที่ attribute สำหรับ local-name() pattern
+// replaceAttributeWithLocalName handles the local-name() form of the selector
 func (xe *XMLStdEngine) replaceAttributeWithLocalName(content, elementName, attrName string, rule model.TransformRule, vars map[string]string) string {
-	// สร้าง regex ที่หา element ใดๆ ที่มี local name ตรงกับ elementName
-	// pattern จะหา: <anyPrefix:ElementName หรือ <ElementName
+	// match any element whose local name is elementName:
+	// <anyPrefix:ElementName, or <ElementName with no prefix at all
 	patterns := []string{
 		// Pattern 1: <prefix:ElementName attr="value"
 		fmt.Sprintf(`(<[^:\s]*:%s[^>]*?\s%s=")([^"]*)(".*?>)`, regexp.QuoteMeta(elementName), regexp.QuoteMeta(attrName)),
-		// Pattern 2: <ElementName attr="value" (ไม่มี namespace)
+		// Pattern 2: <ElementName attr="value" (no namespace)
 		fmt.Sprintf(`(<%s[^>]*?\s%s=")([^"]*)(".*?>)`, regexp.QuoteMeta(elementName), regexp.QuoteMeta(attrName)),
-		// Pattern 3: namespace attribute เช่น xlink:href
+		// Pattern 3: a namespaced attribute, xlink:href for example
 		fmt.Sprintf(`(<[^:\s]*:%s[^>]*?\s[^:]*:%s=")([^"]*)(".*?>)`, regexp.QuoteMeta(elementName), regexp.QuoteMeta(attrName)),
 		fmt.Sprintf(`(<%s[^>]*?\s[^:]*:%s=")([^"]*)(".*?>)`, regexp.QuoteMeta(elementName), regexp.QuoteMeta(attrName)),
 		// Pattern 4: self-closing tags
@@ -157,16 +156,16 @@ func (xe *XMLStdEngine) replaceAttributeWithLocalName(content, elementName, attr
 			}
 
 			prefix := parts[1]   // <element...attr="
-			oldValue := parts[2] // ค่าเดิม
+			oldValue := parts[2] // the value before the rule ran
 			suffix := parts[3]   // "...>
 
-			// ทำการแทนที่ตาม rule
+			// apply the rule
 			newValue := xe.performStringReplace(oldValue, rule, vars)
 
 			return prefix + newValue + suffix
 		})
 
-		// ถ้ามีการเปลี่ยนแปลง ให้ใช้ผลลัพธ์ใหม่
+		// only take the rewritten value if it actually changed
 		if newResult != result {
 			result = newResult
 		}
@@ -175,35 +174,35 @@ func (xe *XMLStdEngine) replaceAttributeWithLocalName(content, elementName, attr
 	return result
 }
 
-// extractElementName - ดึงชื่อ element จาก xpath (แก้ไขแล้ว)
+// extractElementName pulls the element name out of an xpath
 func (xe *XMLStdEngine) extractElementName(xpath string) string {
-	// รองรับรูปแบบ xpath ต่างๆ
+	// several xpath shapes are accepted
 
-	// สำหรับ local-name() pattern: //*[local-name()='ElementName']
+	// local-name() form: //*[local-name()='ElementName']
 	if strings.Contains(xpath, "local-name()") {
-		// หา pattern local-name()='ElementName' หรือ local-name()="ElementName"
+		// either quote style is allowed
 		matches := reLocalName.FindStringSubmatch(xpath)
 		if len(matches) > 1 {
-			return matches[1] // ดึงชื่อ element จากใน quotes
+			return matches[1] // the name inside the quotes
 		}
 	}
 
 	// //ElementName -> ElementName
 	if strings.HasPrefix(xpath, "//") {
 		name := strings.TrimPrefix(xpath, "//")
-		// ตัดส่วน condition ออก เช่น ElementName[@attr='value'] -> ElementName
+		// drop the condition: ElementName[@attr='value'] -> ElementName
 		if idx := strings.Index(name, "["); idx != -1 {
 			name = name[:idx]
 		}
 		return name
 	}
 
-	// /root/ElementName -> ElementName (เอาตัวสุดท้าย)
+	// /root/ElementName -> ElementName (the last segment wins)
 	if strings.HasPrefix(xpath, "/") {
 		parts := strings.Split(strings.Trim(xpath, "/"), "/")
 		if len(parts) > 0 {
 			name := parts[len(parts)-1]
-			// ตัดส่วน condition ออก
+			// drop the condition
 			if idx := strings.Index(name, "["); idx != -1 {
 				name = name[:idx]
 			}
@@ -219,9 +218,9 @@ func (xe *XMLStdEngine) extractElementName(xpath string) string {
 	return xpath
 }
 
-// replaceAttributeGeneric - แทนที่ attribute value แบบ generic
+// replaceAttributeGeneric replaces an attribute value
 func (xe *XMLStdEngine) replaceAttributeGeneric(content, elementName, attrName string, rule model.TransformRule, vars map[string]string) string {
-	// สร้าง regex pattern สำหรับหา attribute ในรูปแบบต่างๆ
+	// one pattern per way the attribute can be written
 	patterns := []string{
 		// Standard attribute: attrName="value"
 		fmt.Sprintf(`(<%s[^>]*?\s%s=")([^"]*)(".*?>)`, regexp.QuoteMeta(elementName), regexp.QuoteMeta(attrName)),
@@ -245,10 +244,10 @@ func (xe *XMLStdEngine) replaceAttributeGeneric(content, elementName, attrName s
 			}
 
 			prefix := parts[1]   // <element...attr="
-			oldValue := parts[2] // ค่าเดิม
+			oldValue := parts[2] // the value before the rule ran
 			suffix := parts[3]   // "...>
 
-			// ทำการแทนที่ตาม rule
+			// apply the rule
 			newValue := xe.performStringReplace(oldValue, rule, vars)
 
 			return prefix + newValue + suffix
@@ -258,9 +257,9 @@ func (xe *XMLStdEngine) replaceAttributeGeneric(content, elementName, attrName s
 	return result
 }
 
-// replaceTextContent - แทนที่ text content ของ element
+// replaceTextContent replaces the text inside an element
 func (xe *XMLStdEngine) replaceTextContent(content, elementName string, rule model.TransformRule, vars map[string]string) string {
-	// Pattern สำหรับ text content: <element>content</element>
+	// text content pattern: <element>content</element>
 	pattern := fmt.Sprintf(`(<%s[^>]*>)([^<]*)(<%s>)`, regexp.QuoteMeta(elementName), regexp.QuoteMeta(elementName))
 	re, err := cachedRegexp(pattern)
 	if err != nil {
@@ -277,49 +276,49 @@ func (xe *XMLStdEngine) replaceTextContent(content, elementName string, rule mod
 		oldText := parts[2]  // text content
 		closeTag := parts[3] // </element>
 
-		// ทำการแทนที่
+		// apply the rule
 		newText := xe.performStringReplace(oldText, rule, vars)
 
 		return openTag + newText + closeTag
 	})
 }
 
-// addByXPath - เพิ่มค่าตาม xpath
+// addByXPath adds whatever the xpath points at
 func (xe *XMLStdEngine) addByXPath(content string, rule model.TransformRule, vars map[string]string) string {
 	xpath := rule.GetPathSelector()
 	field := rule.Params.Field
 	elementName := xe.extractElementName(xpath)
 
 	if strings.HasPrefix(field, "@") {
-		// เพิ่ม attribute
+		// add an attribute
 		attrName := strings.TrimPrefix(field, "@")
 		value := xe.resolveValue(rule.Params, vars)
 		return xe.addAttribute(content, elementName, attrName, fmt.Sprintf("%v", value))
 	}
 
-	// เพิ่ม child element (ซับซ้อนกว่า จะทำภายหลัง)
+	// adding a child element is harder, and not supported yet
 	return content
 }
 
-// removeByXPath - ลบตาม xpath
+// removeByXPath removes whatever the xpath points at
 func (xe *XMLStdEngine) removeByXPath(content string, rule model.TransformRule) string {
 	xpath := rule.GetPathSelector()
 	field := rule.Params.Field
 	elementName := xe.extractElementName(xpath)
 
 	if strings.HasPrefix(field, "@") {
-		// ลบ attribute
+		// remove an attribute
 		attrName := strings.TrimPrefix(field, "@")
 		return xe.removeAttribute(content, elementName, attrName)
 	}
 
-	// ลบ element (ทำภายหลัง)
+	// removing an element is not supported yet
 	return content
 }
 
-// addAttribute - เพิ่ม attribute ใน element
+// addAttribute adds an attribute to an element
 func (xe *XMLStdEngine) addAttribute(content, elementName, attrName, value string) string {
-	// หา opening tag และเพิ่ม attribute
+	// find the opening tag and add it there
 	pattern := fmt.Sprintf(`(<%s)([^>]*>)`, regexp.QuoteMeta(elementName))
 	re, err := cachedRegexp(pattern)
 	if err != nil {
@@ -329,9 +328,9 @@ func (xe *XMLStdEngine) addAttribute(content, elementName, attrName, value strin
 	return re.ReplaceAllString(content, fmt.Sprintf(`$1 %s="%s"$2`, attrName, value))
 }
 
-// removeAttribute - ลบ attribute จาก element
+// removeAttribute removes an attribute from an element
 func (xe *XMLStdEngine) removeAttribute(content, elementName, attrName string) string {
-	// ลบ attribute ในรูปแบบต่างๆ
+	// covers every way the attribute can be written
 	patterns := []string{
 		fmt.Sprintf(`\s%s="[^"]*"`, regexp.QuoteMeta(attrName)),
 		fmt.Sprintf(`\s[^:]*:%s="[^"]*"`, regexp.QuoteMeta(attrName)),
@@ -349,11 +348,11 @@ func (xe *XMLStdEngine) removeAttribute(content, elementName, attrName string) s
 	return result
 }
 
-// performStringReplace - ทำ string replacement ตาม rule params
+// performStringReplace applies the rule's find/replace or regex
 func (xe *XMLStdEngine) performStringReplace(original string, rule model.TransformRule, vars map[string]string) string {
 	result := original
 
-	// Regex replacement — cache compiled regex เพราะ rule เดิมถูกใช้ซ้ำทุก request
+	// Regex replacement — the compiled regex is cached, as the same rule runs on every request
 	if rule.Params.Regex != "" {
 		replaceValue := xe.replaceTemplateVars(rule.Params.Replace, vars)
 		re, err := cachedRegexp(rule.Params.Regex)
@@ -372,7 +371,7 @@ func (xe *XMLStdEngine) performStringReplace(original string, rule model.Transfo
 	return result
 }
 
-// Helper functions (เหมือนเดิม)
+// Helper functions
 func (xe *XMLStdEngine) applyHeaderRule(rule model.TransformRule, headers map[string]string, vars map[string]string) error {
 	if rule.HeaderName == "" {
 		return fmt.Errorf("header_name is required for headers target")
