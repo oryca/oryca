@@ -18,7 +18,8 @@ import {
   Menu,
   X,
   Database,
-  Key
+  Key,
+  TerminalSquare,
 } from 'lucide-react';
 
 interface NavItem {
@@ -31,6 +32,7 @@ interface NavItem {
 const navItems: NavItem[] = [
   { name: 'Dashboard', href: '/dashboard', icon: LayoutDashboard, roles: ['user', 'admin', 'root'] },
   { name: 'Services & Keys', href: '/services', icon: Key, roles: ['user', 'admin', 'root'] },
+  { name: 'Sandbox', href: '/sandbox', icon: TerminalSquare, roles: ['user', 'admin', 'root'] },
   { name: 'Profile & Sessions', href: '/profile', icon: User, roles: ['user', 'admin', 'root'] },
   { name: 'Notifications', href: '/notifications', icon: Bell, roles: ['user', 'admin', 'root'] },
   

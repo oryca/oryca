@@ -78,9 +78,9 @@ takes for every future developer.
 
 **Services & Keys** → **Create new key**. The key is shown once, so copy it now.
 
-The same page has a panel for trying a call: pick the service, the path and the
-key, and send it. You get the status, the body, the headers, and a `curl` command
-to copy.
+Then open **Sandbox**. Pick the service, the path and the key, and send. You get
+the status, how long it took, the body, the headers with the rate-limit ones
+pulled out, and the same call written as `curl`.
 
 From a terminal it looks like this:
 
