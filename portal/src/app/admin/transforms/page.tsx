@@ -88,7 +88,7 @@ export default function AdminTransformsPage() {
     queryFn: async () => {
       if (!selectedService?.type) return [];
       const res = await api.get(`/response-transforms/presets?type=${selectedService.type}`);
-      return res.data || [];
+      return res.data.items || [];
     },
     enabled: !!selectedService?.type,
   });
