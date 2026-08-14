@@ -184,7 +184,14 @@ With the stack up, `tools/smoke-test.sh` walks the whole path a person takes: si
 
 ## Contributing
 
-Issues and questions are welcome, see [CONTRIBUTING.md](CONTRIBUTING.md) and our [Code of Conduct](CODE_OF_CONDUCT.md). Found a security problem? [SECURITY.md](SECURITY.md).
+**Issues and questions are welcome.** Bug reports, questions and ideas are the
+most useful thing you can send today.
+
+**Pull requests are not open yet, but they will be soon.** We would rather say so
+than leave one waiting while we settle how review works.
+
+See [CONTRIBUTING.md](CONTRIBUTING.md) and our [Code of Conduct](CODE_OF_CONDUCT.md).
+Found a security problem? Read [SECURITY.md](SECURITY.md) first.
 
 ## License
 
