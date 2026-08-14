@@ -26,9 +26,8 @@ jobs:
           - image: oryca-control-plane
             context: .
             dockerfile: control-plane/Dockerfile
-          # The portal's addresses are written into its bundle at build time, so a
-          # published image can only carry the local defaults. Anyone serving it
-          # from a domain of their own builds it themselves.
+          # The portal reads its addresses when it serves a page, so one image
+          # works on any domain.
           - image: oryca-portal
             context: ./portal
             dockerfile: ./portal/Dockerfile
@@ -64,3 +63,45 @@ jobs:
           labels: ${{ steps.meta.outputs.labels }}
           cache-from: type=gha
           cache-to: type=gha,mode=max
+
+  release:
+    name: Publish the release notes
+    needs: images
+    runs-on: ubuntu-latest
+    permissions:
+      contents: write
+    steps:
+      - uses: actions/checkout@v5
+        with:
+          fetch-depth: 0
+
+      # The tag message is the release notes: it is written when the release is
+      # cut, by whoever knows what changed.
+      - id: notes
+        run: |
+          {
+            echo 'body<<TAG_MESSAGE_EOF'
+            git tag -l --format='%(contents:body)' "${GITHUB_REF_NAME}"
+            echo
+            echo '## Images'
+            echo
+            echo '```sh'
+            for image in oryca-gateway oryca-control-plane oryca-portal; do
+              echo "docker pull ghcr.io/${GITHUB_REPOSITORY_OWNER}/${image}:${GITHUB_REF_NAME#v}"
+            done
+            echo '```'
+            echo
+            echo 'Or run the whole stack, pinned to this version:'
+            echo
+            echo '```sh'
+            echo "curl -fsSL -o docker-compose.yml https://raw.githubusercontent.com/${GITHUB_REPOSITORY}/main/docker-compose.images.yml"
+            echo "curl -fsSL -o .env https://raw.githubusercontent.com/${GITHUB_REPOSITORY}/main/.env.example"
+            echo "ORYCA_VERSION=${GITHUB_REF_NAME#v} docker compose up -d"
+            echo '```'
+            echo 'TAG_MESSAGE_EOF'
+          } >> "$GITHUB_OUTPUT"
+
+      - uses: softprops/action-gh-release@v2
+        with:
+          body: ${{ steps.notes.outputs.body }}
+          generate_release_notes: true
