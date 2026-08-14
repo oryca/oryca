@@ -51,6 +51,10 @@ docker compose logs control-plane | grep -A2 "ROOT ACCOUNT"
 - **Control Plane API:** [http://localhost:9001/control-plane/api/v1/health](http://localhost:9001/control-plane/api/v1/health)
 - **Gateway:** [http://localhost:9002/gateway/api/health](http://localhost:9002/gateway/api/health)
 
+### 4. Put an API behind it
+[Publish your first API](docs/getting-started.md) walks through the four pieces —
+upstream, service, package, key — and the one detail that trips everyone up.
+
 ---
 
 ## Features
@@ -137,7 +141,8 @@ docker compose up -d portal
 - [`control-plane/`](control-plane): the management side, in Go.
 - [`cmd/`](cmd): entry points, three lines each. The servers themselves live in `gateway/app` and `control-plane/app`, so another project can embed one instead of rebuilding its setup. That is also why nothing is hidden behind `internal/`.
 - [`tools/`](tools): `smoke-test.sh`, which checks a running stack end to end.
-- [`docs/`](docs): how the pieces agree with each other.
+- [`docs/`](docs): how to use it, and how the pieces agree with each other.
+  - [`getting-started.md`](docs/getting-started.md): publish your first API, from upstream to a working key.
   - [`response-transforms.md`](docs/response-transforms.md): rewriting a response on its way back, and the presets that do it for you.
   - [`sync-contract.md`](docs/sync-contract.md): what the gateway and the control plane promise each other.
 
