@@ -63,7 +63,7 @@ export default function ProfilePage() {
     queryKey: ['sessions'],
     queryFn: async () => {
       const res = await api.get('/account/sessions');
-      return res.data;
+      return res.data.items || [];
     },
   });
 

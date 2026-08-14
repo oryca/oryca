@@ -5,16 +5,20 @@
 [![Go](https://img.shields.io/github/go-mod/go-version/oryca/oryca)](go.mod)
 [![License](https://img.shields.io/github/license/oryca/oryca)](LICENSE)
 
-**An open-source API gateway for geospatial services.**
+**An open-source API gateway, at home with geospatial APIs.**
 
 [Quick Start](#quick-start) · [Configuration](#configuration) · [Docs](docs) · [Contributing](CONTRIBUTING.md)
 
-Put ORYCA in front of your spatial servers — OGC API Features, STAC, Tiles, Styles, SensorThings, or plain REST and JSON — and it handles four things you would otherwise build yourself:
+Put ORYCA in front of any HTTP API — your own REST and JSON service, or an OGC API Features, STAC, Tiles, Styles or SensorThings server — and it handles four things you would otherwise build yourself:
 
 - **API keys.** Issues them, checks them on every request.
 - **Rate limits.** Per package, per path, so an upstream server is not the thing that fails first.
-- **Link rewriting.** An OGC API answers with links to itself, which send clients straight past the gateway. ORYCA rewrites them so clients keep coming back.
+- **Response rewriting.** Change a response on its way back: swap an address, hide an upstream's own key, add a header. This is what keeps an API that answers with links to itself from sending clients straight past the gateway.
 - **Developer portal.** Sign-up, keys, docs, and a way to try a call in the browser.
+
+Any API gets all four. What geospatial servers get on top is a gateway that knows
+their shapes: suggested paths per standard, and ready-made rewrite presets — see
+[the OGC section](#what-the-ogc-support-is-and-is-not).
 
 ---
 
@@ -51,11 +55,18 @@ docker compose logs control-plane | grep -A2 "ROOT ACCOUNT"
 
 ## Features
 
-- **Path suggestions per service type.** Pick a type and ORYCA fills in the paths that kind of server usually exposes (`/conformance`, `/collections`), instead of you typing them by hand.
-- **Link rewriting, including XML.** Presets cover JSON responses and capabilities documents, where both the address and the upstream's own API key sit inside attributes.
+**For any API**
+
 - **Try it in the browser.** The portal calls the gateway with your key and shows what comes back, rate-limit headers included (`RateLimit-Limit`, `RateLimit-Remaining`).
 - **Request charts and logs.** Volume, response time, status breakdown, and a searchable log. Each person sees their own traffic, administrators see everyone's.
 - **Self-service sign-up.** Developers register, get a key, and read the docs without an administrator in the loop.
+- **Rewrite rules you write yourself.** JSON by JSONPath, XML by XPath, headers by name — see [response transforms](docs/response-transforms.md).
+- **Serve a path yourself.** A route can answer from a fixed body instead of proxying, for the endpoints your upstream does not have.
+
+**For geospatial servers, on top**
+
+- **Path suggestions per standard.** Pick a service type and ORYCA fills in the paths that kind of server usually exposes (`/conformance`, `/collections`), instead of you typing them by hand.
+- **Rewrite presets, including XML.** One click covers JSON responses and capabilities documents, where both the address and the upstream's own API key sit inside attributes.
 
 ---
 
