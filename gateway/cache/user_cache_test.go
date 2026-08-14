@@ -145,11 +145,7 @@ func TestUserFreshnessCache_Get_TrueMissFailsOpenAndSchedulesRefresh(t *testing.
 	assert.Nil(t, got) // nothing to serve yet — caller fails open
 
 	waitDone(t, provider, 1)
-
-	got2, err := c.Get("u1")
-	require.NoError(t, err)
-	require.NotNil(t, got2)
-	assert.Equal(t, "pkg-fresh", got2.PackageID)
+	waitPackageID(t, c, "u1", "pkg-fresh")
 }
 
 func TestUserFreshnessCache_Get_ConcurrentMissForSameUserDedupedBySingleflight(t *testing.T) {
@@ -247,12 +243,10 @@ func TestUserFreshnessCache_InvalidateAndRefresh_EagerlyRefetches(t *testing.T) 
 	// immediately after invalidate, entries are gone — Get would fail open if called now
 	waitDone(t, provider, 2)
 
-	got1, _ := c.Get("u1")
-	got2, _ := c.Get("u2")
-	require.NotNil(t, got1)
-	require.NotNil(t, got2)
-	assert.Equal(t, "pkg-eager", got1.PackageID)
-	assert.Equal(t, "pkg-eager", got2.PackageID)
+	// The provider signals done before the cache stores what it fetched, so wait
+	// for the value rather than the signal.
+	waitPackageID(t, c, "u1", "pkg-eager")
+	waitPackageID(t, c, "u2", "pkg-eager")
 }
 
 func TestUserFreshnessCache_NegativeCaching_ErrorsCachedTemporarily(t *testing.T) {
