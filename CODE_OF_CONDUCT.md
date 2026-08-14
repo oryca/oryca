@@ -37,7 +37,7 @@ requests — and whenever someone is representing the project in public.
 ## Reporting
 
 If you see or experience behaviour that breaks this, email
-**conduct@oryca.io**. Every report is read and looked into, and we will respect
+**admin@oryca.io**. Every report is read and looked into, and we will respect
 the privacy of whoever reports it.
 
 Maintainers who do not act on a report in good faith may be removed from the
