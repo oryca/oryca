@@ -1,0 +1,89 @@
+@import "tailwindcss";
+@import "./tokens.css";
+
+@theme {
+  --color-paper: var(--color-paper);
+  --color-paper-2: var(--color-paper-2);
+  --color-paper-3: var(--color-paper-3);
+  --color-rule: var(--color-rule);
+  --color-rule-2: var(--color-rule-2);
+  --color-ink: var(--color-ink);
+  --color-ink-2: var(--color-ink-2);
+  --color-ink-3: var(--color-ink-3);
+  --color-muted: var(--color-muted);
+  --color-faint: var(--color-faint);
+  
+  --color-accent: var(--color-accent);
+  --color-accent-deep: var(--color-accent-deep);
+  --color-accent-ink: var(--color-accent-ink);
+  --color-accent-edge: var(--color-accent-edge);
+  --color-accent-wash: var(--color-accent-wash);
+  
+  --color-graphite: var(--color-graphite);
+  --color-graphite-2: var(--color-graphite-2);
+  --color-graphite-ink: var(--color-graphite-ink);
+  --color-graphite-rule: var(--color-graphite-rule);
+  
+  --color-ok: var(--color-ok);
+  --color-ok-edge: var(--color-ok-edge);
+  --color-ok-wash: var(--color-ok-wash);
+  --color-warn: var(--color-warn);
+  --color-warn-edge: var(--color-warn-edge);
+  --color-warn-wash: var(--color-warn-wash);
+  --color-danger: var(--color-danger);
+  --color-danger-edge: var(--color-danger-edge);
+  --color-danger-wash: var(--color-danger-wash);
+  
+  --color-focus: var(--color-focus);
+  
+  --font-sans: var(--font-body);
+  --font-title: var(--font-display);
+  --font-mono: var(--font-mono);
+  
+  --radius-chip: var(--radius-chip);
+  --radius-control: var(--radius-control);
+  --radius-surface: var(--radius-surface);
+}
+
+html, body {
+    overflow-x: clip;
+    background-color: var(--color-paper);
+    font-family: var(--font-body);
+    font-weight: 400;
+    color: var(--color-ink-2);
+    -webkit-font-smoothing: antialiased;
+    min-height: 100vh;
+}
+
+h1, h2, h3, h4, .font-title {
+    font-family: var(--font-display);
+    font-style: normal;
+    letter-spacing: -0.018em;
+    color: var(--color-ink);
+    overflow-wrap: anywhere;
+    min-width: 0;
+}
+
+code, pre, .font-mono {
+    font-family: var(--font-mono);
+}
+
+table, .tabular {
+    font-variant-numeric: tabular-nums;
+}
+
+/* Custom scrollbars */
+::-webkit-scrollbar {
+  width: 8px;
+  height: 8px;
+}
+::-webkit-scrollbar-track {
+  background: var(--color-paper-2);
+}
+::-webkit-scrollbar-thumb {
+  background: var(--color-rule-2);
+  border-radius: var(--radius-chip);
+}
+::-webkit-scrollbar-thumb:hover {
+  background: var(--color-faint);
+}

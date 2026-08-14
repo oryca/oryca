@@ -18,6 +18,13 @@ node_modules/
 .next/
 out/
 
+# Agent instructions. next dev writes portal/AGENTS.md on every run; these are
+# working notes, not part of the project.
+AGENTS.md
+CLAUDE.md
+.cursorrules
+.windsurfrules
+
 # Editor and OS noise
 .DS_Store
 .idea/

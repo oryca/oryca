@@ -93,16 +93,21 @@ services:
       retries: 10
       start_period: 20s
 
-  # Placeholder until the developer portal lands in the final phase. It keeps
-  # `docker compose up` complete from day one, so every phase is verified by
-  # actually running the stack rather than only by building it.
+  # The developer portal.
   portal:
-    image: nginx:alpine
+    build:
+      context: ./portal
+      dockerfile: Dockerfile
+      # The portal reaches both services from the visitor's browser, so these are
+      # the addresses your users type, not the names of the containers. They are
+      # written into the page bundle while the image is built: change them and
+      # run `docker compose build portal` for it to take effect.
+      args:
+        NEXT_PUBLIC_API_URL: ${ORYCA_PORTAL_API_URL:-http://localhost:9001/control-plane/api/v1}
+        NEXT_PUBLIC_GATEWAY_URL: ${ORYCA_PORTAL_GATEWAY_URL:-http://localhost:9002/gateway/api}
     restart: unless-stopped
     ports:
-      - "${ORYCA_PORTAL_PORT:-3000}:80"
-    volumes:
-      - ./portal/placeholder:/usr/share/nginx/html:ro
+      - "${ORYCA_PORTAL_PORT:-3000}:3000"
 
 volumes:
   mongo-data:
