@@ -106,10 +106,9 @@ Each service you register records the version its own upstream implements, which
 
 ## Configuration
 
-`.env` at the root configures the whole stack. Every value has a working default except:
+`.env` at the root configures the whole stack, and every value has a working default. The one to change before anything is reachable from a network you do not control is **`ORYCA_INTERNAL_SECRET`**, which the two Go services share. Rotating it? Put the old value in `ORYCA_INTERNAL_SECRET_PREV` first, and the control plane accepts both until you remove it.
 
-- **`ORYCA_INTERNAL_SECRET`** — the two Go services share it. Change it before anything is reachable from a network you do not control. Rotating it? Put the old value in `ORYCA_INTERNAL_SECRET_PREV` so calls in flight keep working.
-- **`ORYCA_API_REDIS_DB` and `ORYCA_GW_REDIS_DB`** — these must match. Pub/sub ignores the database number, so a mismatch looks like it works until routes stop arriving.
+Running the binaries yourself, without compose? Then `ORYCA_API_REDIS_DB` and `ORYCA_GW_REDIS_DB` have to match, and their built-in defaults do not (0 and 7). Pub/sub ignores the database number, so a mismatch looks like it works until routes stop arriving. The compose files pin both to 0 for you.
 
 Starting data (settings, email templates, the first package) is YAML in `control-plane/seed/`. It loads once, against an empty database. After that the database wins: change things in the portal and a restart will not undo your work. Administrator credentials are deliberately not in those files, they come from `ORYCA_API_ROOT_EMAIL` and `ORYCA_API_ROOT_PASSWORD`.
 
@@ -126,6 +125,7 @@ docker compose up -d portal
 - [`gateway/`](gateway): the traffic side, in Go.
 - [`control-plane/`](control-plane): the management side, in Go.
 - [`cmd/`](cmd): entry points, three lines each. The servers themselves live in `gateway/app` and `control-plane/app`, so another project can embed one instead of rebuilding its setup. That is also why nothing is hidden behind `internal/`.
+- [`tools/`](tools): `smoke-test.sh`, which checks a running stack end to end.
 - [`docs/`](docs): how the pieces agree with each other.
   - [`response-transforms.md`](docs/response-transforms.md): rewriting a response on its way back, and the presets that do it for you.
   - [`sync-contract.md`](docs/sync-contract.md): what the gateway and the control plane promise each other.
