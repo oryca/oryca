@@ -19,7 +19,7 @@ The gateway never imports control-plane code and never connects to MongoDB. It g
 So if the control plane or MongoDB goes offline, the gateway keeps proxying traffic from its cached routing tables. Nothing new arrives until they are back.
 
 > [!IMPORTANT]
-> Both services must point at the **same Redis database**: `ORYCA_API_REDIS_DB` and `ORYCA_GW_REDIS_DB` have to match. Pub/Sub ignores the database number, so a mismatch looks healthy — events arrive, but the cached routing tables never do.
+> Both services must point at the **same Redis database**: `ORYCA_API_REDIS_DB` and `ORYCA_GW_REDIS_DB` have to match. Pub/Sub ignores the database number, so a mismatch looks healthy: events arrive, but the cached routing tables never do.
 
 ---
 

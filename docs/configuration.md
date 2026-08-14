@@ -2,8 +2,8 @@
 
 Everything is environment variables. There is no config file to write.
 
-Running with the compose files, the ten settings in `.env` are all you touch —
-the compose files translate them into whatever each service expects. The rest of
+Running with the compose files, the ten settings in `.env` are all you touch.
+The compose files translate them into whatever each service expects. The rest of
 this page is for running the binaries yourself, or for tuning.
 
 ---
@@ -25,7 +25,7 @@ this page is for running the binaries yourself, or for tuning.
 
 The last two are the ones people get wrong. They are addresses your users' browsers
 resolve, so a container name like `http://control-plane:9001` will not work. Change
-them and restart the portal — no rebuild, the values are read when a page is served.
+them and restart the portal. No rebuild: the values are read when a page is served.
 
 ---
 
@@ -38,8 +38,8 @@ own; everything it knows comes from the control plane and Redis.
 |---|---|---|
 | `ORYCA_GW_HOST` | `0.0.0.0` | Listen address |
 | `ORYCA_GW_PORT` | `9002` | Listen port |
-| `ORYCA_GW_CP_BASE_URL` | — | Where the control plane answers. Also where the key that signs portal sessions is fetched from. |
-| `ORYCA_GW_INTERNAL_SECRET` | — | Must equal `ORYCA_INTERNAL_SECRET` |
+| `ORYCA_GW_CP_BASE_URL` | none | Where the control plane answers. Also where the key that signs portal sessions is fetched from. |
+| `ORYCA_GW_INTERNAL_SECRET` | none | Must equal `ORYCA_INTERNAL_SECRET` |
 | `ORYCA_GW_PUBLIC_URL` | empty | The gateway's own public address, used to expand `{{oryca_gateway_url}}`. Guessed from the request when empty, which a load balancer can get wrong. |
 | `ORYCA_GW_ALLOW_ORIGIN` | `*` | CORS origin |
 | `ORYCA_GW_MAX_REQUEST_BODY` | `500M` | Largest request accepted |
@@ -80,11 +80,11 @@ count, `ORYCA_GW_CB_IDLE_EVICT_MIN` (30) to forget a host.
 
 | Setting | Default | |
 |---|---|---|
-| `ORYCA_API_HOST` | — | Public address, used in the links it emails |
+| `ORYCA_API_HOST` | none | Public address, used in the links it emails |
 | `ORYCA_API_PORT` | `9001` | Listen port |
-| `ORYCA_API_DB_URL` | — | MongoDB connection string |
-| `ORYCA_API_DB_NAME` | — | Database name |
-| `ORYCA_API_REDIS_ADDRESS` | — | Redis address |
+| `ORYCA_API_DB_URL` | none | MongoDB connection string |
+| `ORYCA_API_DB_NAME` | none | Database name |
+| `ORYCA_API_REDIS_ADDRESS` | none | Redis address |
 | `ORYCA_API_REDIS_DB` | `0` | Must match the gateway's |
 | `ORYCA_API_ALLOW_ORIGIN` | `*` | CORS origin |
 | `ORYCA_API_BODY_LIMIT` | `10M` | Largest request accepted |
@@ -108,7 +108,7 @@ gateway's.
 
 ## Both
 
-`LOG_FORMAT` — `console` for readable output, anything else for JSON.
+`LOG_FORMAT`: `console` for readable output, anything else for JSON.
 
 ---
 

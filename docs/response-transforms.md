@@ -1,6 +1,6 @@
 # Response Transforms (Link Rewriter)
 
-A **response transform** changes a response — its headers or its body — on the way back from your upstream server to the client.
+A **response transform** changes a response, its headers or its body, on the way back from your upstream server to the client.
 
 The reason it exists: a geospatial API (OGC API Features, STAC, WMTS) answers with links to itself. A client that follows those links leaves the gateway, and with it the API key check and the rate limit. Rewriting the links keeps clients coming back.
 

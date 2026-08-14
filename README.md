@@ -9,7 +9,7 @@
 
 [Quick Start](#quick-start) · [Configuration](#configuration) · [Docs](docs) · [Contributing](CONTRIBUTING.md)
 
-Put ORYCA in front of any HTTP API — your own REST and JSON service, or an OGC API Features, STAC, Tiles, Styles or SensorThings server — and it handles four things you would otherwise build yourself:
+Put ORYCA in front of any HTTP API, your own REST and JSON service or an OGC API Features, STAC, Tiles, Styles or SensorThings server. It handles four things you would otherwise build yourself:
 
 - **API keys.** Issues them, checks them on every request.
 - **Rate limits.** Per package, per path, so an upstream server is not the thing that fails first.
@@ -17,7 +17,7 @@ Put ORYCA in front of any HTTP API — your own REST and JSON service, or an OGC
 - **Developer portal.** Sign-up, keys, docs, and a way to try a call in the browser.
 
 Any API gets all four. What geospatial servers get on top is a gateway that knows
-their shapes: suggested paths per standard, and ready-made rewrite presets — see
+their shapes: suggested paths per standard, and ready-made rewrite presets. See
 [the OGC section](#what-the-ogc-support-is-and-is-not).
 
 ---
@@ -48,13 +48,13 @@ docker compose logs control-plane | grep -A2 "ROOT ACCOUNT"
 ```
 
 ### 3. Open it
-- **Developer Portal:** [http://localhost:3000](http://localhost:3000) — log in as `admin@localhost`
+- **Developer Portal:** [http://localhost:3000](http://localhost:3000), log in as `admin@localhost`
 - **Control Plane API:** [http://localhost:9001/control-plane/api/v1/health](http://localhost:9001/control-plane/api/v1/health)
 - **Gateway:** [http://localhost:9002/gateway/api/health](http://localhost:9002/gateway/api/health)
 
 ### 4. Put an API behind it
-[Publish your first API](docs/getting-started.md) walks through the four pieces —
-upstream, service, package, key — and the one detail that trips everyone up.
+[Publish your first API](docs/getting-started.md) walks through the four pieces
+(upstream, service, package, key) and the one detail that trips everyone up.
 
 ---
 
@@ -65,7 +65,7 @@ upstream, service, package, key — and the one detail that trips everyone up.
 - **A sandbox.** Call a published service the way your users will: pick a path, add headers or a body, send it with a key, and see the status, the timing, the rate-limit headers, and the same call written as `curl`.
 - **Request charts and logs.** Volume, response time, status breakdown, and a searchable log. Each person sees their own traffic, administrators see everyone's.
 - **Self-service sign-up.** Developers register, get a key, and read the docs without an administrator in the loop.
-- **Rewrite rules you write yourself.** JSON by JSONPath, XML by XPath, headers by name — see [response transforms](docs/response-transforms.md).
+- **Rewrite rules you write yourself.** JSON by JSONPath, XML by XPath, headers by name. See [response transforms](docs/response-transforms.md).
 - **Serve a path yourself.** A route can answer from a fixed body instead of proxying, for the endpoints your upstream does not have.
 
 **For geospatial servers, on top**
@@ -128,7 +128,7 @@ Running the binaries yourself, without compose? Then `ORYCA_API_REDIS_DB` and `O
 
 Starting data (settings, email templates, the first package) is YAML in `control-plane/seed/`. It loads once, against an empty database. After that the database wins: change things in the portal and a restart will not undo your work. Administrator credentials are deliberately not in those files, they come from `ORYCA_API_ROOT_EMAIL` and `ORYCA_API_ROOT_PASSWORD`.
 
-One pair is easy to get wrong. `ORYCA_PORTAL_API_URL` and `ORYCA_PORTAL_GATEWAY_URL` are the addresses the portal calls **from the visitor's browser**, so they have to be reachable by your users — a container name like `http://control-plane:9001` will not work. Serving the stack from your own domain means setting both, then:
+One pair is easy to get wrong. `ORYCA_PORTAL_API_URL` and `ORYCA_PORTAL_GATEWAY_URL` are the addresses the portal calls **from the visitor's browser**, so they have to be reachable by your users. A container name like `http://control-plane:9001` will not work. Serving the stack from your own domain means setting both, then:
 ```sh
 docker compose up -d portal
 ```

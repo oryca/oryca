@@ -31,8 +31,8 @@ Things that do not:
 
 ## Scope
 
-This applies everywhere the project happens — the repository, its issues and pull
-requests — and whenever someone is representing the project in public.
+This applies everywhere the project happens: the repository, its issues and pull
+requests, and whenever someone is representing the project in public.
 
 ## Reporting
 

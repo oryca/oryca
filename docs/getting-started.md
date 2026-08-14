@@ -27,7 +27,7 @@ https://your-gateway/gateway/api/resources/weather/<path>
 ```
 
 Leave the type as **General** for an ordinary REST or JSON API. Pick an OGC type
-only if the upstream really implements that standard — ORYCA uses it to suggest
+only if the upstream really implements that standard. ORYCA uses it to suggest
 paths and to offer the right link-rewrite preset.
 
 Under **Resource Paths**, each row is one route you are publishing. For each row,
@@ -68,7 +68,7 @@ implements, so writing one here says that on its behalf. List only what it reall
 does, or clients will call features that are not there.
 
 Save. If the service is an OGC type, ORYCA offers to apply its link-rewrite
-preset — say yes, unless you plan to write the rules yourself. See
+preset. Say yes, unless you plan to write the rules yourself. See
 [response transforms](response-transforms.md) for what those rules do.
 
 ---
@@ -107,22 +107,22 @@ out.
 
 ## When it does not work
 
-**401** — no key, or the key is wrong. Check the `X-API-Key` header.
+**401.** No key, or the key is wrong. Check the `X-API-Key` header.
 
-**404 with `"detail":"Route not found"`** — the gateway has no such route.
+**404 with `"detail":"Route not found"`.** The gateway has no such route.
 Either the base path or the resource path does not match what you called, the
 service is disabled, or the caller's package does not grant this path, so back to
 step 2. Changes reach the gateway within a second; if it has been longer than a
 minute, check that both services point at the same Redis database (see
 [the sync contract](sync-contract.md)).
 
-**405** — the route exists but not for that method. Add it to the row's methods.
+**405.** The route exists, but not for that method. Add it to the row's methods.
 
-**404 with something else in the body** — that 404 came from your upstream and
+**404 with something else in the body.** That 404 came from your upstream and
 was passed through. The route is fine; the source URL is pointing at the wrong
 place. Re-read step 1.
 
-**502** — the gateway could not reach the upstream at all. Wrong host, or it is
+**502.** The gateway could not reach the upstream at all. Wrong host, or it is
 down. If the upstream runs in the same compose file, use its service name, not
 `localhost`.
 
@@ -130,9 +130,9 @@ down. If the upstream runs in the same compose file, use its service name, not
 
 ## What to look at next
 
-- [Response transforms](response-transforms.md) — rewriting a response on its
+- [Response transforms](response-transforms.md): rewriting a response on its
   way back, and the presets that do it for you.
-- [Gateway and control plane](sync-contract.md) — what the two services promise
+- [Gateway and control plane](sync-contract.md): what the two services promise
   each other, and what to check when a change does not arrive.
-- `tools/smoke-test.sh` — this whole walkthrough as a script, if you would rather
+- `tools/smoke-test.sh`: this whole walkthrough as a script, if you would rather
   read it in one piece.
