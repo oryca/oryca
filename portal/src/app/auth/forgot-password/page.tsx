@@ -20,7 +20,10 @@ export default function ForgotPasswordPage() {
     setIsLoading(true);
 
     try {
-      await api.post('/auth/forgot-password', { email });
+      await api.post('/auth/forgot-password', {
+        email,
+        callbackUrl: `${window.location.origin}/auth/set-password`,
+      });
       setSent(true);
     } catch (err) {
       setError(

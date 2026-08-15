@@ -119,7 +119,7 @@ export default function ProfilePage() {
   const changePassword: UseMutationResult<unknown, Error, void> = useMutation({
     mutationFn: async () => {
       const res = await api.post('/account/change-password', {
-        currentPassword,
+        oldPassword: currentPassword,
         newPassword,
       });
       return res.data;
