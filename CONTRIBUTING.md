@@ -19,6 +19,7 @@ Found a security problem? Please read [SECURITY.md](SECURITY.md) first.
 
 ```sh
 cp .env.example .env
+echo "ORYCA_INTERNAL_SECRET=$(openssl rand -hex 32)" >> .env
 docker compose up -d
 ./tools/smoke-test.sh
 ```

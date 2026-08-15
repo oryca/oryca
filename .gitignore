@@ -1,4 +1,4 @@
-# Local configuration — never commit real values
+# Local configuration, never commit real values
 .env
 *.env
 !.env.example
@@ -18,8 +18,6 @@ node_modules/
 .next/
 out/
 
-# Agent instructions. next dev writes portal/AGENTS.md on every run; these are
-# working notes, not part of the project.
 AGENTS.md
 CLAUDE.md
 .cursorrules
@@ -29,7 +27,3 @@ CLAUDE.md
 .DS_Store
 .idea/
 .vscode/
-
-# AI working files, never published
-portal/.hallmark/
-portal/design.md
