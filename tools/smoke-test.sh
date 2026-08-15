@@ -3,8 +3,8 @@
 #
 #   ./tools/smoke-test.sh
 #
-# Walks the path a real user takes — sign in, register a service, hand out an API
-# key, call through the gateway — and then checks that the request shows up in the
+# Walks the path a real user takes, sign in, register a service, hand out an API
+# key, call through the gateway, and then checks that the request shows up in the
 # dashboard with the right owner. Exits non-zero on the first failure.
 #
 # Reads the generated root password out of the control-plane log, so the stack has

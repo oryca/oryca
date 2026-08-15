@@ -61,6 +61,7 @@ jobs:
       - name: Start the stack
         run: |
           cp .env.example .env
+          echo "ORYCA_INTERNAL_SECRET=$(openssl rand -hex 32)" >> .env
           docker compose up -d --wait
 
       - name: Run the smoke test
