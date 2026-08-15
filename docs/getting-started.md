@@ -20,7 +20,7 @@ It takes four things, in this order.
 **Manage Services** → **Publish Service**.
 
 Fill in a name, and a base path such as `/weather`. That base path is where your
-API will live on the gateway, so a request will look like:
+API will live on the gateway, so a request looks like this.
 
 ```
 https://your-gateway/gateway/api/resources/weather/<path>
@@ -40,7 +40,7 @@ pick where it goes from the dropdown; if you have no upstream yet, choose
 resource path is only the name the gateway publishes it under. The two are
 matched up row by row, and nothing is appended.
 
-So to publish an upstream's `/observations` endpoint as `/latest`:
+So to publish an upstream's `/observations` endpoint as `/latest`, the row reads.
 
 | Resource path | Upstream source URL |
 |---|---|
@@ -48,7 +48,7 @@ So to publish an upstream's `/observations` endpoint as `/latest`:
 
 Not `https://api.upstream.example/v2`, which would forward to the wrong place.
 
-Two things do get filled in:
+Two things do get filled in.
 
 - **`{param}` placeholders.** A resource path of `/collections/{collectionId}`
   with a source URL of `https://upstream.example/collections/{collectionId}`
@@ -63,7 +63,7 @@ fixed body** instead of a URL, and the gateway replies with what you write.
 Nothing is forwarded.
 
 That is genuinely useful for a landing page of links. Be careful with
-`/conformance`: that document declares which conformance classes the server
+`/conformance`, because that document declares which conformance classes the server
 implements, so writing one here says that on its behalf. List only what it really
 does, or clients will call features that are not there.
 
@@ -93,7 +93,7 @@ Then open **Sandbox**. Pick the service, the path and the key, and send. You get
 the status, how long it took, the body, the headers with the rate-limit ones
 pulled out, and the same call written as `curl`.
 
-From a terminal it looks like this:
+From a terminal it looks like this.
 
 ```sh
 curl "http://localhost:9002/gateway/api/resources/weather/latest" \
@@ -130,9 +130,9 @@ down. If the upstream runs in the same compose file, use its service name, not
 
 ## What to look at next
 
-- [Response transforms](response-transforms.md): rewriting a response on its
+- [Response transforms](response-transforms.md) covers rewriting a response on its
   way back, and the presets that do it for you.
-- [Gateway and control plane](sync-contract.md): what the two services promise
+- [Gateway and control plane](sync-contract.md) records what the two services promise
   each other, and what to check when a change does not arrive.
-- `tools/smoke-test.sh`: this whole walkthrough as a script, if you would rather
+- `tools/smoke-test.sh` is this whole walkthrough as a script, if you would rather
   read it in one piece.

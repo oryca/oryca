@@ -7,7 +7,7 @@ ORYCA sits in front of other people's APIs, so please report problems privately.
 Go to the **Security** tab and choose **Report a vulnerability**. Only the
 maintainers see it. Please do not open a normal issue, those are public.
 
-Helpful to include: what an attacker could do, the version you tested, how you
+Helpful to include. What an attacker could do, the version you tested, how you
 deployed it, and steps to reproduce.
 
 You will hear back within a week. We will agree a disclosure date with you, and

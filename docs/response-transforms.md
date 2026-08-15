@@ -2,16 +2,22 @@
 
 A **response transform** changes a response, its headers or its body, on the way back from your upstream server to the client.
 
-The reason it exists: a geospatial API (OGC API Features, STAC, WMTS) answers with links to itself. A client that follows those links leaves the gateway, and with it the API key check and the rate limit. Rewriting the links keeps clients coming back.
+The reason it exists is that a geospatial API (OGC API Features, STAC, WMTS) answers with links to itself. A client that follows those links leaves the gateway, and with it the API key check and the rate limit. Rewriting the links keeps clients coming back.
 
 > [!TIP]
-> **Start with a preset.** If all you need is OGC link rewriting, you do not have to write rules. Select the service in the portal and click **"Apply OGC API Preset"**.
+> **Start from a template.** The portal carries ready-made rulesets under Transforms & Presets, from single-action starters that suit any API to full link rewriters per standard. Applying one writes a transform switched off, so read what it wrote, adjust it, then enable it. Nothing meets traffic until you do.
+
+A template that rewrites links fills in the upstream address of your service,
+minus any query string, so the upstream's own credential never lands in a stored
+rule. It also swaps `api_key=...` inside rewritten links for the caller's own
+credential. If your upstream names that parameter differently, `apikey` or
+`subscription-key` for example, edit the regex to match.
 
 ---
 
 ## 1. Transform Structure
 
-Each transform is attached to a service and defines which requests it intercepts:
+Each transform is attached to a service and defines which requests it intercepts.
 
 ```json
 {
@@ -26,15 +32,15 @@ Each transform is attached to a service and defines which requests it intercepts
 }
 ```
 
-- **`match.path`:** The request path pattern. `/*` matches all paths, `/collections/*` matches sub-paths.
-- **`match.methods`:** List of HTTP methods (e.g. `["GET"]`). If empty, matches all methods.
-- **`rules`:** A list of rules that execute sequentially on the response.
+- **`match.path`** is the request path pattern. `/*` matches all paths, `/collections/*` matches sub-paths.
+- **`match.methods`** is a list of HTTP methods (e.g. `["GET"]`). If empty, matches all methods.
+- **`rules`** is a list of rules that execute sequentially on the response.
 
 ---
 
 ## 2. Rewrite Rules
 
-Rules describe exactly what to modify inside headers or body payloads:
+Rules describe exactly what to modify inside headers or body payloads.
 
 ```json
 {
@@ -67,7 +73,7 @@ Rules describe exactly what to modify inside headers or body payloads:
 
 ## 3. Action Parameters (`params`)
 
-The structure of `params` depends on the selected `action`:
+The structure of `params` depends on the selected `action`.
 
 | Parameter | Actions | Description |
 | :--- | :--- | :--- |
@@ -82,16 +88,16 @@ The structure of `params` depends on the selected `action`:
 
 ## 4. Path Placeholders
 
-You can use dynamic placeholders inside rules that expand per request:
+You can use dynamic placeholders inside rules that expand per request.
 
-- **`{{oryca_gateway_url}}`:** Expands to the public URL of the service on the gateway (e.g. `https://gateway.oryca.io/gateway/api/resources/my-service`).
-- **`{{oryca_auth}}`:** Expands to the client's credential query parameter (e.g. `api_key=xyz` or `token=abc`) so subsequent requests stay authenticated.
+- **`{{oryca_gateway_url}}`** expands to the public URL of the service on the gateway (e.g. `https://gateway.oryca.io/gateway/api/resources/my-service`).
+- **`{{oryca_auth}}`** expands to the client's credential query parameter (e.g. `api_key=xyz` or `token=abc`) so subsequent requests stay authenticated.
 
 ---
 
 ## 5. Execution Conditions (`conditions`)
 
-Conditions allow you to enable a rule only if the matched elements satisfy a filter:
+Conditions allow you to enable a rule only if the matched elements satisfy a filter.
 
 ```json
 {
@@ -108,7 +114,7 @@ Conditions allow you to enable a rule only if the matched elements satisfy a fil
 ```
 *In the example above, the rewrite rule only executes if the link item's `rel` attribute equals either `"self"` or `"alternate"`.*
 
-Use `notEquals` for the opposite (skip the elements listed, act on the rest). Both take a list, and the spelling matters: an unknown key is ignored, which reads as a rule that fires on everything.
+Use `notEquals` for the opposite (skip the elements listed, act on the rest). Both take a list, and the spelling matters, because an unknown key is ignored, which reads as a rule that fires on everything.
 
 > [!WARNING]
 > Conditions are a gate, not a filter. Every condition on a rule has to pass on the element being examined; a rule that matches nothing does nothing, and never reports an error.
@@ -120,7 +126,7 @@ Use `notEquals` for the opposite (skip the elements listed, act on the rest). Bo
 When working with XML (e.g. OGC WMTS Capabilities), use `type: "xml"` and specify elements via `xpath`. 
 
 > [!TIP]
-> To ignore XML namespace prefixes, query using `local-name()`:
+> To ignore XML namespace prefixes, query using `local-name()`.
 > `//*[local-name()='ResourceURL']`
 
 ```json
@@ -137,16 +143,16 @@ When working with XML (e.g. OGC WMTS Capabilities), use `type: "xml"` and specif
 }
 ```
 
-Use `@` in the `field` parameter to specify attribute targets:
-- **(Blank):** Modifies the text content inside the element.
-- **`@href`:** Modifies the value of the `href` attribute.
-- **`@template`:** Modifies the value of the `template` attribute.
+Use `@` in the `field` parameter to specify attribute targets.
+- **Blank** modifies the text content inside the element.
+- **`@href`** modifies the value of the `href` attribute.
+- **`@template`** modifies the value of the `template` attribute.
 
 ---
 
 ## 7. What is Left Alone
 
-Some responses are passed straight through, whatever your rules say. This is deliberate, and it is usually the answer when a transform "does nothing":
+Some responses are passed straight through, whatever your rules say. This is deliberate, and it is usually the answer when a transform appears to do nothing.
 
 - **Non-2xx responses.** An error from the upstream reaches the client untouched.
 - **Non-text bodies.** Binary payloads such as PNG or MVT tiles are never parsed.

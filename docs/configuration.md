@@ -27,7 +27,8 @@ The rest of this page is for running the binaries yourself, or for tuning.
 
 The last two are the ones people get wrong. They are addresses your users' browsers
 resolve, so a container name like `http://control-plane:9001` will not work. Change
-them and restart the portal. No rebuild: the values are read when a page is served.
+them and restart the portal. No rebuild is needed, since the values are read when a
+page is served.
 
 ---
 
@@ -66,12 +67,12 @@ missed; `ORYCA_GW_SYNC_CHANNEL` (`oryca:sync-events`) must match the control
 plane's. `ORYCA_GW_USER_CACHE_TTL` (90s) and
 `ORYCA_GW_USER_CACHE_REFRESH_CONCURRENCY` (25) govern user lookups.
 
-**Circuit breaker**, per upstream host: `ORYCA_GW_CB_CONSECUTIVE_FAILURES` (5)
+**Circuit breaker**, per upstream host. `ORYCA_GW_CB_CONSECUTIVE_FAILURES` (5)
 to open, `ORYCA_GW_CB_TIMEOUT_SEC` (30) before a retry, `ORYCA_GW_CB_MAX_REQUESTS`
 (5) allowed through while half-open, `ORYCA_GW_CB_INTERVAL_SEC` (60) to reset the
 count, `ORYCA_GW_CB_IDLE_EVICT_MIN` (30) to forget a host.
 
-**Upstream connections**: `ORYCA_GW_UPSTREAM_DIAL_TIMEOUT` (30s),
+**Upstream connections.** `ORYCA_GW_UPSTREAM_DIAL_TIMEOUT` (30s),
 `_RESPONSE_HEADER_TIMEOUT` (30s), `_TLS_HANDSHAKE_TIMEOUT` (10s),
 `_KEEP_ALIVE` (30s), `_IDLE_CONN_TIMEOUT` (90s), `_MAX_IDLE_CONNS` (1000),
 `_MAX_IDLE_CONNS_PER_HOST` (100), `_MAX_CONNS_PER_HOST` (200).
@@ -95,30 +96,30 @@ count, `ORYCA_GW_CB_IDLE_EVICT_MIN` (30) to forget a host.
 | `ORYCA_API_SEED_DIR` | built-in | Where the starting YAML lives |
 | `ORYCA_API_LOG_CONSUMER_ENABLED` | `true` | Set `false` to stop writing request logs to MongoDB |
 
-**Mongo pool**: `ORYCA_API_DB_MAX_POOL_SIZE` (50), `_MIN_POOL_SIZE` (10),
+**Mongo pool.** `ORYCA_API_DB_MAX_POOL_SIZE` (50), `_MIN_POOL_SIZE` (10),
 `_SOCKET_TIMEOUT` (20s).
-**Redis**: `_PASSWORD`, `_POOL_SIZE` (50), `_MIN_IDLE_CONNS` (10),
+**Redis.** `_PASSWORD`, `_POOL_SIZE` (50), `_MIN_IDLE_CONNS` (10),
 `_DIAL_TIMEOUT` (5s), `_READ_TIMEOUT` and `_WRITE_TIMEOUT` (3s),
 `_EXPIRES` (300s, the general cache TTL), `_ROUTING_TTL` (86400s, how long
 routing data survives without the control plane).
-**HTTP timeouts**: `ORYCA_API_READ_TIMEOUT` (60s), `_READ_HEADER_TIMEOUT` (10s),
+**HTTP timeouts.** `ORYCA_API_READ_TIMEOUT` (60s), `_READ_HEADER_TIMEOUT` (10s),
 `_IDLE_TIMEOUT` (120s).
-**Sync**: `ORYCA_CP_SYNC_CHANNEL` (`oryca:sync-events`), which must match the
+**Sync.** `ORYCA_CP_SYNC_CHANNEL` (`oryca:sync-events`), which must match the
 gateway's.
 
 ---
 
 ## Both
 
-`LOG_FORMAT`: `console` for readable output, anything else for JSON.
+`LOG_FORMAT` takes `console` for readable output, anything else for JSON.
 
 ---
 
 ## What is not an environment variable
 
-Settings you change while it runs live in the database, not here: sign-up on or
-off, the terms and privacy text, token lifetimes, email templates, packages and
-their rate limits. They start from the YAML in `control-plane/seed/`, which is
+Settings you change while it runs live in the database, not here. Sign-up on or off,
+the terms and privacy text, token lifetimes, email templates, packages and their
+rate limits. They start from the YAML in `control-plane/seed/`, which is
 read once against an empty database. After that the database wins, so editing in
 the portal survives a restart.
 
