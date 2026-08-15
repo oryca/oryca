@@ -91,7 +91,7 @@ count, `ORYCA_GW_CB_IDLE_EVICT_MIN` (30) to forget a host.
 | `ORYCA_API_REDIS_DB` | `0` | Must match the gateway's |
 | `ORYCA_API_ALLOW_ORIGIN` | `*` | CORS origin |
 | `ORYCA_API_BODY_LIMIT` | `10M` | Largest request accepted |
-| `ORYCA_API_JWT_PRIVATE_KEY` | `auth-private.key` | Signing key path. Generated on first start if absent. |
+| `ORYCA_API_JWT_PRIVATE_KEY` | `auth-private.key` | Signing key path. The Docker image generates the pair on first start if it is missing. Running the binary yourself, generate it with `openssl` first, see [Local Development](../README.md#local-development--tests). |
 | `ORYCA_API_JWT_PUBLIC_KEY` | `auth-public.key` | Public half, served at `/.well-known/jwks.json` |
 | `ORYCA_API_SEED_DIR` | built-in | Where the starting YAML lives |
 | `ORYCA_API_LOG_CONSUMER_ENABLED` | `true` | Set `false` to stop writing request logs to MongoDB |
