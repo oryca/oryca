@@ -1,13 +1,14 @@
 package preset
 
 import (
+	"encoding/json"
+	"strings"
 	"testing"
 
 	"github.com/oryca/oryca/control-plane/model"
 
 	"github.com/stretchr/testify/assert"
 	"github.com/stretchr/testify/require"
-	"gopkg.in/yaml.v3"
 )
 
 func TestForType(t *testing.T) {
@@ -16,13 +17,25 @@ func TestForType(t *testing.T) {
 		"OGC_API_Features", "OGC_API_STAC", "OGC_API_Styles",
 		"OGC_API_Tiles", "OGC_API_SensorThings", "General",
 	} {
-		assert.NotEmpty(t, ForType(t2), t2+" has no preset")
+		assert.NotEmpty(t, ForType(t2), t2+" has nothing to offer")
 	}
 	assert.Equal(t, len(All()), len(ForType("")))
 }
 
+func TestTemplatesWithoutATypeSuitEverything(t *testing.T) {
+	// The action templates describe one kind of rule rather than one standard,
+	// so they belong on a plain REST service as much as on an OGC one.
+	general := ForType("General")
+	names := map[string]bool{}
+	for _, p := range general {
+		names[p.Name] = true
+	}
+	assert.True(t, names["action-replace"], "action-replace should be offered for a plain API")
+	assert.True(t, names["blank"], "blank should be offered for a plain API")
+}
+
 func TestRewriteUsesTheUpstreamRoot(t *testing.T) {
-	p, ok := Find("features-links")
+	p, ok := Find("ogc-api-features")
 	require.True(t, ok)
 
 	// A service usually registers the landing page and a path or two below it.
@@ -34,22 +47,38 @@ func TestRewriteUsesTheUpstreamRoot(t *testing.T) {
 		"https://demo.example.io/master/collections/",
 	})
 
-	// three rules in the preset, one upstream root: three rules out
-	require.Len(t, rules, 3)
+	var filled int
 	for _, r := range rules {
-		assert.Equal(t, "https://demo.example.io/master", r.Params.Find)
-		assert.Equal(t, "{{oryca_gateway_url}}", r.Params.Replace)
+		if r.Params.Find != "" {
+			filled++
+			assert.Equal(t, "https://demo.example.io/master", r.Params.Find)
+		}
 	}
+	assert.Equal(t, 1, filled, "one upstream root means one filled rule")
+}
+
+func TestRewriteDropsTheQueryString(t *testing.T) {
+	p, ok := Find("ogc-api-features")
+	require.True(t, ok)
+
+	// A source address often carries the upstream's own credential. It must not
+	// reach a stored rule, and a link in a response never repeats it, so a rule
+	// that kept it would match nothing.
+	rules := p.Rewrite([]string{"https://demo.example.io/master?api_key=SECRET"})
+
+	for _, r := range rules {
+		assert.NotContains(t, r.Params.Find, "SECRET")
+		assert.NotContains(t, r.Params.Regex, "SECRET")
+	}
+	assert.Equal(t, "https://demo.example.io/master", rules[0].Params.Find)
 }
 
 func TestRewriteKeepsUnrelatedUpstreams(t *testing.T) {
-	p, ok := Find("features-links")
+	p, ok := Find("ogc-api-features")
 	require.True(t, ok)
 
 	rules := p.Rewrite([]string{"https://a.example/api", "https://b.example/api"})
 
-	// three rules across two unrelated upstreams
-	require.Len(t, rules, 6)
 	found := map[string]bool{}
 	for _, r := range rules {
 		found[r.Params.Find] = true
@@ -58,35 +87,58 @@ func TestRewriteKeepsUnrelatedUpstreams(t *testing.T) {
 }
 
 func TestRewriteQuotesTheRegexForm(t *testing.T) {
-	p, ok := Find("sensorthings-links")
-	require.True(t, ok)
+	rule := fillSourceURL(model.TransformRule{
+		Params: model.TransformParams{Regex: "^" + sourceURLVar},
+	}, "https://sensors.example/v1.1")
 
-	rules := p.Rewrite([]string{"https://sensors.example/v1.1"})
-
-	require.Len(t, rules, 1)
 	// The dot in v1.1 must not stay a regex wildcard.
-	assert.Equal(t, `^https://sensors\.example/v1\.1`, rules[0].Params.Regex)
+	assert.Equal(t, `^https://sensors\.example/v1\.1`, rule.Params.Regex)
 }
 
-// Presets are written in YAML, and yaml.v3 lowercases a field name unless a tag
-// says otherwise. Without tags, headerName and notEquals bind to nothing and a
-// rule loads with those parts silently missing.
-func TestYAMLKeysBindToTheRule(t *testing.T) {
+func TestEveryTemplateStripsTheUpstreamCredential(t *testing.T) {
+	// A link an upstream returns can carry that upstream's key. Rewriting the
+	// address alone would hand it to the caller, so each template that rewrites
+	// links also replaces the credential with the caller's own.
+	for _, name := range []string{"ogc-api-features", "stac", "wmts-xml", "ogc-sensorthings-v2"} {
+		p, ok := Find(name)
+		require.True(t, ok, name)
+
+		var strips bool
+		for _, r := range p.Rules {
+			if strings.Contains(r.Params.Regex, "api_key") && r.Params.Replace == "{{oryca_auth}}" {
+				strips = true
+				break
+			}
+		}
+		assert.True(t, strips, name+" does not replace the upstream credential")
+	}
+}
+
+func TestTemplatesCarryNoRealAddress(t *testing.T) {
+	// Templates are read by people deciding what to change. Anything that looks
+	// like a real deployment invites them to leave it in place.
+	for _, p := range All() {
+		raw, err := json.Marshal(p)
+		require.NoError(t, err)
+		text := string(raw)
+		assert.NotContains(t, text, "vallaris", p.Name)
+		assert.NotContains(t, text, "gistda", p.Name)
+	}
+}
+
+// JSON field names bind by tag, and a rule that loses headerName or notEquals
+// loads with those parts silently missing.
+func TestJSONKeysBindToTheRule(t *testing.T) {
 	var rule model.TransformRule
-	src := `
-type: json
-target: headers
-action: replace
-headerName: X-Example
-conditions:
-  - field: rel
-    notEquals: [resource]
-params:
-  field: href
-  find: a
-  replace: b
-`
-	require.NoError(t, yaml.Unmarshal([]byte(src), &rule))
+	src := `{
+		"type": "json",
+		"target": "headers",
+		"action": "replace",
+		"headerName": "X-Example",
+		"conditions": [{"field": "rel", "notEquals": ["resource"]}],
+		"params": {"field": "href", "find": "a", "replace": "b"}
+	}`
+	require.NoError(t, json.Unmarshal([]byte(src), &rule))
 
 	assert.Equal(t, "X-Example", rule.HeaderName)
 	require.Len(t, rule.Conditions, 1)

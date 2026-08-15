@@ -1,0 +1,420 @@
+{
+  "key": "ogc-sensorthings-v2",
+  "label": "SensorThings navigation links",
+  "reference": "https://www.ogc.org/standards/sensorthings/",
+  "referenceNote": "OGC SensorThings API Part 1 – Sensing, v1.1 (OGC 18-088)",
+  "description": "Rewrites self-links, navigationLinks and @context for every entity set to route through the gateway, then strips the original api_key",
+  "types": [
+    "OGC_API_SensorThings"
+  ],
+  "match": {
+    "path": "/*",
+    "methods": [
+      "GET"
+    ]
+  },
+  "notes": [
+    "find should only match the domain + version prefix. don't include the service path",
+    "replace should be just {{oryca_gateway_url}}. it already includes the basePath, appending more duplicates it",
+    "Always replace the URL first, then strip api_key. in that order",
+    "Don't append auth on a field that already has an api_key regex-replace rule"
+  ],
+  "rules": [
+    {
+      "type": "json",
+      "target": "body",
+      "action": "replace",
+      "path": "$.value[*].url",
+      "conditions": [],
+      "params": {
+        "find": "{{sourceUrl}}",
+        "replace": "{{oryca_gateway_url}}"
+      },
+      "overwrite": false
+    },
+    {
+      "type": "json",
+      "target": "body",
+      "action": "replace",
+      "path": "$.value[*].url",
+      "conditions": [],
+      "params": {
+        "regex": "api_key=[^&]*",
+        "replace": "{{oryca_auth}}"
+      },
+      "overwrite": false
+    },
+    {
+      "type": "json",
+      "target": "body",
+      "action": "replace",
+      "path": "$.links[*].href",
+      "conditions": [],
+      "params": {
+        "find": "{{sourceUrl}}",
+        "replace": "{{oryca_gateway_url}}"
+      },
+      "overwrite": false
+    },
+    {
+      "type": "json",
+      "target": "body",
+      "action": "replace",
+      "path": "$.links[*].href",
+      "conditions": [],
+      "params": {
+        "regex": "api_key=[^&]*",
+        "replace": "{{oryca_auth}}"
+      },
+      "overwrite": false
+    },
+    {
+      "type": "json",
+      "target": "body",
+      "action": "replace",
+      "path": "$['@context']",
+      "conditions": [],
+      "params": {
+        "find": "{{sourceUrl}}",
+        "replace": "{{oryca_gateway_url}}"
+      },
+      "overwrite": false
+    },
+    {
+      "type": "json",
+      "target": "body",
+      "action": "replace",
+      "path": "$['@context']",
+      "conditions": [],
+      "params": {
+        "regex": "api_key=[^&]*",
+        "replace": "{{oryca_auth}}"
+      },
+      "overwrite": false
+    },
+    {
+      "type": "json",
+      "target": "body",
+      "action": "replace",
+      "path": "$['@id']",
+      "conditions": [],
+      "params": {
+        "find": "{{sourceUrl}}",
+        "replace": "{{oryca_gateway_url}}"
+      },
+      "overwrite": false
+    },
+    {
+      "type": "json",
+      "target": "body",
+      "action": "replace",
+      "path": "$..*['@id']",
+      "conditions": [],
+      "params": {
+        "find": "{{sourceUrl}}",
+        "replace": "{{oryca_gateway_url}}"
+      },
+      "overwrite": false
+    },
+    {
+      "type": "json",
+      "target": "body",
+      "action": "replace",
+      "path": "$..*['@id']",
+      "conditions": [],
+      "params": {
+        "regex": "api_key=[^&]*",
+        "replace": "{{oryca_auth}}"
+      },
+      "overwrite": false
+    },
+    {
+      "type": "json",
+      "target": "body",
+      "action": "replace",
+      "path": "$..*['@iot.selfLink']",
+      "conditions": [],
+      "params": {
+        "find": "{{sourceUrl}}",
+        "replace": "{{oryca_gateway_url}}"
+      },
+      "overwrite": false
+    },
+    {
+      "type": "json",
+      "target": "body",
+      "action": "replace",
+      "path": "$..*['@iot.selfLink']",
+      "conditions": [],
+      "params": {
+        "regex": "api_key=[^&]*",
+        "replace": "{{oryca_auth}}"
+      },
+      "overwrite": false
+    },
+    {
+      "type": "json",
+      "target": "body",
+      "action": "replace",
+      "path": "$['@iot.nextLink']",
+      "conditions": [],
+      "params": {
+        "find": "{{sourceUrl}}",
+        "replace": "{{oryca_gateway_url}}"
+      },
+      "overwrite": false
+    },
+    {
+      "type": "json",
+      "target": "body",
+      "action": "replace",
+      "path": "$['@iot.nextLink']",
+      "conditions": [],
+      "params": {
+        "regex": "api_key=[^&]*",
+        "replace": "{{oryca_auth}}"
+      },
+      "overwrite": false
+    },
+    {
+      "type": "json",
+      "target": "body",
+      "action": "replace",
+      "path": "$['@iot.prevLink']",
+      "conditions": [],
+      "params": {
+        "find": "{{sourceUrl}}",
+        "replace": "{{oryca_gateway_url}}"
+      },
+      "overwrite": false
+    },
+    {
+      "type": "json",
+      "target": "body",
+      "action": "replace",
+      "path": "$['@iot.prevLink']",
+      "conditions": [],
+      "params": {
+        "regex": "api_key=[^&]*",
+        "replace": "{{oryca_auth}}"
+      },
+      "overwrite": false
+    },
+    {
+      "type": "json",
+      "target": "body",
+      "action": "replace",
+      "path": "$..*['Things@navigationLink']",
+      "conditions": [],
+      "params": {
+        "find": "{{sourceUrl}}",
+        "replace": "{{oryca_gateway_url}}"
+      },
+      "overwrite": false
+    },
+    {
+      "type": "json",
+      "target": "body",
+      "action": "replace",
+      "path": "$..*['Things@navigationLink']",
+      "conditions": [],
+      "params": {
+        "regex": "api_key=[^&]*",
+        "replace": "{{oryca_auth}}"
+      },
+      "overwrite": false
+    },
+    {
+      "type": "json",
+      "target": "body",
+      "action": "replace",
+      "path": "$..*['Locations@navigationLink']",
+      "conditions": [],
+      "params": {
+        "find": "{{sourceUrl}}",
+        "replace": "{{oryca_gateway_url}}"
+      },
+      "overwrite": false
+    },
+    {
+      "type": "json",
+      "target": "body",
+      "action": "replace",
+      "path": "$..*['Locations@navigationLink']",
+      "conditions": [],
+      "params": {
+        "regex": "api_key=[^&]*",
+        "replace": "{{oryca_auth}}"
+      },
+      "overwrite": false
+    },
+    {
+      "type": "json",
+      "target": "body",
+      "action": "replace",
+      "path": "$..*['HistoricalLocations@navigationLink']",
+      "conditions": [],
+      "params": {
+        "find": "{{sourceUrl}}",
+        "replace": "{{oryca_gateway_url}}"
+      },
+      "overwrite": false
+    },
+    {
+      "type": "json",
+      "target": "body",
+      "action": "replace",
+      "path": "$..*['HistoricalLocations@navigationLink']",
+      "conditions": [],
+      "params": {
+        "regex": "api_key=[^&]*",
+        "replace": "{{oryca_auth}}"
+      },
+      "overwrite": false
+    },
+    {
+      "type": "json",
+      "target": "body",
+      "action": "replace",
+      "path": "$..*['Datastreams@navigationLink']",
+      "conditions": [],
+      "params": {
+        "find": "{{sourceUrl}}",
+        "replace": "{{oryca_gateway_url}}"
+      },
+      "overwrite": false
+    },
+    {
+      "type": "json",
+      "target": "body",
+      "action": "replace",
+      "path": "$..*['Datastreams@navigationLink']",
+      "conditions": [],
+      "params": {
+        "regex": "api_key=[^&]*",
+        "replace": "{{oryca_auth}}"
+      },
+      "overwrite": false
+    },
+    {
+      "type": "json",
+      "target": "body",
+      "action": "replace",
+      "path": "$..*['Sensors@navigationLink']",
+      "conditions": [],
+      "params": {
+        "find": "{{sourceUrl}}",
+        "replace": "{{oryca_gateway_url}}"
+      },
+      "overwrite": false
+    },
+    {
+      "type": "json",
+      "target": "body",
+      "action": "replace",
+      "path": "$..*['Sensors@navigationLink']",
+      "conditions": [],
+      "params": {
+        "regex": "api_key=[^&]*",
+        "replace": "{{oryca_auth}}"
+      },
+      "overwrite": false
+    },
+    {
+      "type": "json",
+      "target": "body",
+      "action": "replace",
+      "path": "$..*['ObservedProperties@navigationLink']",
+      "conditions": [],
+      "params": {
+        "find": "{{sourceUrl}}",
+        "replace": "{{oryca_gateway_url}}"
+      },
+      "overwrite": false
+    },
+    {
+      "type": "json",
+      "target": "body",
+      "action": "replace",
+      "path": "$..*['ObservedProperties@navigationLink']",
+      "conditions": [],
+      "params": {
+        "regex": "api_key=[^&]*",
+        "replace": "{{oryca_auth}}"
+      },
+      "overwrite": false
+    },
+    {
+      "type": "json",
+      "target": "body",
+      "action": "replace",
+      "path": "$..*['Observations@navigationLink']",
+      "conditions": [],
+      "params": {
+        "find": "{{sourceUrl}}",
+        "replace": "{{oryca_gateway_url}}"
+      },
+      "overwrite": false
+    },
+    {
+      "type": "json",
+      "target": "body",
+      "action": "replace",
+      "path": "$..*['Observations@navigationLink']",
+      "conditions": [],
+      "params": {
+        "regex": "api_key=[^&]*",
+        "replace": "{{oryca_auth}}"
+      },
+      "overwrite": false
+    },
+    {
+      "type": "json",
+      "target": "body",
+      "action": "replace",
+      "path": "$..*['FeatureOfInterest@navigationLink']",
+      "conditions": [],
+      "params": {
+        "find": "{{sourceUrl}}",
+        "replace": "{{oryca_gateway_url}}"
+      },
+      "overwrite": false
+    },
+    {
+      "type": "json",
+      "target": "body",
+      "action": "replace",
+      "path": "$..*['FeatureOfInterest@navigationLink']",
+      "conditions": [],
+      "params": {
+        "regex": "api_key=[^&]*",
+        "replace": "{{oryca_auth}}"
+      },
+      "overwrite": false
+    },
+    {
+      "type": "json",
+      "target": "body",
+      "action": "replace",
+      "path": "$..resultType.definition",
+      "conditions": [],
+      "params": {
+        "find": "{{sourceUrl}}",
+        "replace": "{{oryca_gateway_url}}"
+      },
+      "overwrite": false
+    },
+    {
+      "type": "json",
+      "target": "body",
+      "action": "replace",
+      "path": "$['@context']",
+      "conditions": [],
+      "params": {
+        "find": "#",
+        "replace": "%23"
+      },
+      "overwrite": false
+    }
+  ]
+}

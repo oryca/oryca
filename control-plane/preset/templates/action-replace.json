@@ -1,0 +1,51 @@
+{
+  "key": "action-replace",
+  "label": "Replace text or a header",
+  "description": "Replaces text or a header with a new value. exact match or regex",
+  "types": [],
+  "match": {
+    "path": "/*",
+    "methods": [
+      "GET"
+    ]
+  },
+  "notes": [
+    "Use either find or regex, not both",
+    "field targets a specific key inside the object at path. omit it to replace the whole node"
+  ],
+  "rules": [
+    {
+      "type": "json",
+      "target": "body",
+      "action": "replace",
+      "path": "$.data.url",
+      "conditions": [],
+      "params": {
+        "find": "https://upstream.example.com",
+        "replace": "{{oryca_gateway_url}}"
+      }
+    },
+    {
+      "type": "json",
+      "target": "body",
+      "action": "replace",
+      "path": "$.data.url",
+      "conditions": [],
+      "params": {
+        "regex": "api_key=[^&]*",
+        "replace": "{{oryca_auth}}"
+      }
+    },
+    {
+      "type": "json",
+      "target": "headers",
+      "action": "replace",
+      "headerName": "X-Powered-By",
+      "conditions": [],
+      "params": {
+        "find": "upstream-service",
+        "replace": "oryca-gateway"
+      }
+    }
+  ]
+}

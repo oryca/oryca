@@ -1,0 +1,48 @@
+{
+  "key": "action-add",
+  "label": "Add a field or header",
+  "description": "Injects a new field or header with a static value",
+  "types": [],
+  "match": {
+    "path": "/*",
+    "methods": [
+      "GET"
+    ]
+  },
+  "notes": [
+    "Won't auto-create the parent path if it doesn't already exist",
+    "value supports string, number, boolean"
+  ],
+  "rules": [
+    {
+      "type": "json",
+      "target": "body",
+      "action": "add",
+      "path": "$.gateway_version",
+      "conditions": [],
+      "params": {
+        "value": "oryca-gateway-v1"
+      }
+    },
+    {
+      "type": "json",
+      "target": "body",
+      "action": "add",
+      "path": "$.items[*].proxied",
+      "conditions": [],
+      "params": {
+        "value": true
+      }
+    },
+    {
+      "type": "json",
+      "target": "headers",
+      "action": "add",
+      "headerName": "X-Gateway-Name",
+      "conditions": [],
+      "params": {
+        "value": "oryca-gateway"
+      }
+    }
+  ]
+}

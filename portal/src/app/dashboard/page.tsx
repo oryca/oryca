@@ -1,24 +1,23 @@
+/* Hallmark · genre: modern-minimal · macrostructure: Workbench
+ * design-system: design.md · designed-as-app
+ */
 'use client';
 
-import React, { useState, useEffect } from 'react';
-import { useQuery, useMutation } from '@tanstack/react-query';
+import React, { useMemo, useState } from 'react';
+import { useQuery } from '@tanstack/react-query';
 import { api } from '@/lib/api';
 import { useAuth } from '@/app/providers';
 import NavigationShell from '@/components/NavigationShell';
 import {
-  Activity,
-  ArrowRight,
-  ChevronDown,
-  Clock,
-  Filter,
-  RefreshCw,
-  Server,
-  User,
-  AlertTriangle,
-  FileText,
-  Search,
-  Database
-} from 'lucide-react';
+  Button,
+  PageHeader,
+  SectionCard,
+  EmptyState,
+  SkeletonLine,
+  Loading,
+  useToast,
+} from '@/components/ui';
+import { ArrowRight, RefreshCw, Server, Activity } from 'lucide-react';
 
 interface DashboardBucket {
   time: string;
@@ -70,43 +69,159 @@ interface AccessLogPage {
   nextCursor?: string;
 }
 
+interface ServiceOption {
+  id: string;
+  name: string;
+  basePath: string;
+}
+
+interface UserOption {
+  id: string;
+  email: string;
+  role: string;
+}
+
+type Range = '1h' | '24h' | '7d' | '30d';
+const RANGES: Range[] = ['1h', '24h', '7d', '30d'];
+
+const RANGE_LABEL: Record<Range, string> = {
+  '1h': 'Last hour',
+  '24h': 'Last 24h',
+  '7d': 'Last 7 days',
+  '30d': 'Last 30 days',
+};
+
+function rangeWindow(range: Range) {
+  const to = new Date();
+  const from = new Date(to);
+  if (range === '1h') from.setHours(to.getHours() - 1);
+  else if (range === '24h') from.setHours(to.getHours() - 24);
+  else if (range === '7d') from.setDate(to.getDate() - 7);
+  else from.setDate(to.getDate() - 30);
+  return { from: from.toISOString(), to: to.toISOString() };
+}
+
+function statusTone(code: number) {
+  if (code >= 500) return 'border-danger-edge bg-danger-wash text-danger';
+  if (code >= 400) return 'border-warn-edge bg-warn-wash text-warn';
+  return 'border-ok-edge bg-ok-wash text-ok';
+}
+
+function StatTile({
+  label,
+  value,
+  note,
+  tone = 'ink',
+}: {
+  label: string;
+  value: string;
+  note: string;
+  tone?: 'ink' | 'ok' | 'warn' | 'danger';
+}) {
+  const valueColor = {
+    ink: 'text-ink',
+    ok: 'text-ok',
+    warn: 'text-warn',
+    danger: 'text-danger',
+  }[tone];
+
+  return (
+    <div className="ui-card p-4">
+      <p className="text-xs text-muted">{label}</p>
+      <p className={`tabular mt-1 font-title text-xl font-semibold ${valueColor}`}>{value}</p>
+      <p className="mt-1 text-xs text-muted">{note}</p>
+    </div>
+  );
+}
+
+function TrafficChart({ buckets, interval }: { buckets: DashboardBucket[]; interval: string }) {
+  const maxCount = Math.max(...buckets.map((b) => b.count), 1);
+  const total = buckets.reduce((sum, b) => sum + b.count, 0);
+  const width = 100 / buckets.length;
+
+  return (
+    <div>
+      <svg
+        className="h-56 w-full"
+        viewBox="0 0 100 100"
+        preserveAspectRatio="none"
+        role="img"
+        aria-label={`Request volume across ${buckets.length} buckets — ${total.toLocaleString()} requests in total, peaking at ${maxCount.toLocaleString()} per bucket`}
+      >
+        {[25, 50, 75].map((y) => (
+          <line
+            key={y}
+            x1="0"
+            y1={y}
+            x2="100"
+            y2={y}
+            stroke="var(--color-rule)"
+            strokeWidth="0.25"
+            strokeDasharray="2"
+          />
+        ))}
+        {buckets.map((b, idx) => {
+          const height = (b.count / maxCount) * 80;
+          return (
+            <rect
+              key={b.time}
+              x={idx * width + 0.5}
+              y={100 - height}
+              width={Math.max(width - 1, 0.2)}
+              height={height}
+              fill="var(--color-accent)"
+            >
+              {/* เบราว์เซอร์แสดง <title> เป็น tooltip ให้เอง ไม่ต้องเขียน hover เอง */}
+              <title>
+                {new Date(b.time).toLocaleString()} — {b.count.toLocaleString()} requests
+              </title>
+            </rect>
+          );
+        })}
+      </svg>
+
+      <div className="tabular mt-2 flex justify-between border-t border-rule pt-2 text-xs text-muted">
+        <span>{new Date(buckets[0].time).toLocaleTimeString()}</span>
+        <span>bucketed by {interval}</span>
+        <span>{new Date(buckets[buckets.length - 1].time).toLocaleTimeString()}</span>
+      </div>
+    </div>
+  );
+}
+
 export default function DashboardPage() {
   const { user } = useAuth();
-  
-  // Filters
-  const [range, setRange] = useState<'1h' | '24h' | '7d' | '30d'>('24h');
-  const [selectedServiceId, setSelectedServiceId] = useState<string>('');
-  const [selectedUserId, setSelectedUserId] = useState<string>('');
+  const { error: toastError } = useToast();
+  const isAdmin = user?.role === 'admin' || user?.role === 'root';
+
+  const [range, setRange] = useState<Range>('24h');
+  const [selectedServiceId, setSelectedServiceId] = useState('');
+  const [selectedUserId, setSelectedUserId] = useState('');
   const [isRefreshing, setIsRefreshing] = useState(false);
 
-  // Raw logs pagination state
-  const [logs, setLogs] = useState<AccessLog[]>([]);
-  const [nextCursor, setNextCursor] = useState<string | undefined>(undefined);
-  const [isLoadingMoreLogs, setIsLoadingMoreLogs] = useState(false);
+  // หน้าถัดๆ ไปของ log เก็บแยกจาก query ของหน้าแรก
+  const [extraLogs, setExtraLogs] = useState<{ rows: AccessLog[]; cursor?: string } | null>(null);
+  const [isLoadingMore, setIsLoadingMore] = useState(false);
 
-  // Time calculate helpers
-  const getRangeTimes = () => {
-    const to = new Date();
-    const from = new Date();
-    if (range === '1h') {
-      from.setHours(to.getHours() - 1);
-    } else if (range === '24h') {
-      from.setHours(to.getHours() - 24);
-    } else if (range === '7d') {
-      from.setDate(to.getDate() - 7);
-    } else if (range === '30d') {
-      from.setDate(to.getDate() - 30);
-    }
-    return {
-      from: from.toISOString(),
-      to: to.toISOString(),
-    };
-  };
+  // ตรึงช่วงเวลาไว้กับ range ไม่ให้ขยับทุก render
+  const { from: fromTime, to: toTime } = useMemo(() => rangeWindow(range), [range]);
 
-  const { from: fromTime, to: toTime } = getRangeTimes();
+  const filterKey = `${range}|${selectedServiceId}|${selectedUserId}`;
+  const [syncedFilter, setSyncedFilter] = useState(filterKey);
+  if (filterKey !== syncedFilter) {
+    // เปลี่ยนตัวกรองแล้วต้องทิ้งหน้าที่โหลดเพิ่มไว้ ไม่งั้นข้อมูลคนละชุดจะปนกัน
+    setSyncedFilter(filterKey);
+    setExtraLogs(null);
+  }
 
-  // Fetch Services list for dropdown
-  const { data: services } = useQuery<any[]>({
+  const scopedParams = useMemo(() => {
+    const params: Record<string, string> = { from: fromTime, to: toTime };
+    if (selectedServiceId) params.serviceId = selectedServiceId;
+    if (selectedUserId && isAdmin) params.userId = selectedUserId;
+    return params;
+  }, [fromTime, toTime, selectedServiceId, selectedUserId, isAdmin]);
+
+  const { data: services } = useQuery<ServiceOption[]>({
     queryKey: ['services-list'],
     queryFn: async () => {
       const res = await api.get('/services');
@@ -114,433 +229,363 @@ export default function DashboardPage() {
     },
   });
 
-  // Fetch Users list (only if admin/root)
-  const { data: users } = useQuery<any[]>({
+  const { data: users } = useQuery<UserOption[]>({
     queryKey: ['users-list'],
     queryFn: async () => {
       const res = await api.get('/users');
       return res.data.items || [];
     },
-    enabled: user?.role === 'admin' || user?.role === 'root',
+    enabled: isAdmin,
   });
 
-  // Fetch Dashboard Summary
-  const { data: summary, isLoading: isLoadingSummary, refetch: refetchSummary } = useQuery<DashboardSummary>({
-    queryKey: ['summary', range, selectedServiceId, selectedUserId],
-    queryFn: async () => {
-      const params: any = { from: fromTime, to: toTime };
-      if (selectedServiceId) params.serviceId = selectedServiceId;
-      if (selectedUserId && (user?.role === 'admin' || user?.role === 'root')) {
-        params.userId = selectedUserId;
-      }
-      const res = await api.get('/dashboard/summary', { params });
-      return res.data;
-    },
+  const {
+    data: summary,
+    isLoading: isLoadingSummary,
+    refetch: refetchSummary,
+  } = useQuery<DashboardSummary>({
+    queryKey: ['summary', filterKey],
+    queryFn: async () => (await api.get('/dashboard/summary', { params: scopedParams })).data,
   });
 
-  // Fetch Dashboard Stats for Chart
-  const { data: stats, isLoading: isLoadingStats, refetch: refetchStats } = useQuery<DashboardStats>({
-    queryKey: ['stats', range, selectedServiceId, selectedUserId],
-    queryFn: async () => {
-      const params: any = { from: fromTime, to: toTime };
-      if (selectedServiceId) params.serviceId = selectedServiceId;
-      if (selectedUserId && (user?.role === 'admin' || user?.role === 'root')) {
-        params.userId = selectedUserId;
-      }
-      const res = await api.get('/dashboard/stats', { params });
-      return res.data;
-    },
+  const {
+    data: stats,
+    isLoading: isLoadingStats,
+    refetch: refetchStats,
+  } = useQuery<DashboardStats>({
+    queryKey: ['stats', filterKey],
+    queryFn: async () => (await api.get('/dashboard/stats', { params: scopedParams })).data,
   });
 
-  // Fetch Initial Raw Logs
-  const fetchLogs = async (cursor?: string) => {
-    const params: any = { from: fromTime, to: toTime, limit: 15 };
-    if (selectedServiceId) params.serviceId = selectedServiceId;
-    if (selectedUserId && (user?.role === 'admin' || user?.role === 'root')) {
-      params.userId = selectedUserId;
-    }
-    if (cursor) params.cursor = cursor;
-    
-    const res = await api.get<AccessLogPage>('/dashboard/logs', { params });
-    return res.data;
-  };
-
-  const { data: initialLogsData, isLoading: isLoadingLogs, refetch: refetchLogsInitial } = useQuery<AccessLogPage>({
-    queryKey: ['logs-initial', range, selectedServiceId, selectedUserId],
-    queryFn: () => fetchLogs(),
+  const {
+    data: firstLogPage,
+    isLoading: isLoadingLogs,
+    refetch: refetchLogs,
+  } = useQuery<AccessLogPage>({
+    queryKey: ['logs', filterKey],
+    queryFn: async () =>
+      (await api.get<AccessLogPage>('/dashboard/logs', { params: { ...scopedParams, limit: 15 } }))
+        .data,
   });
 
-  useEffect(() => {
-    if (initialLogsData) {
-      setLogs(initialLogsData.data || []);
-      setNextCursor(initialLogsData.nextCursor);
-    }
-  }, [initialLogsData]);
+  const logs = [...(firstLogPage?.data ?? []), ...(extraLogs?.rows ?? [])];
+  const nextCursor = extraLogs ? extraLogs.cursor : firstLogPage?.nextCursor;
 
-  // Refetch helper
-  const handleRefresh = async () => {
+  async function handleRefresh() {
     setIsRefreshing(true);
-    await Promise.all([
-      refetchSummary(),
-      refetchStats(),
-      refetchLogsInitial(),
-    ]);
-    setIsRefreshing(false);
-  };
-
-  // Load More Logs
-  const handleLoadMore = async () => {
-    if (!nextCursor || isLoadingMoreLogs) return;
-    setIsLoadingMoreLogs(true);
+    setExtraLogs(null);
     try {
-      const res = await fetchLogs(nextCursor);
-      setLogs((prev) => [...prev, ...(res.data || [])]);
-      setNextCursor(res.nextCursor);
-    } catch (err) {
-      console.error(err);
+      await Promise.all([refetchSummary(), refetchStats(), refetchLogs()]);
     } finally {
-      setIsLoadingMoreLogs(false);
+      setIsRefreshing(false);
     }
-  };
+  }
 
-  // Trigger load logs on query changes
-  useEffect(() => {
-    fetchLogs().then((data) => {
-      setLogs(data.data || []);
-      setNextCursor(data.nextCursor);
-    }).catch(console.error);
-  }, [range, selectedServiceId, selectedUserId]);
+  async function handleLoadMore() {
+    if (!nextCursor || isLoadingMore) return;
+    setIsLoadingMore(true);
+    try {
+      const res = await api.get<AccessLogPage>('/dashboard/logs', {
+        params: { ...scopedParams, limit: 15, cursor: nextCursor },
+      });
+      setExtraLogs((prev) => ({
+        rows: [...(prev?.rows ?? []), ...(res.data.data ?? [])],
+        cursor: res.data.nextCursor,
+      }));
+    } catch {
+      toastError('Could not load more logs', handleLoadMore);
+    } finally {
+      setIsLoadingMore(false);
+    }
+  }
 
-  // Chart Draw Variables
-  const buckets = stats?.buckets || [];
-  const maxCount = Math.max(...buckets.map((b) => b.count), 1);
-  const intervalLabel = stats?.interval || 'hour';
+  const buckets = stats?.buckets ?? [];
 
   return (
     <NavigationShell>
-      <div className="space-y-6">
-        {/* Top Header */}
-        <div className="flex flex-col sm:flex-row sm:items-center sm:justify-between gap-4">
-          <div>
-            <h1 className="font-title text-2xl font-bold tracking-tight text-ink">
-              Gateway Dashboard
-            </h1>
-            <p className="text-sm text-muted">
-              {user?.role === 'user'
-                ? 'Usage logs and traffic statistics for your API keys'
-                : 'Global gateway requests volume, latency, and status diagnostics'}
-            </p>
-          </div>
-
-          <div className="flex flex-wrap items-center gap-2">
-            {/* Range Select */}
-            <div className="flex border border-rule rounded-control overflow-hidden bg-paper">
-              {(['1h', '24h', '7d', '30d'] as const).map((r) => (
+      <PageHeader
+        title="Gateway Dashboard"
+        description={
+          user?.role === 'user'
+            ? 'Usage and request logs for your own API keys'
+            : 'Request volume, latency and response codes across the whole gateway'
+        }
+        actions={
+          <>
+            <div
+              role="group"
+              aria-label="Time range"
+              className="flex overflow-hidden rounded-control border border-rule bg-paper"
+            >
+              {RANGES.map((r) => (
                 <button
                   key={r}
+                  type="button"
+                  aria-pressed={range === r}
                   onClick={() => setRange(r)}
-                  className={`px-3 py-1.5 text-xs font-semibold uppercase transition ${
-                    range === r ? 'bg-accent-wash border-r border-accent-edge text-accent' : 'text-muted hover:text-ink hover:bg-paper-2'
+                  className={`px-3 py-2 text-xs font-medium whitespace-nowrap transition-colors duration-200 ${
+                    range === r
+                      ? 'bg-accent-wash text-accent'
+                      : 'text-ink-3 hover:bg-paper-2 hover:text-ink'
                   }`}
                 >
-                  {r}
+                  {RANGE_LABEL[r]}
                 </button>
               ))}
             </div>
 
-            {/* Refresh Button */}
-            <button
+            <Button
               onClick={handleRefresh}
-              disabled={isRefreshing}
-              className="p-2 bg-paper border border-rule hover:border-faint rounded-control text-muted hover:text-ink transition duration-short flex items-center justify-center disabled:opacity-50"
-              title="Refresh data"
-            >
-              <RefreshCw className={`w-4 h-4 ${isRefreshing ? 'animate-spin' : ''}`} />
-            </button>
-          </div>
-        </div>
+              loading={isRefreshing}
+              aria-label="Refresh"
+              icon={<RefreshCw className="h-4 w-4" />}
+            />
+          </>
+        }
+      />
 
-        {/* Diagnostic Filters Dropdowns */}
-        <div className="bg-paper p-4 border border-rule rounded-surface flex flex-wrap gap-4 items-center shadow-sm">
-          <div className="flex items-center gap-2 text-xs font-bold text-muted uppercase tracking-wider">
-            <Filter className="w-3.5 h-3.5" /> Filter:
-          </div>
-
-          {/* Service filter */}
-          <div className="flex-1 min-w-[200px] max-w-xs relative">
+      <SectionCard className="mb-6" title="Filters">
+        <div className="flex flex-wrap gap-4">
+          <label className="min-w-0 flex-1 basis-56">
+            <span className="ui-field__label">Service</span>
             <select
+              className="ui-input"
               value={selectedServiceId}
               onChange={(e) => setSelectedServiceId(e.target.value)}
-              className="w-full bg-paper-2 border border-rule rounded-control px-3 py-1.5 text-xs text-ink outline-none appearance-none focus:border-focus"
             >
-              <option value="">All Services</option>
+              <option value="">All services</option>
               {services?.map((svc) => (
                 <option key={svc.id} value={svc.id}>
                   {svc.name} ({svc.basePath})
                 </option>
               ))}
             </select>
-            <ChevronDown className="w-3.5 h-3.5 text-muted absolute right-3 top-2.5 pointer-events-none" />
-          </div>
+          </label>
 
-          {/* User filter (Admin only) */}
-          {(user?.role === 'admin' || user?.role === 'root') && (
-            <div className="flex-1 min-w-[200px] max-w-xs relative">
+          {isAdmin && (
+            <label className="min-w-0 flex-1 basis-56">
+              <span className="ui-field__label">Consumer</span>
               <select
+                className="ui-input"
                 value={selectedUserId}
                 onChange={(e) => setSelectedUserId(e.target.value)}
-                className="w-full bg-paper-2 border border-rule rounded-control px-3 py-1.5 text-xs text-ink outline-none appearance-none focus:border-focus"
               >
-                <option value="">All Consumers</option>
+                <option value="">Everyone</option>
                 {users?.map((u) => (
                   <option key={u.id} value={u.id}>
                     {u.email} ({u.role})
                   </option>
                 ))}
               </select>
-              <ChevronDown className="w-3.5 h-3.5 text-muted absolute right-3 top-2.5 pointer-events-none" />
-            </div>
+            </label>
           )}
         </div>
+      </SectionCard>
 
-        {/* Summary KPI Cards */}
-        {isLoadingSummary ? (
-          <div className="grid grid-cols-2 lg:grid-cols-5 gap-4">
-            {[...Array(5)].map((_, i) => (
-              <div key={i} className="bg-paper border border-rule rounded-surface p-4 h-24 animate-pulse"></div>
+      {/* ---- ตัวเลขสรุป ---- */}
+      {isLoadingSummary && (
+        <Loading label="Loading summary">
+          <div className="mb-6 grid grid-cols-2 gap-4 lg:grid-cols-5">
+            {[0, 1, 2, 3, 4].map((i) => (
+              <div key={i} className="ui-card p-4">
+                <SkeletonLine width="60%" />
+                <SkeletonLine width="45%" className="mt-2 h-5" />
+                <SkeletonLine width="80%" className="mt-2" />
+              </div>
             ))}
           </div>
-        ) : !summary ? (
-          <div className="bg-paper border border-rule rounded-surface p-8 text-center text-muted">
-            Failed to load request summaries.
-          </div>
-        ) : (
-          <div className="grid grid-cols-2 lg:grid-cols-5 gap-4">
-            <div className="bg-paper border border-rule rounded-surface p-4 relative overflow-hidden shadow-sm">
-              <span className="text-[10px] uppercase font-bold tracking-wider text-muted">Total Requests</span>
-              <p className="font-title text-2xl font-bold tracking-tight text-ink mt-1">
-                {summary.total.toLocaleString()}
-              </p>
-              <span className="text-[10px] text-muted block mt-1">requests matched</span>
-              <div className="absolute bottom-0 left-0 right-0 h-1 bg-accent"></div>
-            </div>
+        </Loading>
+      )}
 
-            <div className="bg-paper border border-rule rounded-surface p-4 relative overflow-hidden shadow-sm">
-              <span className="text-[10px] uppercase font-bold tracking-wider text-muted">Avg Latency</span>
-              <p className="font-title text-2xl font-bold tracking-tight text-ink mt-1">
-                {summary.avgTimeMs.toFixed(1)} ms
-              </p>
-              <span className="text-[10px] text-muted block mt-1">average roundtrip speed</span>
-              <div className="absolute bottom-0 left-0 right-0 h-1 bg-ok"></div>
-            </div>
-
-            <div className="bg-paper border border-rule rounded-surface p-4 relative overflow-hidden shadow-sm">
-              <span className="text-[10px] uppercase font-bold tracking-wider text-muted">Success Rate</span>
-              <p className="font-title text-2xl font-bold tracking-tight text-ok mt-1">
-                {summary.total > 0 ? ((summary.status2xx / summary.total) * 100).toFixed(1) : '100.0'}%
-              </p>
-              <span className="text-[10px] text-muted block mt-1">{summary.status2xx} responses (2xx)</span>
-              <div className="absolute bottom-0 left-0 right-0 h-1 bg-ok"></div>
-            </div>
-
-            <div className="bg-paper border border-rule rounded-surface p-4 relative overflow-hidden shadow-sm">
-              <span className="text-[10px] uppercase font-bold tracking-wider text-muted">Client Errors</span>
-              <p className="font-title text-2xl font-bold tracking-tight text-warn mt-1">
-                {summary.status4xx.toLocaleString()}
-              </p>
-              <span className="text-[10px] text-muted block mt-1">responses (4xx)</span>
-              <div className="absolute bottom-0 left-0 right-0 h-1 bg-warn"></div>
-            </div>
-
-            <div className="bg-paper border border-rule rounded-surface p-4 relative overflow-hidden shadow-sm">
-              <span className="text-[10px] uppercase font-bold tracking-wider text-muted">Server Errors</span>
-              <p className="font-title text-2xl font-bold tracking-tight text-danger mt-1">
-                {summary.status5xx.toLocaleString()}
-              </p>
-              <span className="text-[10px] text-muted block mt-1">responses (5xx)</span>
-              <div className="absolute bottom-0 left-0 right-0 h-1 bg-danger"></div>
-            </div>
-          </div>
-        )}
-
-        {/* Charts & Top Services */}
-        <div className="grid grid-cols-1 lg:grid-cols-3 gap-6">
-          {/* SVG Custom Chart */}
-          <div className="bg-paper border border-rule rounded-surface p-6 shadow-sm lg:col-span-2">
-            <div className="mb-4">
-              <h2 className="font-title text-sm font-semibold text-ink">
-                Traffic Over Time
-              </h2>
-              <p className="text-[11px] text-muted mt-0.5">
-                Aggregated in {intervalLabel} intervals
-              </p>
-            </div>
-
-            {isLoadingStats ? (
-              <div className="h-64 bg-paper-2 rounded-control animate-pulse flex items-center justify-center text-xs text-muted">
-                Generating visual series...
-              </div>
-            ) : buckets.length === 0 ? (
-              <div className="h-64 flex items-center justify-center text-xs text-muted border border-dashed border-rule rounded-control">
-                No telemetry data for this range.
-              </div>
-            ) : (
-              <div className="relative">
-                {/* SVG Visual Representation */}
-                <div className="h-56 w-full flex items-end">
-                  <svg className="w-full h-full" viewBox="0 0 100 100" preserveAspectRatio="none">
-                    {/* Grid Lines */}
-                    <line x1="0" y1="25" x2="100" y2="25" stroke="var(--color-rule)" strokeWidth="0.25" strokeDasharray="2" />
-                    <line x1="0" y1="50" x2="100" y2="50" stroke="var(--color-rule)" strokeWidth="0.25" strokeDasharray="2" />
-                    <line x1="0" y1="75" x2="100" y2="75" stroke="var(--color-rule)" strokeWidth="0.25" strokeDasharray="2" />
-                    
-                    {/* Render Bar Chart columns for high visual accuracy */}
-                    {buckets.map((b, idx) => {
-                      const width = 100 / buckets.length;
-                      const x = idx * width;
-                      const height = (b.count / maxCount) * 80; // Scale to 80% max height
-                      const y = 100 - height;
-                      return (
-                        <g key={idx} className="group cursor-pointer">
-                          <rect
-                            x={x + 0.5}
-                            y={y}
-                            width={width - 1}
-                            height={height}
-                            fill="var(--color-accent)"
-                            opacity="0.8"
-                            className="hover:opacity-100 transition"
-                          />
-                        </g>
-                      );
-                    })}
-                  </svg>
-                </div>
-                
-                {/* Chart labels */}
-                <div className="flex justify-between mt-2 pt-2 border-t border-rule text-[10px] text-muted">
-                  <span>{new Date(buckets[0].time).toLocaleTimeString()}</span>
-                  <span>{new Date(buckets[Math.floor(buckets.length / 2)].time).toLocaleDateString()}</span>
-                  <span>{new Date(buckets[buckets.length - 1].time).toLocaleTimeString()}</span>
-                </div>
-              </div>
-            )}
-          </div>
-
-          {/* Busiest Catalog Services list */}
-          <div className="bg-paper border border-rule rounded-surface p-6 shadow-sm">
-            <h2 className="font-title text-sm font-semibold text-ink mb-4 border-b border-rule pb-2">
-              Busiest Services
-            </h2>
-
-            {isLoadingSummary ? (
-              <div className="space-y-3">
-                {[...Array(3)].map((_, i) => (
-                  <div key={i} className="h-10 bg-paper-2 rounded-control animate-pulse"></div>
-                ))}
-              </div>
-            ) : !summary?.topServices || summary.topServices.length === 0 ? (
-              <p className="text-xs text-muted text-center py-8">No service calls recorded.</p>
-            ) : (
-              <div className="space-y-3">
-                {summary.topServices.map((svc) => (
-                  <div key={svc.serviceId} className="flex items-center justify-between p-2 rounded-control bg-paper-2 border border-rule hover:border-faint transition">
-                    <div className="flex items-center gap-2">
-                      <Server className="w-4 h-4 text-accent" />
-                      <div>
-                        <p className="text-xs font-semibold text-ink max-w-[140px] truncate">{svc.name || 'API Service'}</p>
-                        <p className="text-[10px] text-muted truncate">ID: {svc.serviceId.substring(0, 8)}</p>
-                      </div>
-                    </div>
-                    <span className="text-xs font-bold text-accent px-2 py-0.5 rounded-chip bg-accent-wash border border-accent-edge">
-                      {svc.count.toLocaleString()} reqs
-                    </span>
-                  </div>
-                ))}
-              </div>
-            )}
-          </div>
+      {!isLoadingSummary && !summary && (
+        <div className="ui-card mb-6">
+          <EmptyState
+            icon={<Activity className="h-5 w-5" />}
+            title="Could not load the summary"
+            description="Try again. If it keeps failing, the control plane may not be responding."
+            action={
+              <Button variant="secondary" onClick={handleRefresh} loading={isRefreshing}>
+                Refresh
+              </Button>
+            }
+          />
         </div>
+      )}
 
-        {/* Live Logs Table */}
-        <div className="bg-paper border border-rule rounded-surface p-6 shadow-sm">
-          <h2 className="font-title text-sm font-semibold text-ink mb-4 border-b border-rule pb-2">
-            Request Streams
-          </h2>
+      {!isLoadingSummary && summary && (
+        <div className="ui-fade mb-6 grid grid-cols-2 gap-4 lg:grid-cols-5">
+          <StatTile
+            label="Requests"
+            value={summary.total.toLocaleString()}
+            note="in the selected range"
+          />
+          <StatTile
+            label="Average latency"
+            value={`${summary.avgTimeMs.toFixed(1)} ms`}
+            note="round trip per request"
+          />
+          <StatTile
+            label="Success rate"
+            value={`${summary.total > 0 ? ((summary.status2xx / summary.total) * 100).toFixed(1) : '100.0'}%`}
+            note={`${summary.status2xx.toLocaleString()} responses in 2xx`}
+            tone="ok"
+          />
+          <StatTile
+            label="Client errors"
+            value={summary.status4xx.toLocaleString()}
+            note="responses in 4xx"
+            tone="warn"
+          />
+          <StatTile
+            label="Server errors"
+            value={summary.status5xx.toLocaleString()}
+            note="responses in 5xx"
+            tone="danger"
+          />
+        </div>
+      )}
 
-          {isLoadingLogs && logs.length === 0 ? (
-            <div className="space-y-4">
-              {[...Array(5)].map((_, i) => (
-                <div key={i} className="h-10 bg-paper-2 rounded-control animate-pulse"></div>
+      {/* ---- กราฟ + service ที่ถูกเรียกมากสุด ---- */}
+      <div className="mb-6 grid grid-cols-1 gap-6 lg:grid-cols-3">
+        <SectionCard
+          className="lg:col-span-2"
+          title="Requests over time"
+          description={`Bucketed by ${stats?.interval ?? 'hour'}`}
+        >
+          {isLoadingStats && (
+            <Loading label="Loading chart">
+              <div className="ui-skeleton h-56 w-full" />
+            </Loading>
+          )}
+          {!isLoadingStats && buckets.length === 0 && (
+            <EmptyState
+              title="Nothing in this range"
+              description="Widen the time range, or clear the service filter."
+            />
+          )}
+          {!isLoadingStats && buckets.length > 0 && (
+            <TrafficChart buckets={buckets} interval={stats?.interval ?? 'hour'} />
+          )}
+        </SectionCard>
+
+        <SectionCard title="Busiest services">
+          {isLoadingSummary && (
+            <Loading label="Loading service ranking">
+              <div className="space-y-3">
+                {[0, 1, 2].map((i) => (
+                  <SkeletonLine key={i} className="h-8" />
+                ))}
+              </div>
+            </Loading>
+          )}
+          {!isLoadingSummary && (!summary?.topServices || summary.topServices.length === 0) && (
+            <EmptyState
+              icon={<Server className="h-5 w-5" />}
+              title="No traffic yet"
+              description="Once requests flow through the gateway, the ranking shows up here."
+            />
+          )}
+          {!isLoadingSummary && summary?.topServices && summary.topServices.length > 0 && (
+            <ul className="ui-fade space-y-2">
+              {summary.topServices.map((svc) => (
+                <li
+                  key={svc.serviceId}
+                  className="flex items-center justify-between gap-2 rounded-control border border-rule bg-paper-2 p-2"
+                >
+                  <div className="flex min-w-0 items-center gap-2">
+                    <Server className="h-4 w-4 shrink-0 text-accent" aria-hidden="true" />
+                    <div className="min-w-0">
+                      <p className="truncate text-sm text-ink">{svc.name || 'Unnamed service'}</p>
+                      <p className="truncate font-mono text-xs text-muted">
+                        {svc.serviceId.substring(0, 8)}
+                      </p>
+                    </div>
+                  </div>
+                  <span className="tabular shrink-0 rounded-chip border border-accent-edge bg-accent-wash px-2 py-0.5 text-xs font-medium whitespace-nowrap text-accent">
+                    {svc.count.toLocaleString()}
+                  </span>
+                </li>
+              ))}
+            </ul>
+          )}
+        </SectionCard>
+      </div>
+
+      {/* ---- log ดิบ ---- */}
+      <SectionCard title="Recent requests" flush>
+        {isLoadingLogs && logs.length === 0 && (
+          <Loading label="Loading recent requests">
+            <div className="space-y-2 p-4">
+              {[0, 1, 2, 3, 4].map((i) => (
+                <SkeletonLine key={i} className="h-6" />
               ))}
             </div>
-          ) : logs.length === 0 ? (
-            <div className="text-center py-8 text-xs text-muted">
-              No matching request entries found.
-            </div>
-          ) : (
-            <div className="space-y-4">
-              <div className="overflow-x-auto">
-                <table className="w-full text-left border-collapse text-xs">
-                  <thead>
-                    <tr className="border-b border-rule text-muted text-[10px] uppercase font-bold tracking-wider">
-                      <th className="py-2 px-3">Status</th>
-                      <th className="py-2 px-3">Method</th>
-                      <th className="py-2 px-3">Path</th>
-                      <th className="py-2 px-3">Duration</th>
-                      <th className="py-2 px-3">IP Address</th>
-                      <th className="py-2 px-3">Timestamp</th>
-                    </tr>
-                  </thead>
-                  <tbody className="divide-y divide-rule font-mono">
-                    {logs.map((log) => {
-                      let statusColor = 'text-ok bg-ok-wash border-ok-edge';
-                      if (log.statusCode >= 400 && log.statusCode < 500) {
-                        statusColor = 'text-warn bg-warn-wash border-warn-edge';
-                      } else if (log.statusCode >= 500) {
-                        statusColor = 'text-danger bg-danger-wash border-danger-edge';
-                      }
-                      
-                      return (
-                        <tr key={log.id} className="hover:bg-paper-2 transition-colors">
-                          <td className="py-2.5 px-3">
-                            <span className={`px-2 py-0.5 rounded-chip border text-[10px] font-bold ${statusColor}`}>
-                              {log.statusCode}
-                            </span>
-                          </td>
-                          <td className="py-2.5 px-3 font-semibold text-ink">{log.method || 'GET'}</td>
-                          <td className="py-2.5 px-3 text-ink-3 max-w-xs truncate" title={log.path}>
-                            {log.path || '/'}
-                          </td>
-                          <td className="py-2.5 px-3 text-muted">{log.durationMs} ms</td>
-                          <td className="py-2.5 px-3 text-muted">{log.ip || '127.0.0.1'}</td>
-                          <td className="py-2.5 px-3 text-muted">
-                            {new Date(log.time).toLocaleTimeString()}
-                          </td>
-                        </tr>
-                      );
-                    })}
-                  </tbody>
-                </table>
-              </div>
+          </Loading>
+        )}
 
-              {/* Load More Button */}
-              {nextCursor && (
-                <div className="flex justify-center pt-2">
-                  <button
-                    onClick={handleLoadMore}
-                    disabled={isLoadingMoreLogs}
-                    className="px-4 py-2 border border-rule hover:border-faint rounded-control text-xs font-semibold text-ink-2 hover:bg-paper-2 transition flex items-center gap-2 disabled:opacity-50"
-                  >
-                    {isLoadingMoreLogs ? 'Loading entries...' : 'Load More Logs'}
-                    {!isLoadingMoreLogs && <ArrowRight className="w-3 h-3" />}
-                  </button>
-                </div>
-              )}
+        {!isLoadingLogs && logs.length === 0 && (
+          <EmptyState
+            title="No requests match these filters"
+            description="Widen the time range, or clear the service and consumer filters."
+          />
+        )}
+
+        {logs.length > 0 && (
+          <>
+            <div className="ui-scroll-x">
+              <table className="w-full border-collapse text-left text-sm">
+                <thead>
+                  <tr className="border-b border-rule text-xs text-muted">
+                    <th className="px-3 py-2 font-medium whitespace-nowrap">Status</th>
+                    <th className="px-3 py-2 font-medium whitespace-nowrap">Method</th>
+                    <th className="px-3 py-2 font-medium whitespace-nowrap">Path</th>
+                    <th className="px-3 py-2 font-medium whitespace-nowrap">Duration</th>
+                    <th className="px-3 py-2 font-medium whitespace-nowrap">IP</th>
+                    <th className="px-3 py-2 font-medium whitespace-nowrap">Time</th>
+                  </tr>
+                </thead>
+                <tbody className="tabular divide-y divide-rule font-mono text-xs">
+                  {logs.map((log) => (
+                    <tr key={log.id}>
+                      <td className="px-3 py-2.5">
+                        <span
+                          className={`rounded-chip border px-2 py-0.5 font-medium ${statusTone(log.statusCode)}`}
+                        >
+                          {log.statusCode}
+                        </span>
+                      </td>
+                      <td className="px-3 py-2.5 font-medium whitespace-nowrap text-ink">
+                        {log.method || 'GET'}
+                      </td>
+                      <td className="max-w-xs truncate px-3 py-2.5 text-ink-3" title={log.path}>
+                        {log.path || '/'}
+                      </td>
+                      <td className="px-3 py-2.5 whitespace-nowrap text-muted">
+                        {log.durationMs} ms
+                      </td>
+                      <td className="px-3 py-2.5 whitespace-nowrap text-muted">{log.ip || '—'}</td>
+                      <td className="px-3 py-2.5 whitespace-nowrap text-muted">
+                        {new Date(log.time).toLocaleTimeString()}
+                      </td>
+                    </tr>
+                  ))}
+                </tbody>
+              </table>
             </div>
-          )}
-        </div>
-      </div>
+
+            {nextCursor && (
+              <div className="flex justify-center border-t border-rule p-4">
+                <Button
+                  onClick={handleLoadMore}
+                  loading={isLoadingMore}
+                  icon={<ArrowRight className="h-4 w-4" />}
+                >
+                  Load more
+                </Button>
+              </div>
+            )}
+          </>
+        )}
+      </SectionCard>
     </NavigationShell>
   );
 }

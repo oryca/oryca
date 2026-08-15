@@ -1,21 +1,25 @@
 'use client';
 
-import React, { useState, useEffect } from 'react';
+import React, { useState } from 'react';
 import { useQuery, useMutation, useQueryClient } from '@tanstack/react-query';
 import { api } from '@/lib/api';
 import NavigationShell from '@/components/NavigationShell';
+import {
+  Button,
+  PageHeader,
+  EmptyState,
+  SkeletonLine,
+  Loading,
+  useToast,
+  useConfirm,
+} from '@/components/ui';
 import {
   Mail,
   Server,
   Plus,
   Trash2,
   Edit,
-  Save,
-  CheckCircle,
   AlertTriangle,
-  ChevronDown,
-  Info,
-  Settings,
   Eye,
   FileCode
 } from 'lucide-react';
@@ -49,6 +53,8 @@ interface EmailTemplate {
 
 export default function AdminMailPage() {
   const queryClient = useQueryClient();
+  const { toast, error: toastError } = useToast();
+  const confirm = useConfirm();
   const [activeTab, setActiveTab] = useState<'servers' | 'templates'>('servers');
 
   // Form states for MailServer CRUD
@@ -71,7 +77,6 @@ export default function AdminMailPage() {
   const [selectedTemplate, setSelectedTemplate] = useState<EmailTemplate | null>(null);
 
   const [formError, setFormError] = useState<string | null>(null);
-  const [success, setSuccess] = useState<string | null>(null);
 
   // Queries
   const { data: mailServers, isLoading: isLoadingServers } = useQuery<MailServer[]>({
@@ -90,38 +95,30 @@ export default function AdminMailPage() {
     },
   });
 
-  // Load editing MailServer into form states
-  useEffect(() => {
-    if (editingServer) {
-      setServerName(editingServer.name || '');
-      setIsDefault(editingServer.default === true);
-      setSender(editingServer.sender || '');
-      setSenderEmail(editingServer.senderEmail || '');
-      setSmtpAuth(editingServer.auth !== false);
-      setSmtpHost(editingServer.smtp?.host || '');
-      setSmtpPort(editingServer.smtp?.port || '587');
-      setSmtpUser(editingServer.smtp?.user || '');
-      setSmtpPassword(editingServer.smtp?.password || '');
-      setTlsSkipVerify(editingServer.smtp?.tlsSkipVerify === true);
-      setResetExp(editingServer.resetPasswordExpired || 1440);
-      setVerifyExp(editingServer.verifyEmailExpired || 1440);
-      setIsServerFormOpen(true);
-    } else {
-      setServerName('');
-      setIsDefault(true);
-      setSender('ORYCA Gatekeeper');
-      setSenderEmail('noreply@localhost');
-      setSmtpAuth(true);
-      setSmtpHost('');
-      setSmtpPort('587');
-      setSmtpUser('');
-      setSmtpPassword('');
-      setTlsSkipVerify(false);
-      setResetExp(1440);
-      setVerifyExp(1440);
-    }
+  /** เปิดฟอร์มพร้อมเติมค่า — ทำตรงนี้ทีเดียว ไม่ต้องมี effect คอยตามซิงก์ */
+  function openServerForm(server: MailServer | null) {
+    setEditingServer(server);
+    setServerName(server?.name || '');
+    setIsDefault(server ? server.default === true : true);
+    setSender(server?.sender || 'ORYCA Gatekeeper');
+    setSenderEmail(server?.senderEmail || 'noreply@localhost');
+    setSmtpAuth(server ? server.auth !== false : true);
+    setSmtpHost(server?.smtp?.host || '');
+    setSmtpPort(server?.smtp?.port || '587');
+    setSmtpUser(server?.smtp?.user || '');
+    setSmtpPassword(server?.smtp?.password || '');
+    setTlsSkipVerify(server?.smtp?.tlsSkipVerify === true);
+    setResetExp(server?.resetPasswordExpired || 1440);
+    setVerifyExp(server?.verifyEmailExpired || 1440);
     setFormError(null);
-  }, [editingServer, isServerFormOpen]);
+    setIsServerFormOpen(true);
+  }
+
+  function closeServerForm() {
+    setIsServerFormOpen(false);
+    setEditingServer(null);
+    setFormError(null);
+  }
 
   // Mutations
   const saveServerMutation = useMutation({
@@ -154,10 +151,11 @@ export default function AdminMailPage() {
       queryClient.invalidateQueries({ queryKey: ['admin-mail-servers'] });
       setIsServerFormOpen(false);
       setEditingServer(null);
-      setSuccess('SMTP Mail Server configuration saved.');
+      // ผลของการบันทึกมองไม่เห็นบนหน้าจอ จึงต้องบอก
+      toast({ tone: 'ok', message: 'SMTP settings saved' });
     },
-    onError: (err: any) => {
-      setFormError(err.message || 'Failed to save SMTP mail server settings.');
+    onError: (err: unknown) => {
+      setFormError(err instanceof Error && err.message ? err.message : 'Could not save the SMTP settings');
     },
   });
 
@@ -167,43 +165,65 @@ export default function AdminMailPage() {
     },
     onSuccess: () => {
       queryClient.invalidateQueries({ queryKey: ['admin-mail-servers'] });
-      setSuccess('Mail Server deleted.');
+      toast({ tone: 'ok', message: 'Mail server deleted' });
     },
+    onError: (err: unknown) =>
+      toastError(err instanceof Error && err.message ? err.message : 'Could not delete the mail server'),
   });
+
+  async function askDeleteServer(server: MailServer) {
+    const ok = await confirm({
+      title: `Delete mail server "${server.name}"`,
+      consequences: [
+        'This cannot be undone',
+        server.default
+          ? 'This is the default one — no automated email goes out until you set up another'
+          : 'Verification and password-reset email keeps using the default server',
+      ],
+      confirmLabel: 'Delete server',
+      danger: true,
+    });
+    if (ok) deleteServerMutation.mutate(server.id);
+  }
 
   return (
     <NavigationShell>
+      <PageHeader
+        title="Mail settings"
+        description="The SMTP server and templates used for account verification and password resets"
+      />
+
       <div className="space-y-6">
-        {/* Toggle tabs */}
-        <div className="flex border-b border-rule pb-px gap-6">
+        <div role="tablist" aria-label="View" className="flex gap-6 border-b border-rule">
           <button
+            role="tab"
+            type="button"
+            aria-selected={activeTab === 'servers'}
             onClick={() => setActiveTab('servers')}
-            className={`pb-3 text-sm font-semibold border-b-2 transition ${
+            className={`-mb-px flex items-center gap-2 border-b-2 pb-3 text-sm whitespace-nowrap transition-colors duration-200 ${
               activeTab === 'servers'
-                ? 'border-accent text-ink font-bold'
+                ? 'border-accent font-medium text-ink'
                 : 'border-transparent text-muted hover:text-ink'
             }`}
           >
-            📬 SMTP Servers
+            <Server className="h-4 w-4" aria-hidden="true" />
+            Mail servers
           </button>
           <button
+            role="tab"
+            type="button"
+            aria-selected={activeTab === 'templates'}
             onClick={() => setActiveTab('templates')}
-            className={`pb-3 text-sm font-semibold border-b-2 transition ${
+            className={`-mb-px flex items-center gap-2 border-b-2 pb-3 text-sm whitespace-nowrap transition-colors duration-200 ${
               activeTab === 'templates'
-                ? 'border-accent text-ink font-bold'
+                ? 'border-accent font-medium text-ink'
                 : 'border-transparent text-muted hover:text-ink'
             }`}
           >
-            📝 Email Templates
+            <FileCode className="h-4 w-4" aria-hidden="true" />
+            Templates
           </button>
         </div>
-
-        {success && (
-          <div className="flex items-start gap-3 rounded-control border border-ok-edge bg-ok-wash p-4 text-xs text-ok">
-            <CheckCircle className="w-4 h-4 mt-0.5 flex-shrink-0" />
-            <div>{success}</div>
-          </div>
-        )}
 
         {/* ================================= SERVERS TAB ================================= */}
         {activeTab === 'servers' && (
@@ -212,8 +232,7 @@ export default function AdminMailPage() {
               <h2 className="text-xs font-bold text-muted uppercase tracking-wider font-title">SMTP Mail Configuration</h2>
               <button
                 onClick={() => {
-                  setEditingServer(null);
-                  setIsServerFormOpen(true);
+                  openServerForm(null);
                 }}
                 className="px-3 py-1.5 bg-accent hover:bg-accent-deep text-accent-ink text-xs font-semibold rounded-control transition duration-short flex items-center gap-1"
               >
@@ -416,8 +435,7 @@ export default function AdminMailPage() {
                       <button
                         type="button"
                         onClick={() => {
-                          setIsServerFormOpen(false);
-                          setEditingServer(null);
+                          closeServerForm();
                         }}
                         className="px-4 py-2 border border-rule hover:border-faint rounded-control text-ink-2 hover:bg-paper-2 transition"
                       >
@@ -437,12 +455,19 @@ export default function AdminMailPage() {
             )}
 
             {isLoadingServers ? (
-              <div className="space-y-4">
-                <div className="h-16 bg-paper rounded-surface border border-rule animate-pulse"></div>
-              </div>
+              <Loading label="Loading mail servers">
+                <div className="ui-card space-y-2 p-4">
+                  <SkeletonLine width="35%" className="h-4" />
+                  <SkeletonLine width="60%" />
+                </div>
+              </Loading>
             ) : !mailServers || mailServers.length === 0 ? (
-              <div className="p-8 bg-paper border border-rule border-dashed rounded-surface text-center text-xs text-muted">
-                No mail servers configured. You must set up SMTP to allow automated emails (registration confirmation, password recovery).
+              <div className="ui-card">
+                <EmptyState
+                  icon={<Mail className="h-5 w-5" />}
+                  title="No mail server configured"
+                  description="Without SMTP the portal cannot send verification or reset email, so an administrator has to verify every account by hand."
+                />
               </div>
             ) : (
               <div className="space-y-3">
@@ -470,26 +495,25 @@ export default function AdminMailPage() {
                       </div>
                     </div>
 
-                    <div className="flex gap-2 self-end sm:self-center">
-                      <button
-                        onClick={() => setEditingServer(server)}
-                        className="p-1.5 rounded-control text-muted hover:text-ink hover:bg-paper-3 transition"
-                        title="Edit Server"
-                      >
-                        <Edit className="w-4 h-4" />
-                      </button>
-                      <button
-                        onClick={() => {
-                          if (confirm(`Delete mail server "${server.name}"?`)) {
-                            deleteServerMutation.mutate(server.id);
-                          }
-                        }}
-                        disabled={deleteServerMutation.isPending}
-                        className="p-1.5 rounded-control text-muted hover:text-danger hover:bg-danger-wash border border-transparent hover:border-danger-edge transition"
-                        title="Delete Server"
-                      >
-                        <Trash2 className="w-4 h-4" />
-                      </button>
+                    <div className="flex gap-1 self-end sm:self-center">
+                      <Button
+                        size="sm"
+                        variant="ghost"
+                        onClick={() => openServerForm(server)}
+                        aria-label={`Edit server ${server.name}`}
+                        icon={<Edit className="h-4 w-4" />}
+                      />
+                      <Button
+                        size="sm"
+                        variant="ghost-danger"
+                        onClick={() => askDeleteServer(server)}
+                        loading={
+                          deleteServerMutation.isPending &&
+                          deleteServerMutation.variables === server.id
+                        }
+                        aria-label={`Delete server ${server.name}`}
+                        icon={<Trash2 className="h-4 w-4" />}
+                      />
                     </div>
                   </div>
                 ))}
@@ -505,13 +529,21 @@ export default function AdminMailPage() {
             <div className="lg:col-span-1 space-y-4">
               <h2 className="text-xs font-bold text-muted uppercase tracking-wider">Default System Templates</h2>
               {isLoadingTemplates ? (
-                <div className="space-y-3">
-                  {[...Array(2)].map((_, i) => (
-                    <div key={i} className="h-12 bg-paper rounded-control border animate-pulse"></div>
-                  ))}
-                </div>
+                <Loading label="Loading templates">
+                  <div className="space-y-2">
+                    {[0, 1].map((i) => (
+                      <SkeletonLine key={i} className="h-10" />
+                    ))}
+                  </div>
+                </Loading>
               ) : !templates || templates.length === 0 ? (
-                <p className="text-xs text-muted text-center py-6">No email templates found.</p>
+                <div className="ui-card">
+                  <EmptyState
+                    icon={<FileCode className="h-5 w-5" />}
+                    title="No email templates"
+                    description="The default templates are created the first time the control plane boots."
+                  />
+                </div>
               ) : (
                 <div className="space-y-2">
                   {templates.map((tpl) => (

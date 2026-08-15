@@ -1,23 +1,41 @@
+/* Hallmark · genre: modern-minimal · macrostructure: Workbench
+ * design-system: design.md · designed-as-app
+ */
 'use client';
 
 import React, { useState } from 'react';
-import { useQuery, useMutation, useQueryClient } from '@tanstack/react-query';
-import { api, getAccessToken } from '@/lib/api';
+import {
+  useQuery,
+  useMutation,
+  useQueryClient,
+  type UseMutationResult,
+} from '@tanstack/react-query';
+import { api } from '@/lib/api';
 import { useAuth } from '@/app/providers';
 import NavigationShell from '@/components/NavigationShell';
 import {
-  User,
-  KeyRound,
-  ShieldAlert,
-  Monitor,
-  Globe,
-  Clock,
-  Trash2,
-  AlertTriangle,
-  CheckCircle,
-  Eye,
-  EyeOff
-} from 'lucide-react';
+  Button,
+  Field,
+  PageHeader,
+  SectionCard,
+  EmptyState,
+  SkeletonLine,
+  Loading,
+  useToast,
+  useConfirm,
+} from '@/components/ui';
+import { Monitor, Globe, Clock, Trash2 } from 'lucide-react';
+
+interface AccountProfile {
+  id: string;
+  email: string;
+  username?: string;
+  firstName?: string;
+  lastName?: string;
+  displayName?: string;
+  organization?: string;
+  avatar?: string;
+}
 
 interface Session {
   id: string;
@@ -29,37 +47,46 @@ interface Session {
   loginAt: string;
 }
 
+function messageOf(err: unknown, fallback: string) {
+  return err instanceof Error && err.message ? err.message : fallback;
+}
+
 export default function ProfilePage() {
   const queryClient = useQueryClient();
-  const { user, refreshUser } = useAuth();
-  
-  // Profile update state
-  const [firstName, setFirstName] = useState(user?.firstName || '');
-  const [lastName, setLastName] = useState(user?.lastName || '');
-  const [displayName, setDisplayName] = useState(user?.displayName || '');
-  const [organization, setOrganization] = useState('');
-  
-  const [profileSuccess, setProfileSuccess] = useState<string | null>(null);
-  const [profileError, setProfileError] = useState<string | null>(null);
+  const { refreshUser } = useAuth();
+  const { toast, error: toastError } = useToast();
+  const confirm = useConfirm();
 
-  // Password change state
+  const [firstName, setFirstName] = useState('');
+  const [lastName, setLastName] = useState('');
+  const [displayName, setDisplayName] = useState('');
+  const [organization, setOrganization] = useState('');
+
   const [currentPassword, setCurrentPassword] = useState('');
   const [newPassword, setNewPassword] = useState('');
   const [confirmPassword, setConfirmPassword] = useState('');
-  const [passwordSuccess, setPasswordSuccess] = useState<string | null>(null);
-  const [passwordError, setPasswordError] = useState<string | null>(null);
+  // ตรวจรหัสผ่านหลังผู้ใช้ออกจากช่องครั้งแรกเท่านั้น ไม่ตรวจทุกตัวอักษร
+  const [confirmTouched, setConfirmTouched] = useState(false);
 
-  // Initialize profile inputs once user loads
-  React.useEffect(() => {
-    if (user) {
-      setFirstName(user.firstName || '');
-      setLastName(user.lastName || '');
-      setDisplayName(user.displayName || '');
-    }
-  }, [user]);
+  // PUT /account/profile เขียนทับทุก field ที่มันรู้จัก ไม่ใช่ patch เฉพาะที่ส่งไป
+  // จึงต้องโหลดโปรไฟล์เต็มมาก่อน แล้วส่งกลับให้ครบ ไม่งั้น username/avatar/organization
+  // จะถูกล้างเป็นค่าว่างทุกครั้งที่กดบันทึก
+  const { data: profile, isLoading: isLoadingProfile } = useQuery<AccountProfile>({
+    queryKey: ['account-profile'],
+    queryFn: async () => (await api.get('/account/profile')).data,
+  });
 
-  // Fetch active sessions
-  const { data: sessions, isLoading: isLoadingSessions, refetch: refetchSessions } = useQuery<Session[]>({
+  // ปรับ state ระหว่าง render ตามแนวทางของ React ไม่ใช่ใน effect (กัน cascading render)
+  const [syncedProfileId, setSyncedProfileId] = useState<string | undefined>(undefined);
+  if (profile && profile.id !== syncedProfileId) {
+    setSyncedProfileId(profile.id);
+    setFirstName(profile.firstName || '');
+    setLastName(profile.lastName || '');
+    setDisplayName(profile.displayName || '');
+    setOrganization(profile.organization || '');
+  }
+
+  const { data: sessions, isLoading: isLoadingSessions } = useQuery<Session[]>({
     queryKey: ['sessions'],
     queryFn: async () => {
       const res = await api.get('/account/sessions');
@@ -67,322 +94,288 @@ export default function ProfilePage() {
     },
   });
 
-  // Profile update mutation
-  const updateProfileMutation = useMutation({
+  const saveProfile: UseMutationResult<unknown, Error, void> = useMutation({
     mutationFn: async () => {
-      setProfileError(null);
-      setProfileSuccess(null);
       const res = await api.put('/account/profile', {
         firstName,
         lastName,
         displayName,
         organization,
+        // ส่งคืนตามที่ได้มา สองอันนี้หน้านี้ไม่ได้แก้ แต่ถ้าไม่ส่งจะโดนล้าง
+        username: profile?.username ?? '',
+        avatar: profile?.avatar ?? '',
       });
       return res.data;
     },
+    // สำเร็จแล้วชื่อในแถบข้างเปลี่ยนให้เห็นเอง จึงไม่ต้อง toast
     onSuccess: async () => {
+      queryClient.invalidateQueries({ queryKey: ['account-profile'] });
       await refreshUser();
-      setProfileSuccess('Profile updated successfully.');
     },
-    onError: (err: any) => {
-      setProfileError(err.message || 'Failed to update profile.');
-    },
+    onError: (err) =>
+      toastError(messageOf(err, 'Could not save your profile'), () => saveProfile.mutate()),
   });
 
-  // Password change mutation
-  const changePasswordMutation = useMutation({
+  const changePassword: UseMutationResult<unknown, Error, void> = useMutation({
     mutationFn: async () => {
-      setPasswordError(null);
-      setPasswordSuccess(null);
-      if (newPassword !== confirmPassword) {
-        throw new Error('New passwords do not match.');
-      }
       const res = await api.post('/account/change-password', {
         currentPassword,
         newPassword,
       });
       return res.data;
     },
+    // ผลมองไม่เห็นบนหน้าจอ จึงต้องบอก
     onSuccess: () => {
-      setPasswordSuccess('Password changed successfully.');
+      toast({ tone: 'ok', message: 'Password changed' });
       setCurrentPassword('');
       setNewPassword('');
       setConfirmPassword('');
+      setConfirmTouched(false);
     },
-    onError: (err: any) => {
-      setPasswordError(err.message || 'Failed to change password.');
-    },
+    onError: (err) => toastError(messageOf(err, 'Could not change the password')),
   });
 
-  // Revoke session mutation
-  const revokeSessionMutation = useMutation({
+  const revokeOne: UseMutationResult<void, Error, string> = useMutation({
     mutationFn: async (sessionId: string) => {
       await api.delete(`/account/sessions/${sessionId}`);
     },
-    onSuccess: () => {
-      queryClient.invalidateQueries({ queryKey: ['sessions'] });
-    },
+    onSuccess: () => queryClient.invalidateQueries({ queryKey: ['sessions'] }),
+    onError: (err, id) =>
+      toastError(messageOf(err, 'Could not revoke that device'), () => revokeOne.mutate(id)),
   });
 
-  // Revoke all other sessions mutation
-  const revokeAllSessionsMutation = useMutation({
+  const revokeAll: UseMutationResult<void, Error, void> = useMutation({
     mutationFn: async () => {
       await api.delete('/account/sessions');
     },
-    onSuccess: () => {
-      queryClient.invalidateQueries({ queryKey: ['sessions'] });
-    },
+    onSuccess: () => queryClient.invalidateQueries({ queryKey: ['sessions'] }),
+    onError: (err) =>
+      toastError(messageOf(err, 'Could not revoke the other devices'), () => revokeAll.mutate()),
   });
+
+  const passwordMismatch =
+    confirmTouched && confirmPassword.length > 0 && newPassword !== confirmPassword;
+
+  async function askRevokeOne(session: Session) {
+    const ok = await confirm({
+      title: 'Revoke this device',
+      description: `${session.os || 'Unknown OS'} · ${session.browser || 'Unknown browser'}`,
+      consequences: [
+        'That device is signed out immediately',
+        'It has to sign in again to keep working',
+      ],
+      confirmLabel: 'Revoke',
+      danger: true,
+    });
+    if (ok) revokeOne.mutate(session.id);
+  }
+
+  async function askRevokeAll() {
+    const ok = await confirm({
+      title: 'Revoke every other device',
+      consequences: [
+        'This browser stays signed in',
+        'Every other device is signed out immediately',
+      ],
+      confirmLabel: 'Revoke all',
+      danger: true,
+    });
+    if (ok) revokeAll.mutate();
+  }
 
   return (
     <NavigationShell>
-      <div className="space-y-6">
-        <div>
-          <h1 className="font-title text-2xl font-bold tracking-tight text-ink">
-            Profile & Sessions
-          </h1>
-          <p className="text-sm text-muted">
-            Manage your profile details, security settings, and active login sessions
-          </p>
-        </div>
+      <PageHeader
+        title="Profile & Sessions"
+        description="Your details, your password, and the devices signed in right now"
+      />
 
-        <div className="grid grid-cols-1 lg:grid-cols-2 gap-6">
-          {/* Profile Details Card */}
-          <div className="bg-paper border border-rule rounded-surface p-6 shadow-sm">
-            <h2 className="font-title text-base font-semibold text-ink flex items-center gap-2 mb-4 border-b border-rule pb-2">
-              <User className="w-5 h-5 text-accent" /> Profile Details
-            </h2>
-
-            {profileSuccess && (
-              <div className="flex items-start gap-3 rounded-control border border-ok-edge bg-ok-wash p-4 text-xs text-ok mb-4">
-                <CheckCircle className="w-4 h-4 flex-shrink-0 mt-0.5" />
-                <div>{profileSuccess}</div>
-              </div>
-            )}
-
-            {profileError && (
-              <div className="flex items-start gap-3 rounded-control border border-danger-edge bg-danger-wash p-4 text-xs text-danger mb-4">
-                <AlertTriangle className="w-4 h-4 flex-shrink-0 mt-0.5" />
-                <div>{profileError}</div>
-              </div>
-            )}
-
-            <form
-              onSubmit={(e) => {
-                e.preventDefault();
-                updateProfileMutation.mutate();
-              }}
-              className="space-y-4"
-            >
-              <div className="grid grid-cols-2 gap-4">
-                <div>
-                  <label className="text-xs font-semibold text-muted uppercase tracking-wider block mb-1">
-                    First Name
-                  </label>
-                  <input
-                    type="text"
-                    value={firstName}
-                    onChange={(e) => setFirstName(e.target.value)}
-                    className="w-full bg-paper-2 border border-rule rounded-control px-3 py-2 text-sm text-ink outline-none focus:border-focus focus:ring-1 focus:ring-focus font-sans"
-                  />
-                </div>
-                <div>
-                  <label className="text-xs font-semibold text-muted uppercase tracking-wider block mb-1">
-                    Last Name
-                  </label>
-                  <input
-                    type="text"
-                    value={lastName}
-                    onChange={(e) => setLastName(e.target.value)}
-                    className="w-full bg-paper-2 border border-rule rounded-control px-3 py-2 text-sm text-ink outline-none focus:border-focus focus:ring-1 focus:ring-focus font-sans"
-                  />
-                </div>
-              </div>
-
-              <div>
-                <label className="text-xs font-semibold text-muted uppercase tracking-wider block mb-1">
-                  Display Name
-                </label>
-                <input
-                  type="text"
-                  value={displayName}
-                  onChange={(e) => setDisplayName(e.target.value)}
-                  className="w-full bg-paper-2 border border-rule rounded-control px-3 py-2 text-sm text-ink outline-none focus:border-focus focus:ring-1 focus:ring-focus font-sans"
-                  placeholder="e.g. John Doe"
-                />
-              </div>
-
-              <div>
-                <label className="text-xs font-semibold text-muted uppercase tracking-wider block mb-1">
-                  Organization / Company
-                </label>
-                <input
-                  type="text"
-                  value={organization}
-                  onChange={(e) => setOrganization(e.target.value)}
-                  className="w-full bg-paper-2 border border-rule rounded-control px-3 py-2 text-sm text-ink outline-none focus:border-focus focus:ring-1 focus:ring-focus font-sans"
-                  placeholder="e.g. Acme Corp"
-                />
-              </div>
-
-              <div className="pt-2">
-                <button
-                  type="submit"
-                  disabled={updateProfileMutation.isPending}
-                  className="px-4 py-2 bg-accent hover:bg-accent-deep text-accent-ink text-sm font-semibold rounded-control transition duration-short disabled:opacity-50"
-                >
-                  {updateProfileMutation.isPending ? 'Saving...' : 'Save Profile'}
-                </button>
-              </div>
-            </form>
-          </div>
-
-          {/* Change Password Card */}
-          <div className="bg-paper border border-rule rounded-surface p-6 shadow-sm">
-            <h2 className="font-title text-base font-semibold text-ink flex items-center gap-2 mb-4 border-b border-rule pb-2">
-              <KeyRound className="w-5 h-5 text-accent" /> Change Password
-            </h2>
-
-            {passwordSuccess && (
-              <div className="flex items-start gap-3 rounded-control border border-ok-edge bg-ok-wash p-4 text-xs text-ok mb-4">
-                <CheckCircle className="w-4 h-4 flex-shrink-0 mt-0.5" />
-                <div>{passwordSuccess}</div>
-              </div>
-            )}
-
-            {passwordError && (
-              <div className="flex items-start gap-3 rounded-control border border-danger-edge bg-danger-wash p-4 text-xs text-danger mb-4">
-                <AlertTriangle className="w-4 h-4 flex-shrink-0 mt-0.5" />
-                <div>{passwordError}</div>
-              </div>
-            )}
-
-            <form
-              onSubmit={(e) => {
-                e.preventDefault();
-                changePasswordMutation.mutate();
-              }}
-              className="space-y-4"
-            >
-              <div>
-                <label className="text-xs font-semibold text-muted uppercase tracking-wider block mb-1">
-                  Current Password
-                </label>
-                <input
-                  type="password"
-                  value={currentPassword}
-                  onChange={(e) => setCurrentPassword(e.target.value)}
-                  required
-                  className="w-full bg-paper-2 border border-rule rounded-control px-3 py-2 text-sm text-ink outline-none focus:border-focus focus:ring-1 focus:ring-focus font-sans"
-                />
-              </div>
-
-              <div>
-                <label className="text-xs font-semibold text-muted uppercase tracking-wider block mb-1">
-                  New Password
-                </label>
-                <input
-                  type="password"
-                  value={newPassword}
-                  onChange={(e) => setNewPassword(e.target.value)}
-                  required
-                  className="w-full bg-paper-2 border border-rule rounded-control px-3 py-2 text-sm text-ink outline-none focus:border-focus focus:ring-1 focus:ring-focus font-sans"
-                />
-              </div>
-
-              <div>
-                <label className="text-xs font-semibold text-muted uppercase tracking-wider block mb-1">
-                  Confirm New Password
-                </label>
-                <input
-                  type="password"
-                  value={confirmPassword}
-                  onChange={(e) => setConfirmPassword(e.target.value)}
-                  required
-                  className="w-full bg-paper-2 border border-rule rounded-control px-3 py-2 text-sm text-ink outline-none focus:border-focus focus:ring-1 focus:ring-focus font-sans"
-                />
-              </div>
-
-              <div className="pt-2">
-                <button
-                  type="submit"
-                  disabled={changePasswordMutation.isPending}
-                  className="px-4 py-2 bg-accent hover:bg-accent-deep text-accent-ink text-sm font-semibold rounded-control transition duration-short disabled:opacity-50"
-                >
-                  {changePasswordMutation.isPending ? 'Updating...' : 'Update Password'}
-                </button>
-              </div>
-            </form>
-          </div>
-        </div>
-
-        {/* Sessions Card */}
-        <div className="bg-paper border border-rule rounded-surface p-6 shadow-sm">
-          <div className="flex flex-col sm:flex-row sm:items-center sm:justify-between gap-4 mb-4 border-b border-rule pb-2">
-            <h2 className="font-title text-base font-semibold text-ink flex items-center gap-2">
-              <Monitor className="w-5 h-5 text-accent" /> Active Login Sessions
-            </h2>
-            <button
-              onClick={() => {
-                if (confirm('Are you sure you want to revoke all other active sessions? You will remain logged in on this browser.')) {
-                  revokeAllSessionsMutation.mutate();
-                }
-              }}
-              disabled={revokeAllSessionsMutation.isPending || !sessions || sessions.length <= 1}
-              className="text-xs font-semibold text-danger hover:underline disabled:opacity-50 disabled:no-underline"
-            >
-              Revoke All Other Sessions
-            </button>
-          </div>
-
-          {isLoadingSessions ? (
-            <div className="flex justify-center p-8">
-              <div className="w-6 h-6 border-2 border-rule border-t-accent rounded-full animate-spin"></div>
+      <div className="grid grid-cols-1 gap-6 lg:grid-cols-2">
+        <SectionCard title="Your details" description="The display name is what shows in the sidebar">
+          <form
+            className="space-y-4"
+            onSubmit={(e) => {
+              e.preventDefault();
+              saveProfile.mutate();
+            }}
+          >
+            <div className="grid grid-cols-1 gap-4 sm:grid-cols-2">
+              <Field
+                label="First name"
+                value={firstName}
+                onChange={(e) => setFirstName(e.target.value)}
+                autoComplete="given-name"
+              />
+              <Field
+                label="Last name"
+                value={lastName}
+                onChange={(e) => setLastName(e.target.value)}
+                autoComplete="family-name"
+              />
             </div>
-          ) : !sessions || sessions.length === 0 ? (
-            <p className="text-sm text-muted text-center py-6">No active sessions found.</p>
-          ) : (
-            <div className="divide-y divide-rule border border-rule rounded-surface overflow-hidden">
-              {sessions.map((session) => (
-                <div key={session.id} className="p-4 flex flex-col sm:flex-row sm:items-center justify-between gap-4 hover:bg-paper-2 transition">
-                  <div className="flex items-start gap-3">
-                    <div className="w-8 h-8 rounded-control bg-paper-3 flex items-center justify-center text-muted mt-0.5">
-                      <Monitor className="w-4 h-4" />
-                    </div>
-                    <div>
-                      <div className="text-sm font-semibold text-ink flex items-center gap-2">
-                        {session.os || 'Unknown OS'} • {session.browser || 'Unknown Browser'}
-                        {/* Tag current session (just checking if it's the first login? Or we can't fully know but it is fine to render sessions) */}
-                      </div>
-                      <div className="text-xs text-muted flex flex-wrap gap-x-4 gap-y-1 mt-0.5">
-                        <span className="flex items-center gap-1">
-                          <Globe className="w-3.5 h-3.5" /> {session.ipAddress || 'Unknown IP'} {session.location && `(${session.location})`}
-                        </span>
-                        <span className="flex items-center gap-1">
-                          <Clock className="w-3.5 h-3.5" /> Logged in: {new Date(session.loginAt).toLocaleString()}
-                        </span>
-                      </div>
-                    </div>
-                  </div>
 
-                  <button
-                    onClick={() => {
-                      if (confirm('Revoke this session? The device will be signed out immediately.')) {
-                        revokeSessionMutation.mutate(session.id);
-                      }
-                    }}
-                    disabled={revokeSessionMutation.isPending}
-                    className="self-end sm:self-center p-2 rounded-control text-muted hover:text-danger hover:bg-danger-wash border border-transparent hover:border-danger-edge transition"
-                    title="Revoke session"
-                  >
-                    <Trash2 className="w-4 h-4" />
-                  </button>
+            <Field
+              label="Display name"
+              value={displayName}
+              onChange={(e) => setDisplayName(e.target.value)}
+              placeholder="Somchai Jaidee"
+              helper="Left empty, we use the part of your email before the @"
+              autoComplete="nickname"
+            />
+
+            <Field
+              label="Organisation"
+              value={organization}
+              onChange={(e) => setOrganization(e.target.value)}
+              placeholder="Company or team"
+              autoComplete="organization"
+            />
+
+            <Button
+              type="submit"
+              variant="primary"
+              loading={saveProfile.isPending}
+              disabled={isLoadingProfile}
+            >
+              Save
+            </Button>
+          </form>
+        </SectionCard>
+
+        <SectionCard title="Change password" description="Other devices stay signed in until you revoke them">
+          <form
+            className="space-y-4"
+            onSubmit={(e) => {
+              e.preventDefault();
+              setConfirmTouched(true);
+              if (newPassword !== confirmPassword) return;
+              changePassword.mutate();
+            }}
+          >
+            <Field
+              label="Current password"
+              type="password"
+              value={currentPassword}
+              onChange={(e) => setCurrentPassword(e.target.value)}
+              required
+              autoComplete="current-password"
+            />
+            <Field
+              label="New password"
+              type="password"
+              value={newPassword}
+              onChange={(e) => setNewPassword(e.target.value)}
+              required
+              autoComplete="new-password"
+            />
+            <Field
+              label="Confirm new password"
+              type="password"
+              value={confirmPassword}
+              onChange={(e) => setConfirmPassword(e.target.value)}
+              onBlur={() => setConfirmTouched(true)}
+              error={passwordMismatch ? 'The two passwords do not match. Type them again.' : undefined}
+              required
+              autoComplete="new-password"
+            />
+
+            <Button
+              type="submit"
+              variant="primary"
+              loading={changePassword.isPending}
+              disabled={passwordMismatch}
+            >
+              Change password
+            </Button>
+          </form>
+        </SectionCard>
+      </div>
+
+      <SectionCard
+        className="mt-6"
+        title="Active sessions"
+        description="See something you do not recognise? Revoke it, then change your password"
+        flush
+        actions={
+          <Button
+            size="sm"
+            variant="danger"
+            onClick={askRevokeAll}
+            loading={revokeAll.isPending}
+            disabled={!sessions || sessions.length <= 1}
+          >
+            Revoke other devices
+          </Button>
+        }
+      >
+        {isLoadingSessions && (
+          <Loading label="Loading sessions">
+            <div className="space-y-3 p-4">
+              {[0, 1].map((i) => (
+                <div key={i}>
+                  <SkeletonLine width="45%" className="mb-2 h-4" />
+                  <SkeletonLine width="70%" />
                 </div>
               ))}
             </div>
-          )}
-        </div>
-      </div>
+          </Loading>
+        )}
+
+        {!isLoadingSessions && (!sessions || sessions.length === 0) && (
+          <EmptyState
+            icon={<Monitor className="h-5 w-5" />}
+            title="No active sessions"
+            description="Sessions appear here once you sign in from another browser or device"
+          />
+        )}
+
+        {!isLoadingSessions && sessions && sessions.length > 0 && (
+          <ul className="ui-fade divide-y divide-rule">
+            {sessions.map((session) => (
+              <li
+                key={session.id}
+                className="flex flex-col gap-3 p-4 sm:flex-row sm:items-center sm:justify-between"
+              >
+                <div className="flex min-w-0 items-start gap-3">
+                  <span
+                    aria-hidden="true"
+                    className="mt-0.5 flex h-8 w-8 shrink-0 items-center justify-center rounded-control bg-paper-3 text-muted"
+                  >
+                    <Monitor className="h-4 w-4" />
+                  </span>
+                  <div className="min-w-0">
+                    <p className="text-sm font-medium text-ink">
+                      {session.os || 'Unknown OS'} ·{' '}
+                      {session.browser || 'Unknown browser'}
+                    </p>
+                    <p className="mt-0.5 flex flex-wrap gap-x-4 gap-y-1 text-xs text-muted">
+                      <span className="inline-flex items-center gap-1">
+                        <Globe className="h-3.5 w-3.5" aria-hidden="true" />
+                        {session.ipAddress || 'Unknown IP'}
+                        {session.location && ` (${session.location})`}
+                      </span>
+                      <span className="inline-flex items-center gap-1">
+                        <Clock className="h-3.5 w-3.5" aria-hidden="true" />
+                        Signed in {new Date(session.loginAt).toLocaleString()}
+                      </span>
+                    </p>
+                  </div>
+                </div>
+
+                <Button
+                  size="sm"
+                  variant="ghost-danger"
+                  className="self-end sm:self-center"
+                  onClick={() => askRevokeOne(session)}
+                  loading={revokeOne.isPending && revokeOne.variables === session.id}
+                  aria-label="Revoke this device"
+                  icon={<Trash2 className="h-4 w-4" />}
+                />
+              </li>
+            ))}
+          </ul>
+        )}
+      </SectionCard>
     </NavigationShell>
   );
 }

@@ -1,0 +1,116 @@
+{
+  "key": "wmts-xml",
+  "label": "WMTS capabilities links",
+  "reference": "https://www.ogc.org/standards/wmts/",
+  "referenceNote": "OGC Web Map Tile Service (WMTS) 1.0.0 (OGC 07-057r7)",
+  "description": "Rewrites ResourceURL, ServiceMetadataURL and Get in a WMTS GetCapabilities response to route through the gateway, then replaces the upstream credential. This is WMTS 1.0.0, the older XML standard, not OGC API - Tiles.",
+  "types": [],
+  "match": {
+    "path": "/*",
+    "methods": [
+      "GET"
+    ]
+  },
+  "notes": [
+    "Uses local-name() xpath so it doesn't depend on the upstream's namespace prefix",
+    "field points to the attribute to rewrite (@template, @href, @xlink:href), not the element's text content"
+  ],
+  "rules": [
+    {
+      "type": "xml",
+      "target": "body",
+      "action": "replace",
+      "xpath": "//*[local-name()='ResourceURL']",
+      "conditions": [],
+      "params": {
+        "find": "{{sourceUrl}}",
+        "replace": "{{oryca_gateway_url}}",
+        "field": "@template"
+      }
+    },
+    {
+      "type": "xml",
+      "target": "body",
+      "action": "replace",
+      "xpath": "//*[local-name()='ResourceURL']",
+      "conditions": [],
+      "params": {
+        "regex": "api_key=[^&]*",
+        "replace": "{{oryca_auth}}",
+        "field": "@template"
+      }
+    },
+    {
+      "type": "xml",
+      "target": "body",
+      "action": "replace",
+      "xpath": "//*[local-name()='ServiceMetadataURL']",
+      "conditions": [],
+      "params": {
+        "find": "{{sourceUrl}}",
+        "replace": "{{oryca_gateway_url}}",
+        "field": "@href"
+      }
+    },
+    {
+      "type": "xml",
+      "target": "body",
+      "action": "replace",
+      "xpath": "//*[local-name()='ServiceMetadataURL']",
+      "conditions": [],
+      "params": {
+        "find": "{{sourceUrl}}",
+        "replace": "{{oryca_gateway_url}}",
+        "field": "@xlink:href"
+      }
+    },
+    {
+      "type": "xml",
+      "target": "body",
+      "action": "replace",
+      "xpath": "//*[local-name()='ServiceMetadataURL']",
+      "conditions": [],
+      "params": {
+        "regex": "api_key=[^&]*",
+        "replace": "{{oryca_auth}}",
+        "field": "@href"
+      }
+    },
+    {
+      "type": "xml",
+      "target": "body",
+      "action": "replace",
+      "xpath": "//*[local-name()='ServiceMetadataURL']",
+      "conditions": [],
+      "params": {
+        "regex": "api_key=[^&]*",
+        "replace": "{{oryca_auth}}",
+        "field": "@xlink:href"
+      }
+    },
+    {
+      "type": "xml",
+      "target": "body",
+      "action": "replace",
+      "xpath": "//*[local-name()='Get']",
+      "conditions": [],
+      "params": {
+        "find": "{{sourceUrl}}",
+        "replace": "{{oryca_gateway_url}}",
+        "field": "@xlink:href"
+      }
+    },
+    {
+      "type": "xml",
+      "target": "body",
+      "action": "replace",
+      "xpath": "//*[local-name()='Get']",
+      "conditions": [],
+      "params": {
+        "regex": "api_key=[^&]*",
+        "replace": "{{oryca_auth}}",
+        "field": "@xlink:href"
+      }
+    }
+  ]
+}

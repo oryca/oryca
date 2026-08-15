@@ -12,7 +12,7 @@ healthy.
 
 ## What that looks like
 
-Things that help:
+Things that help.
 
 - Being kind and taking other people seriously
 - Respecting a point of view or an experience that is not yours
@@ -20,7 +20,7 @@ Things that help:
 - Owning a mistake, apologising, and learning from it
 - Weighing what is best for the community, not only for yourself
 
-Things that do not:
+Things that do not.
 
 - Sexual language or imagery, and unwanted attention of any kind
 - Trolling, insults, and personal or political attacks
@@ -31,8 +31,8 @@ Things that do not:
 
 ## Scope
 
-This applies everywhere the project happens: the repository, its issues and pull
-requests, and whenever someone is representing the project in public.
+This applies everywhere the project happens, which is the repository, its issues and
+pull requests, and wherever someone is representing the project in public.
 
 ## Reporting
 

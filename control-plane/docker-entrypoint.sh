@@ -5,7 +5,7 @@ set -e
 # Generate one on first start so a fresh clone runs without any manual setup;
 # the key lives on a volume, so tokens stay valid across restarts.
 if [ ! -f "$ORYCA_API_JWT_PRIVATE_KEY" ]; then
-	echo "No signing key at $ORYCA_API_JWT_PRIVATE_KEY — generating one."
+	echo "No signing key at $ORYCA_API_JWT_PRIVATE_KEY. Generating one."
 	mkdir -p "$(dirname "$ORYCA_API_JWT_PRIVATE_KEY")"
 	openssl genpkey -algorithm RSA -pkeyopt rsa_keygen_bits:2048 \
 		-out "$ORYCA_API_JWT_PRIVATE_KEY" 2>/dev/null

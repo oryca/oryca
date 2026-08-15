@@ -1,11 +1,11 @@
 # Portal
 
-The web interface for ORYCA. One app for everyone: people who consume the APIs
+The web interface for ORYCA. One app for everyone, people who consume the APIs
 and the people who publish them, with the menu limited by role.
 
 ## Running it
 
-The portal needs the rest of the stack. From the repository root:
+The portal needs the rest of the stack. From the repository root.
 
 ```sh
 docker compose up -d
@@ -14,7 +14,7 @@ docker compose up -d
 Then open http://localhost:3000.
 
 To work on the portal itself, run the backend in Docker and the portal on your
-machine:
+machine.
 
 ```sh
 docker compose up -d control-plane gateway mongo redis
@@ -24,7 +24,7 @@ cd portal && npm install && npm run dev
 ## How it talks to the backend
 
 Every call is made from the browser, never from the Next.js server. That keeps
-one address correct for both: the one your users type.
+one address correct for both, the one your users type.
 
 Those addresses are read when a page is served, not when the image is built, so
 one image works on any domain. `app/layout.tsx` puts them into the page as

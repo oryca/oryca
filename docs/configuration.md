@@ -2,9 +2,11 @@
 
 Everything is environment variables. There is no config file to write.
 
-Running with the compose files, the ten settings in `.env` are all you touch.
-The compose files translate them into whatever each service expects. The rest of
-this page is for running the binaries yourself, or for tuning.
+Running with the compose files, the ten settings in `.env` are all you touch, and
+the compose file translates them into whatever each service expects. Only one has
+no default, and compose refuses to start without it.
+
+The rest of this page is for running the binaries yourself, or for tuning.
 
 ---
 
@@ -12,9 +14,9 @@ this page is for running the binaries yourself, or for tuning.
 
 | Setting | Default | What it does |
 |---|---|---|
-| `ORYCA_INTERNAL_SECRET` | `dev-internal-secret-change-me` | Shared by the two services. The gateway sends it on every `/internal/*` call. **Change it** before anything is reachable from a network you do not control. |
+| `ORYCA_INTERNAL_SECRET` | none | Shared by the two services. The gateway sends it on every `/internal/*` call, and whoever holds it can read every service and API key you have. There is no default: generate one with `openssl rand -hex 32`. |
 | `ORYCA_INTERNAL_SECRET_PREV` | empty | The previous secret, accepted alongside the current one. Set it while rotating, remove it after. |
-| `ORYCA_API_ROOT_EMAIL` | `admin@localhost` | The first administrator, created on the first start only. |
+| `ORYCA_API_ROOT_EMAIL` | empty | The first administrator, created on the first start only. `.env.example` ships `admin@localhost`; leaving it truly empty skips creating a root account, and the log says so. |
 | `ORYCA_API_ROOT_PASSWORD` | empty | Leave empty and one is generated and printed to the log once. |
 | `ORYCA_PORTAL_PORT` | `3000` | Host port for the portal. |
 | `ORYCA_GATEWAY_PORT` | `9002` | Host port for the gateway. |
@@ -25,7 +27,8 @@ this page is for running the binaries yourself, or for tuning.
 
 The last two are the ones people get wrong. They are addresses your users' browsers
 resolve, so a container name like `http://control-plane:9001` will not work. Change
-them and restart the portal. No rebuild: the values are read when a page is served.
+them and restart the portal. No rebuild is needed, since the values are read when a
+page is served.
 
 ---
 
@@ -64,12 +67,12 @@ missed; `ORYCA_GW_SYNC_CHANNEL` (`oryca:sync-events`) must match the control
 plane's. `ORYCA_GW_USER_CACHE_TTL` (90s) and
 `ORYCA_GW_USER_CACHE_REFRESH_CONCURRENCY` (25) govern user lookups.
 
-**Circuit breaker**, per upstream host: `ORYCA_GW_CB_CONSECUTIVE_FAILURES` (5)
+**Circuit breaker**, per upstream host. `ORYCA_GW_CB_CONSECUTIVE_FAILURES` (5)
 to open, `ORYCA_GW_CB_TIMEOUT_SEC` (30) before a retry, `ORYCA_GW_CB_MAX_REQUESTS`
 (5) allowed through while half-open, `ORYCA_GW_CB_INTERVAL_SEC` (60) to reset the
 count, `ORYCA_GW_CB_IDLE_EVICT_MIN` (30) to forget a host.
 
-**Upstream connections**: `ORYCA_GW_UPSTREAM_DIAL_TIMEOUT` (30s),
+**Upstream connections.** `ORYCA_GW_UPSTREAM_DIAL_TIMEOUT` (30s),
 `_RESPONSE_HEADER_TIMEOUT` (30s), `_TLS_HANDSHAKE_TIMEOUT` (10s),
 `_KEEP_ALIVE` (30s), `_IDLE_CONN_TIMEOUT` (90s), `_MAX_IDLE_CONNS` (1000),
 `_MAX_IDLE_CONNS_PER_HOST` (100), `_MAX_CONNS_PER_HOST` (200).
@@ -88,35 +91,35 @@ count, `ORYCA_GW_CB_IDLE_EVICT_MIN` (30) to forget a host.
 | `ORYCA_API_REDIS_DB` | `0` | Must match the gateway's |
 | `ORYCA_API_ALLOW_ORIGIN` | `*` | CORS origin |
 | `ORYCA_API_BODY_LIMIT` | `10M` | Largest request accepted |
-| `ORYCA_API_JWT_PRIVATE_KEY` | `auth-private.key` | Signing key path. Generated on first start if absent. |
+| `ORYCA_API_JWT_PRIVATE_KEY` | `auth-private.key` | Signing key path. The Docker image generates the pair on first start if it is missing. Running the binary yourself, generate it with `openssl` first, see [Local Development](../README.md#local-development--tests). |
 | `ORYCA_API_JWT_PUBLIC_KEY` | `auth-public.key` | Public half, served at `/.well-known/jwks.json` |
 | `ORYCA_API_SEED_DIR` | built-in | Where the starting YAML lives |
 | `ORYCA_API_LOG_CONSUMER_ENABLED` | `true` | Set `false` to stop writing request logs to MongoDB |
 
-**Mongo pool**: `ORYCA_API_DB_MAX_POOL_SIZE` (50), `_MIN_POOL_SIZE` (10),
+**Mongo pool.** `ORYCA_API_DB_MAX_POOL_SIZE` (50), `_MIN_POOL_SIZE` (10),
 `_SOCKET_TIMEOUT` (20s).
-**Redis**: `_PASSWORD`, `_POOL_SIZE` (50), `_MIN_IDLE_CONNS` (10),
+**Redis.** `_PASSWORD`, `_POOL_SIZE` (50), `_MIN_IDLE_CONNS` (10),
 `_DIAL_TIMEOUT` (5s), `_READ_TIMEOUT` and `_WRITE_TIMEOUT` (3s),
 `_EXPIRES` (300s, the general cache TTL), `_ROUTING_TTL` (86400s, how long
 routing data survives without the control plane).
-**HTTP timeouts**: `ORYCA_API_READ_TIMEOUT` (60s), `_READ_HEADER_TIMEOUT` (10s),
+**HTTP timeouts.** `ORYCA_API_READ_TIMEOUT` (60s), `_READ_HEADER_TIMEOUT` (10s),
 `_IDLE_TIMEOUT` (120s).
-**Sync**: `ORYCA_CP_SYNC_CHANNEL` (`oryca:sync-events`), which must match the
+**Sync.** `ORYCA_CP_SYNC_CHANNEL` (`oryca:sync-events`), which must match the
 gateway's.
 
 ---
 
 ## Both
 
-`LOG_FORMAT`: `console` for readable output, anything else for JSON.
+`LOG_FORMAT` takes `console` for readable output, anything else for JSON.
 
 ---
 
 ## What is not an environment variable
 
-Settings you change while it runs live in the database, not here: sign-up on or
-off, the terms and privacy text, token lifetimes, email templates, packages and
-their rate limits. They start from the YAML in `control-plane/seed/`, which is
+Settings you change while it runs live in the database, not here. Sign-up on or off,
+the terms and privacy text, token lifetimes, email templates, packages and their
+rate limits. They start from the YAML in `control-plane/seed/`, which is
 read once against an empty database. After that the database wins, so editing in
 the portal survives a restart.
 

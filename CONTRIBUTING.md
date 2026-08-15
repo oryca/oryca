@@ -34,6 +34,6 @@ go test ./...
 gofmt -l .
 ```
 
-One rule to know: the gateway and the control plane never import each other. They
+There is one rule to know. The gateway and the control plane never import each other. They
 talk over HTTP and Redis, described in [docs/sync-contract.md](docs/sync-contract.md).
 `boundary_test.go` fails the build if that changes.

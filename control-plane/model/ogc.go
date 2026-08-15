@@ -33,30 +33,53 @@ type OGCInfo struct {
 // The versions each set follows are noted per entry; a server on a different
 // version may legitimately answer at other paths.
 var ogcCorePaths = map[string][]string{
-	// OGC API - Features - Part 1: Core 1.0 (also ISO 19168-1)
+	// OGC API - Features - Part 1: Core 1.0 (OGC 17-069r4, also ISO 19168-1)
+	// The API definition is reached through the landing page's service-desc link
+	// rather than a fixed path, so it is not listed.
 	TypeOGCAPIFeatures: {
 		"/", "/conformance", "/collections",
 		"/collections/{collectionId}",
 		"/collections/{collectionId}/items",
+		"/collections/{collectionId}/items/{featureId}",
 	},
 	// STAC API 1.0. A community specification, not an OGC standard, though its
-	// item search follows OGC API - Features closely.
+	// item access follows OGC API - Features closely, which is where the
+	// collection and item paths come from.
 	TypeOGCAPISTAC: {
-		"/", "/conformance", "/collections", "/search",
+		"/", "/conformance", "/collections",
+		"/collections/{collectionId}",
+		"/collections/{collectionId}/items",
+		"/collections/{collectionId}/items/{featureId}",
+		"/search",
 	},
 	// OGC API - Styles - Part 1: Core, still a draft at the time of writing, so
 	// these paths can change before it is adopted.
 	TypeOGCAPIStyles: {
 		"/", "/conformance", "/styles",
+		"/styles/{styleId}",
+		"/styles/{styleId}/metadata",
 	},
-	// OGC API - Tiles - Part 1: Core 1.0
+	// OGC API - Tiles - Part 1: Core 1.0 (OGC 20-057). Only the vector tileset
+	// classes are listed. Map tiles and styled map tiles are separate
+	// requirements classes that fewer servers implement, and listing every one
+	// would bury the paths most services actually have. The standard says these
+	// paths are examples rather than requirements, so a server that documents
+	// others in its API definition is still conformant.
 	TypeOGCAPITiles: {
 		"/", "/conformance", "/tileMatrixSets",
+		"/tileMatrixSets/{tileMatrixSetId}",
+		"/tiles",
+		"/tiles/{tileMatrixSetId}",
+		"/tiles/{tileMatrixSetId}/{tileMatrix}/{tileRow}/{tileCol}",
+		"/collections/{collectionId}/tiles",
 	},
-	// SensorThings API 1.0 and 1.1. It advertises conformance from its landing
-	// page rather than a /conformance endpoint, so only the entity sets are listed.
+	// SensorThings API 1.0 and 1.1 (OGC 18-088). All eight entity sets of Part 1
+	// Sensing. It advertises conformance from its landing page rather than a
+	// /conformance endpoint, so that path is not listed.
 	TypeOGCAPISensorThings: {
-		"/", "/Things", "/Datastreams", "/Observations",
+		"/", "/Things", "/Locations", "/HistoricalLocations",
+		"/Datastreams", "/Sensors", "/ObservedProperties",
+		"/Observations", "/FeaturesOfInterest",
 	},
 }
 

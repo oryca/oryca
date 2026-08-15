@@ -20,7 +20,10 @@
     --color-ink:          oklch(24%   0.020 258);
     --color-ink-2:        oklch(34%   0.018 257);
     --color-ink-3:        oklch(44%   0.016 257);
-    --color-muted:        oklch(52%   0.014 256);
+    /* muted แบกข้อความรองทั้งแอป (238 จุด) — L52% ให้ contrast 4.03:1 บนกระดาษ
+     * ต่ำกว่าเกณฑ์ 4.5:1 ของข้อความขนาดปกติ ลดเป็น 47% ได้ 4.8:1 */
+    --color-muted:        oklch(47%   0.014 256);
+    /* faint ไม่ใช่สีข้อความ — ใช้กับเส้น scrollbar และของประดับเท่านั้น */
     --color-faint:        oklch(63%   0.011 255);
 
     /* ---- The one signal. Target < 5% of any viewport. ---- */
@@ -49,6 +52,7 @@
     --color-warn-edge:    oklch(86%   0.060 75);
     --color-warn-wash:    oklch(96.5% 0.030 78);
     --color-danger:       oklch(53%   0.190 20);
+    --color-danger-deep:  oklch(47%   0.190 20);
     --color-danger-edge:  oklch(86%   0.060 20);
     --color-danger-wash:  oklch(96%   0.025 20);
 
@@ -98,6 +102,9 @@
 
     /* ---- Elevation: one barely-there lift. Depth comes from hairlines. ---- */
     --lift: 0 1px 2px oklch(24% 0.02 258 / 0.05);
+    /* ชั้นที่ลอยจริงมีสองอันเท่านั้น: dialog กับ toast */
+    --shadow-pop:   0 12px 32px oklch(24% 0.02 258 / 0.16);
+    --shadow-toast: 0 8px 24px  oklch(24% 0.02 258 / 0.12);
 
     /* ---- z-index: named scale, never 9999 ---- */
     --z-rail:   10;

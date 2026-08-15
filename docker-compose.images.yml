@@ -68,7 +68,7 @@ services:
       ORYCA_API_ALLOW_ORIGIN: '*'
       ORYCA_API_JWT_PRIVATE_KEY: /data/auth-private.key
       ORYCA_API_JWT_PUBLIC_KEY: /data/auth-public.key
-      ORYCA_INTERNAL_SECRET: ${ORYCA_INTERNAL_SECRET:?set ORYCA_INTERNAL_SECRET in .env}
+      ORYCA_INTERNAL_SECRET: ${ORYCA_INTERNAL_SECRET:?generate one with openssl rand -hex 32 and put it in .env}
       ORYCA_API_ROOT_EMAIL: ${ORYCA_API_ROOT_EMAIL:-admin@localhost}
       ORYCA_API_ROOT_PASSWORD: ${ORYCA_API_ROOT_PASSWORD:-}
       ORYCA_API_LOG_RETENTION_DAYS: ${ORYCA_API_LOG_RETENTION_DAYS:-14}
@@ -100,7 +100,7 @@ services:
       ORYCA_GW_REDIS_DB: 0
       ORYCA_GW_ALLOW_ORIGIN: '*'
       ORYCA_GW_CP_BASE_URL: http://control-plane:9001/control-plane/api/v1
-      ORYCA_GW_INTERNAL_SECRET: ${ORYCA_INTERNAL_SECRET:?set ORYCA_INTERNAL_SECRET in .env}
+      ORYCA_GW_INTERNAL_SECRET: ${ORYCA_INTERNAL_SECRET:?generate one with openssl rand -hex 32 and put it in .env}
       LOG_FORMAT: console
     healthcheck:
       test:

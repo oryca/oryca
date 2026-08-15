@@ -1,13 +1,16 @@
+/* Hallmark · genre: modern-minimal · macrostructure: Workbench
+ * design-system: design.md · designed-as-app
+ * เมนูจัดกลุ่มตามงาน ไม่ใช่ list แบน · drawer มือถือ: Esc · scroll lock · focus trap
+ */
 'use client';
 
-import React, { useState, useEffect } from 'react';
+import React, { useState, useEffect, useRef, useCallback } from 'react';
 import { useRouter, usePathname } from 'next/navigation';
 import Link from 'next/link';
 import { useAuth } from '@/app/providers';
 import { api } from '@/lib/api';
 import {
   LayoutDashboard,
-  BookOpen,
   User,
   Bell,
   Network,
@@ -17,38 +20,181 @@ import {
   LogOut,
   Menu,
   X,
-  Database,
   Key,
   TerminalSquare,
 } from 'lucide-react';
 
+type Role = 'user' | 'admin' | 'root';
+
 interface NavItem {
   name: string;
   href: string;
-  icon: React.ComponentType<any>;
-  roles: ('user' | 'admin' | 'root')[];
+  icon: React.ComponentType<{ className?: string }>;
 }
 
-const navItems: NavItem[] = [
-  { name: 'Dashboard', href: '/dashboard', icon: LayoutDashboard, roles: ['user', 'admin', 'root'] },
-  { name: 'Services & Keys', href: '/services', icon: Key, roles: ['user', 'admin', 'root'] },
-  { name: 'Sandbox', href: '/sandbox', icon: TerminalSquare, roles: ['user', 'admin', 'root'] },
-  { name: 'Profile & Sessions', href: '/profile', icon: User, roles: ['user', 'admin', 'root'] },
-  { name: 'Notifications', href: '/notifications', icon: Bell, roles: ['user', 'admin', 'root'] },
-  
-  // Admin & Root only
-  { name: 'Manage Services', href: '/admin/services', icon: GitBranch, roles: ['admin', 'root'] },
-  { name: 'Transforms & Presets', href: '/admin/transforms', icon: Layers, roles: ['admin', 'root'] },
-  { name: 'Packages & Users', href: '/admin/packages', icon: Network, roles: ['admin', 'root'] },
-  { name: 'Mail settings', href: '/admin/mail', icon: Mail, roles: ['admin', 'root'] },
+interface NavGroup {
+  label: string;
+  roles: Role[];
+  items: NavItem[];
+}
+
+const navGroups: NavGroup[] = [
+  {
+    label: 'Work',
+    roles: ['user', 'admin', 'root'],
+    items: [
+      { name: 'Dashboard', href: '/dashboard', icon: LayoutDashboard },
+      { name: 'Services & Keys', href: '/services', icon: Key },
+      { name: 'Sandbox', href: '/sandbox', icon: TerminalSquare },
+    ],
+  },
+  {
+    label: 'Account',
+    roles: ['user', 'admin', 'root'],
+    items: [
+      { name: 'Profile & Sessions', href: '/profile', icon: User },
+      { name: 'Notifications', href: '/notifications', icon: Bell },
+    ],
+  },
+  {
+    label: 'Administration',
+    roles: ['admin', 'root'],
+    items: [
+      { name: 'Manage Services', href: '/admin/services', icon: GitBranch },
+      { name: 'Transforms & Presets', href: '/admin/transforms', icon: Layers },
+      { name: 'Packages & Users', href: '/admin/packages', icon: Network },
+      { name: 'Mail settings', href: '/admin/mail', icon: Mail },
+    ],
+  },
 ];
+
+function NavLink({
+  item,
+  pathname,
+  unreadCount,
+  onNavigate,
+}: {
+  item: NavItem;
+  pathname: string;
+  unreadCount: number;
+  onNavigate?: () => void;
+}) {
+  const isActive = pathname.startsWith(item.href);
+  const Icon = item.icon;
+  const showBadge = item.href === '/notifications' && unreadCount > 0;
+
+  return (
+    <Link
+      href={item.href}
+      onClick={onNavigate}
+      aria-current={isActive ? 'page' : undefined}
+      className={`flex items-center gap-3 rounded-control border px-3 py-2 text-sm transition-colors duration-200 ${
+        isActive
+          ? 'border-accent-edge bg-accent-wash font-medium text-accent'
+          : 'border-transparent text-ink-2 hover:bg-paper-3 hover:text-ink'
+      }`}
+    >
+      <Icon className={`h-[18px] w-[18px] shrink-0 ${isActive ? 'text-accent' : 'text-muted'}`} />
+      <span className="min-w-0 flex-1 truncate">{item.name}</span>
+      {showBadge && (
+        <span className="tabular shrink-0 rounded-full bg-accent px-1.5 py-0.5 text-[11px] font-semibold text-accent-ink">
+          {unreadCount}
+        </span>
+      )}
+    </Link>
+  );
+}
+
+function NavGroups({
+  groups,
+  pathname,
+  unreadCount,
+  onNavigate,
+}: {
+  groups: NavGroup[];
+  pathname: string;
+  unreadCount: number;
+  onNavigate?: () => void;
+}) {
+  return (
+    <>
+      {groups.map((group) => (
+        <div key={group.label} className="mb-5">
+          <p className="mb-1.5 px-3 text-[11px] font-medium tracking-wide text-muted">
+            {group.label}
+          </p>
+          <div className="space-y-0.5">
+            {group.items.map((item) => (
+              <NavLink
+                key={item.href}
+                item={item}
+                pathname={pathname}
+                unreadCount={unreadCount}
+                onNavigate={onNavigate}
+              />
+            ))}
+          </div>
+        </div>
+      ))}
+    </>
+  );
+}
+
+function AccountRow({
+  email,
+  name,
+  compact = false,
+  onLogout,
+}: {
+  email: string;
+  name: string;
+  compact?: boolean;
+  onLogout: () => void;
+}) {
+  return (
+    <div className="flex items-center justify-between gap-2">
+      <div className="flex min-w-0 items-center gap-2.5">
+        <span
+          aria-hidden="true"
+          className="flex h-9 w-9 shrink-0 items-center justify-center rounded-full border border-accent-edge bg-accent-wash font-title text-sm font-semibold uppercase text-accent"
+        >
+          {email.substring(0, 2)}
+        </span>
+        <span className="min-w-0">
+          <span className="block truncate text-sm font-medium text-ink">{name}</span>
+          {!compact && <span className="block truncate text-xs text-muted">{email}</span>}
+        </span>
+      </div>
+      <button
+        type="button"
+        onClick={onLogout}
+        title="Sign out"
+        aria-label="Sign out"
+        className="ui-btn ui-btn--sm ui-btn--icon ui-btn--ghost"
+      >
+        <LogOut className="h-[18px] w-[18px]" />
+      </button>
+    </div>
+  );
+}
+
+function Wordmark({ size = 'md' }: { size?: 'sm' | 'md' }) {
+  return (
+    <span className={`font-title font-semibold tracking-tight text-ink ${size === 'sm' ? 'text-base' : 'text-lg'}`}>
+      oryca<span className="text-accent">.</span>portal
+    </span>
+  );
+}
 
 export default function NavigationShell({ children }: { children: React.ReactNode }) {
   const router = useRouter();
   const pathname = usePathname();
   const { user, isAuthenticated, isLoading, logout } = useAuth();
-  const [isMobileMenuOpen, setIsMobileMenuOpen] = useState(false);
+  const [isDrawerOpen, setIsDrawerOpen] = useState(false);
   const [unreadCount, setUnreadCount] = useState(0);
+
+  const drawerRef = useRef<HTMLDialogElement>(null);
+  const toggleRef = useRef<HTMLButtonElement>(null);
 
   useEffect(() => {
     if (!isLoading && !isAuthenticated) {
@@ -56,173 +202,171 @@ export default function NavigationShell({ children }: { children: React.ReactNod
     }
   }, [isLoading, isAuthenticated, router]);
 
-  // Fetch unread notification count
   useEffect(() => {
-    if (isAuthenticated) {
-      async function getUnread() {
-        try {
-          const res = await api.get('/notifications/unread-count');
-          setUnreadCount(res.data.unreadCount || 0);
-        } catch {
-          // Ignored
-        }
+    if (!isAuthenticated) return;
+
+    let cancelled = false;
+    async function getUnread() {
+      try {
+        const res = await api.get('/notifications/unread-count');
+        if (!cancelled) setUnreadCount(res.data.unreadCount || 0);
+      } catch {
+        // เงียบไว้ — ตัวเลขแจ้งเตือนพลาดได้ ไม่ควรรบกวนผู้ใช้
       }
-      getUnread();
-      
-      // Set interval to fetch count every 15s
-      const interval = setInterval(getUnread, 15000);
-      return () => clearInterval(interval);
     }
+    getUnread();
+    const interval = setInterval(getUnread, 15000);
+    return () => {
+      cancelled = true;
+      clearInterval(interval);
+    };
   }, [isAuthenticated]);
+
+  const closeDrawer = useCallback(() => {
+    drawerRef.current?.close();
+  }, []);
+
+  // เปิดผ่าน showModal() — focus trap · Esc · inert พื้นหลัง มาจากเบราว์เซอร์
+  // เหลือแค่ล็อก scroll ของ body ที่ยังต้องทำเอง
+  useEffect(() => {
+    const el = drawerRef.current;
+    if (!el || !isDrawerOpen) return;
+
+    el.showModal();
+    const previousOverflow = document.body.style.overflow;
+    document.body.style.overflow = 'hidden';
+
+    return () => {
+      document.body.style.overflow = previousOverflow;
+    };
+  }, [isDrawerOpen]);
 
   if (isLoading || !user) {
     return (
-      <div className="flex min-h-screen items-center justify-center bg-paper-2">
-        <div className="w-8 h-8 border-2 border-rule border-t-accent rounded-full animate-spin"></div>
-      </div>
+      <output className="flex min-h-screen items-center justify-center bg-paper-2 text-sm text-muted">
+        Checking your session…
+      </output>
     );
   }
 
-  const visibleItems = navItems.filter((item) => item.roles.includes(user.role));
+  const visibleGroups = navGroups.filter((g) => g.roles.includes(user.role));
+  const accountName = user.displayName || user.email.split('@')[0];
 
   return (
     <div className="flex min-h-screen bg-paper-2">
-      {/* Sidebar for Desktop */}
-      <aside className="hidden md:flex md:w-64 md:flex-col md:fixed md:inset-y-0 bg-paper border-r border-rule">
-        <div className="flex flex-col flex-grow pt-5 pb-4 overflow-y-auto">
-          <div className="flex items-center flex-shrink-0 px-6 gap-2 border-b border-rule pb-5">
-            <span className="font-title text-xl font-bold tracking-tight text-ink">
-              oryca<span className="text-accent">.</span>portal
-            </span>
-            <span className="text-[10px] uppercase font-bold tracking-wider px-2 py-0.5 rounded-chip bg-accent-wash border border-accent-edge text-accent">
-              {user.role}
-            </span>
-          </div>
-          
-          <nav className="mt-6 flex-1 px-4 space-y-1">
-            {visibleItems.map((item) => {
-              const isActive = pathname.startsWith(item.href);
-              const Icon = item.icon;
-              return (
-                <Link
-                  key={item.name}
-                  href={item.href}
-                  className={`group flex items-center px-3 py-2.5 text-sm font-medium rounded-control transition duration-short ${
-                    isActive
-                      ? 'bg-accent-wash border border-accent-edge text-accent'
-                      : 'text-ink-2 hover:bg-paper-3 border border-transparent'
-                  }`}
-                >
-                  <Icon
-                    className={`mr-3 flex-shrink-0 h-5 w-5 ${
-                      isActive ? 'text-accent' : 'text-muted group-hover:text-ink-2'
-                    }`}
-                  />
-                  <span className="flex-1">{item.name}</span>
-                  {item.name === 'Notifications' && unreadCount > 0 && (
-                    <span className="ml-2 bg-accent text-accent-ink text-[10px] font-bold px-2 py-0.5 rounded-full">
-                      {unreadCount}
-                    </span>
-                  )}
-                </Link>
-              );
-            })}
-          </nav>
+      {/* ข้ามไปเนื้อหา — ลิงก์แรกของหน้าสำหรับผู้ใช้คีย์บอร์ด */}
+      <a
+        href="#main"
+        className="sr-only focus:not-sr-only focus:absolute focus:left-3 focus:top-3 focus:z-50 focus:rounded-control focus:border focus:border-rule-2 focus:bg-paper focus:px-3 focus:py-2 focus:text-sm focus:text-ink"
+      >
+        Skip to main content
+      </a>
+
+      {/* Sidebar — desktop */}
+      <aside className="fixed inset-y-0 left-0 z-30 hidden w-64 flex-col border-r border-rule bg-paper md:flex">
+        <div className="flex items-center gap-2 border-b border-rule px-5 py-4">
+          <Wordmark />
+          <span className="rounded-chip border border-accent-edge bg-accent-wash px-1.5 py-0.5 text-[10px] font-semibold uppercase tracking-wide text-accent">
+            {user.role}
+          </span>
         </div>
 
-        {/* Sidebar Footer */}
-        <div className="flex-shrink-0 flex border-t border-rule p-4 bg-paper-2">
-          <div className="flex items-center justify-between w-full">
-            <div className="flex items-center min-w-0">
-              <div className="w-9 h-9 rounded-full bg-accent-wash border border-accent-edge flex items-center justify-center text-accent font-title font-semibold uppercase">
-                {user.email.substring(0, 2)}
-              </div>
-              <div className="ml-3 min-w-0">
-                <p className="text-sm font-semibold text-ink truncate">
-                  {user.displayName || user.email.split('@')[0]}
-                </p>
-                <p className="text-xs text-muted truncate">{user.email}</p>
-              </div>
-            </div>
-            <button
-              onClick={logout}
-              className="p-1.5 rounded-control text-muted hover:text-danger hover:bg-danger-wash border border-transparent hover:border-danger-edge transition duration-short"
-              title="Logout"
-            >
-              <LogOut className="h-5 w-5" />
-            </button>
-          </div>
+        <nav aria-label="Main menu" className="flex-1 overflow-y-auto px-3 py-4">
+          <NavGroups groups={visibleGroups} pathname={pathname} unreadCount={unreadCount} />
+        </nav>
+
+        <div className="border-t border-rule bg-paper-2 p-3">
+          <AccountRow email={user.email} name={accountName} onLogout={logout} />
         </div>
       </aside>
 
-      {/* Main Container */}
-      <div className="md:pl-64 flex flex-col flex-1 w-full">
-        {/* Mobile Header */}
-        <header className="sticky top-0 z-40 flex items-center justify-between h-14 bg-paper border-b border-rule px-4 md:hidden">
-          <span className="font-title text-lg font-bold tracking-tight text-ink">
-            oryca<span className="text-accent">.</span>portal
-          </span>
+      <div className="relative flex min-h-screen w-full flex-1 flex-col overflow-hidden md:pl-64">
+        {/* Crisp Origami Facet Background for Portal Pages */}
+        <svg
+          aria-hidden="true"
+          className="pointer-events-none absolute top-0 right-0 z-0 h-[520px] w-[520px] opacity-70 select-none"
+          viewBox="0 0 500 500"
+          fill="none"
+          xmlns="http://www.w3.org/2000/svg"
+        >
+          <polygon points="500,0 320,60 420,220" fill="oklch(91% 0.045 254 / 0.4)" stroke="oklch(82% 0.07 254 / 0.5)" strokeWidth="0.75" />
+          <polygon points="320,60 180,0 240,180" fill="oklch(93% 0.035 254 / 0.35)" stroke="oklch(85% 0.05 254 / 0.4)" strokeWidth="0.75" />
+          <polygon points="320,60 240,180 420,220" fill="oklch(88% 0.06 254 / 0.45)" stroke="oklch(79% 0.09 254 / 0.6)" strokeWidth="0.75" />
+          <polygon points="420,220 240,180 300,360" fill="oklch(92% 0.04 254 / 0.35)" stroke="oklch(82% 0.07 254 / 0.45)" strokeWidth="0.75" />
+          <polygon points="500,0 420,220 500,300" fill="oklch(89% 0.055 254 / 0.4)" stroke="oklch(80% 0.08 254 / 0.5)" strokeWidth="0.75" />
+          <polygon points="420,220 500,300 300,360" fill="oklch(94% 0.03 254 / 0.3)" stroke="oklch(84% 0.06 254 / 0.35)" strokeWidth="0.75" />
+        </svg>
+
+        <svg
+          aria-hidden="true"
+          className="pointer-events-none absolute right-0 bottom-0 z-0 h-[420px] w-[420px] opacity-60 select-none"
+          viewBox="0 0 400 400"
+          fill="none"
+          xmlns="http://www.w3.org/2000/svg"
+        >
+          <polygon points="400,400 240,320 340,180" fill="oklch(93% 0.04 78 / 0.4)" stroke="oklch(83% 0.07 75 / 0.4)" strokeWidth="0.75" />
+          <polygon points="240,320 120,400 200,220" fill="oklch(95% 0.03 78 / 0.35)" stroke="oklch(86% 0.05 75 / 0.35)" strokeWidth="0.75" />
+          <polygon points="240,320 200,220 340,180" fill="oklch(91% 0.055 78 / 0.4)" stroke="oklch(81% 0.08 75 / 0.45)" strokeWidth="0.75" />
+          <polygon points="340,180 200,220 280,80" fill="oklch(96% 0.02 78 / 0.3)" stroke="oklch(88% 0.04 75 / 0.3)" strokeWidth="0.75" />
+        </svg>
+
+        {/* Header — mobile */}
+        <header className="sticky top-0 z-40 flex h-14 items-center justify-between border-b border-rule bg-paper px-4 md:hidden">
+          <Wordmark size="sm" />
           <button
-            onClick={() => setIsMobileMenuOpen(!isMobileMenuOpen)}
-            className="p-1 rounded-control text-ink-2 border border-rule"
+            ref={toggleRef}
+            type="button"
+            onClick={() => setIsDrawerOpen(true)}
+            aria-expanded={isDrawerOpen}
+            aria-label="Open menu"
+            className="ui-btn ui-btn--sm ui-btn--icon ui-btn--secondary"
           >
-            {isMobileMenuOpen ? <X className="h-6 w-6" /> : <Menu className="h-6 w-6" />}
+            <Menu className="h-5 w-5" />
           </button>
         </header>
 
-        {/* Mobile Drawer Menu */}
-        {isMobileMenuOpen && (
-          <div className="fixed inset-0 z-30 md:hidden bg-scrim" onClick={() => setIsMobileMenuOpen(false)}>
-            <div className="fixed inset-y-0 right-0 w-64 bg-paper border-l border-rule flex flex-col p-4 space-y-4" onClick={(e) => e.stopPropagation()}>
-              <div className="flex items-center justify-between pb-3 border-b border-rule">
-                <span className="font-title text-lg font-bold tracking-tight text-ink">Navigation</span>
-                <button onClick={() => setIsMobileMenuOpen(false)} className="p-1 text-muted">
-                  <X className="h-5 w-5" />
-                </button>
-              </div>
-              <nav className="flex-grow space-y-1">
-                {visibleItems.map((item) => {
-                  const isActive = pathname.startsWith(item.href);
-                  const Icon = item.icon;
-                  return (
-                    <Link
-                      key={item.name}
-                      href={item.href}
-                      onClick={() => setIsMobileMenuOpen(false)}
-                      className={`flex items-center px-3 py-2 text-sm font-medium rounded-control ${
-                        isActive
-                          ? 'bg-accent-wash text-accent border border-accent-edge'
-                          : 'text-ink-2 hover:bg-paper-2 border border-transparent'
-                      }`}
-                    >
-                      <Icon className="mr-3 h-5 w-5 flex-shrink-0" />
-                      <span className="flex-1">{item.name}</span>
-                      {item.name === 'Notifications' && unreadCount > 0 && (
-                        <span className="ml-2 bg-accent text-accent-ink text-[10px] font-bold px-2 py-0.5 rounded-full">
-                          {unreadCount}
-                        </span>
-                      )}
-                    </Link>
-                  );
-                })}
-              </nav>
-              <div className="border-t border-rule pt-4 flex items-center justify-between">
-                <div className="flex items-center min-w-0">
-                  <div className="w-8 h-8 rounded-full bg-accent-wash flex items-center justify-center text-accent font-semibold uppercase">
-                    {user.email.substring(0, 2)}
-                  </div>
-                  <span className="ml-2 text-sm text-ink font-semibold truncate">{user.email}</span>
-                </div>
-                <button onClick={logout} className="p-1 text-danger hover:bg-danger-wash rounded-control">
-                  <LogOut className="h-5 w-5" />
-                </button>
-              </div>
+        {/* Drawer — mobile */}
+        {isDrawerOpen && (
+          <dialog
+            ref={drawerRef}
+            className="ui-dialog ui-drawer z-50"
+            aria-label="Main menu"
+            onClose={() => {
+              setIsDrawerOpen(false);
+              toggleRef.current?.focus();
+            }}
+            onClick={(e) => {
+              if (e.target === drawerRef.current) closeDrawer();
+            }}
+          >
+            <div className="flex items-center justify-between border-b border-rule px-4 py-3">
+              <Wordmark size="sm" />
+              <button
+                type="button"
+                onClick={closeDrawer}
+                aria-label="Close menu"
+                className="ui-btn ui-btn--sm ui-btn--icon ui-btn--ghost"
+              >
+                <X className="h-5 w-5" />
+              </button>
             </div>
-          </div>
+
+            <nav aria-label="Main menu" className="flex-1 overflow-y-auto px-3 py-4">
+              <NavGroups
+                groups={visibleGroups}
+                pathname={pathname}
+                unreadCount={unreadCount}
+                onNavigate={closeDrawer}
+              />
+            </nav>
+
+            <div className="border-t border-rule bg-paper-2 p-3">
+              <AccountRow email={user.email} name={accountName} compact onLogout={logout} />
+            </div>
+          </dialog>
         )}
 
-        {/* Main Content Area */}
-        <main className="flex-grow p-4 md:p-8 max-w-7xl w-full mx-auto">
+        <main id="main" className="relative z-10 mx-auto w-full max-w-7xl flex-grow p-4 md:p-8">
           {children}
         </main>
       </div>
