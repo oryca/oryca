@@ -4,7 +4,7 @@
 [![Stability](https://img.shields.io/badge/stability-alpha-f4d03f.svg)](https://github.com/mkenney/software-guides/blob/master/STABILITY-BADGES.md#alpha)
 [![Release](https://img.shields.io/github/v/release/oryca/oryca?sort=semver&cacheSeconds=300)](https://github.com/oryca/oryca/releases)
 [![Go](https://img.shields.io/github/go-mod/go-version/oryca/oryca?cacheSeconds=300)](go.mod)
-[![License](https://img.shields.io/github/license/oryca/oryca?cacheSeconds=300)](LICENSE)
+[![License](https://img.shields.io/github/license/oryca/oryca?cacheSeconds=300&v=2)](LICENSE)
 
 **An open-source API gateway, at home with geospatial APIs.**
 
