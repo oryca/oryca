@@ -34,6 +34,7 @@ You need Docker. Nothing else, no Go and no Node.
 ### 1. Get the stack running
 There is no tagged release yet, so build from source. Docker is still the only
 thing you need, the build itself happens inside containers.
+**macOS / Linux / Git Bash / WSL**
 ```sh
 git clone https://github.com/oryca/oryca.git
 cd oryca && cp .env.example .env
@@ -41,7 +42,16 @@ echo "ORYCA_INTERNAL_SECRET=$(openssl rand -hex 32)" >> .env
 docker compose up -d --build
 ```
 
-The third line is the one thing you have to set. The gateway and the control
+**Windows PowerShell** (no `openssl`, no `$(...)` substitution there)
+```powershell
+git clone https://github.com/oryca/oryca.git
+cd oryca; cp .env.example .env
+$b=New-Object byte[] 32; (New-Object Security.Cryptography.RNGCryptoServiceProvider).GetBytes($b)
+Add-Content .env "ORYCA_INTERNAL_SECRET=$(($b|%{$_.ToString('x2')}) -join '')"
+docker compose up -d --build
+```
+
+The secret line is the one thing you have to set. The gateway and the control
 plane share that secret, and whoever holds it can read every service and API key
 you have, so there is no default to fall back on.
 
@@ -182,6 +192,9 @@ openssl genpkey -algorithm RSA -pkeyopt rsa_keygen_bits:2048 -out auth-private.k
 openssl rsa -in auth-private.key -pubout -out auth-public.key
 go run ../cmd/oryca-control-plane
 ```
+
+> [!TIP]
+> Needs `openssl` on the PATH. On Windows, run this from Git Bash (bundled with Git for Windows) or WSL instead of plain PowerShell.
 
 ```sh
 cd gateway
