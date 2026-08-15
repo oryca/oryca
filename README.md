@@ -30,14 +30,20 @@ You need Docker. Nothing else, no Go and no Node.
 ```sh
 curl -fsSL -o docker-compose.yml https://raw.githubusercontent.com/oryca/oryca/main/docker-compose.images.yml
 curl -fsSL -o .env https://raw.githubusercontent.com/oryca/oryca/main/.env.example
+echo "ORYCA_INTERNAL_SECRET=$(openssl rand -hex 32)" >> .env
 docker compose up -d
 ```
+
+The third line is the one thing you have to set. The gateway and the control
+plane share that secret, and whoever holds it can read every service and API key
+you have, so there is no default to fall back on.
 
 That pulls the published images, tracking the newest release. Pin a version with
 `ORYCA_VERSION=0.1.0 docker compose up -d`. To build from source instead:
 ```sh
 git clone https://github.com/oryca/oryca.git
 cd oryca && cp .env.example .env
+echo "ORYCA_INTERNAL_SECRET=$(openssl rand -hex 32)" >> .env
 docker compose up -d --build
 ```
 
@@ -138,6 +144,19 @@ One pair is easy to get wrong. `ORYCA_PORTAL_API_URL` and `ORYCA_PORTAL_GATEWAY_
 ```sh
 docker compose up -d portal
 ```
+
+---
+
+## Upgrading
+
+```sh
+docker compose pull
+docker compose up -d
+```
+
+`docker compose up` on its own keeps whatever image it already has, so the pull
+is the part that gets you the new one. Your data lives in Docker volumes and is
+untouched.
 
 ---
 

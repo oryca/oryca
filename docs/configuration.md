@@ -2,9 +2,11 @@
 
 Everything is environment variables. There is no config file to write.
 
-Running with the compose files, the ten settings in `.env` are all you touch.
-The compose files translate them into whatever each service expects. The rest of
-this page is for running the binaries yourself, or for tuning.
+Running with the compose files, the ten settings in `.env` are all you touch, and
+the compose file translates them into whatever each service expects. Only one has
+no default, and compose refuses to start without it.
+
+The rest of this page is for running the binaries yourself, or for tuning.
 
 ---
 
@@ -12,7 +14,7 @@ this page is for running the binaries yourself, or for tuning.
 
 | Setting | Default | What it does |
 |---|---|---|
-| `ORYCA_INTERNAL_SECRET` | `dev-internal-secret-change-me` | Shared by the two services. The gateway sends it on every `/internal/*` call. **Change it** before anything is reachable from a network you do not control. |
+| `ORYCA_INTERNAL_SECRET` | none | Shared by the two services. The gateway sends it on every `/internal/*` call, and whoever holds it can read every service and API key you have. There is no default: generate one with `openssl rand -hex 32`. |
 | `ORYCA_INTERNAL_SECRET_PREV` | empty | The previous secret, accepted alongside the current one. Set it while rotating, remove it after. |
 | `ORYCA_API_ROOT_EMAIL` | `admin@localhost` | The first administrator, created on the first start only. |
 | `ORYCA_API_ROOT_PASSWORD` | empty | Leave empty and one is generated and printed to the log once. |
