@@ -123,12 +123,15 @@ func (h *TransformConfigHandler) ApplyPreset(c echo.Context) error {
 		})
 	}
 
+	// Applied switched off. A template fills in the upstream address it can see,
+	// which is right for most services and wrong for one assembled from several
+	// servers, so somebody reads the rules before any traffic meets them.
 	created, err := h.svc.Create(c.Request().Context(), &model.TransformConfigRequest{
-		Name:        svc.Name + " — " + p.Title,
+		Name:        svc.Name + " " + p.Title,
 		Description: p.Description,
 		ServiceID:   body.ServiceID,
 		Match:       p.Match,
-		Enabled:     true,
+		Enabled:     false,
 		Rules:       p.Rewrite(sourceURLs),
 	}, ctxUser.ID)
 	if err != nil {

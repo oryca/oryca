@@ -1,66 +1,113 @@
-// Package preset holds the ready-made response transforms offered for OGC API
-// services.
+// Package preset holds the response-transform templates the portal offers.
 //
-// They ship with the binary rather than living in the database: they are a
-// library to pick from, not settings to edit. Applying one writes an ordinary
-// transform config, which is then yours to change.
+// Each template is a JSON file under templates/, embedded in the binary. They
+// are a library to start from, not settings to edit. Applying one writes an
+// ordinary transform config, which is then yours to change.
+//
+// Some templates suit one API standard, some suit any HTTP API at all. The ones
+// with an empty types list are offered for every service.
 package preset
 
 import (
-	_ "embed"
+	"embed"
+	"encoding/json"
+	"io/fs"
+	"net/url"
 	"regexp"
+	"sort"
 	"strings"
 
 	"github.com/oryca/oryca/control-plane/model"
-
-	"gopkg.in/yaml.v3"
 )
 
-//go:embed ogc-transforms.yaml
-var embedded []byte
+//go:embed templates/*.json
+var embedded embed.FS
 
-// sourceURLVar is replaced with the upstream address when a preset is applied.
-// Everything else in a rule is left for the gateway to resolve per request.
+// sourceURLVar is replaced with the upstream address when a template is applied.
+// A template that leaves it out is asking to be filled in by hand, which is what
+// the ones pointing at a second server do. Everything else in a rule is left for
+// the gateway to resolve per request.
 const sourceURLVar = "{{sourceUrl}}"
 
-// Preset is one offer: what it does, which service types it suits, and the rules
-// it writes.
+// Preset is one template. What it does, which service types it suits, the
+// standard it follows, and the rules it writes.
 type Preset struct {
-	Name        string                `yaml:"name" json:"name"`
-	Types       []string              `yaml:"types" json:"types"`
-	Title       string                `yaml:"title" json:"title"`
-	Description string                `yaml:"description" json:"description"`
-	Match       model.TransformMatch  `yaml:"match" json:"match"`
-	Rules       []model.TransformRule `yaml:"rules" json:"rules"`
+	Name          string                `json:"name"`
+	Types         []string              `json:"types"`
+	Title         string                `json:"title"`
+	Description   string                `json:"description"`
+	Reference     string                `json:"reference,omitempty"`
+	ReferenceNote string                `json:"referenceNote,omitempty"`
+	Notes         []string              `json:"notes,omitempty"`
+	Match         model.TransformMatch  `json:"match"`
+	Rules         []model.TransformRule `json:"rules"`
+}
+
+// file is the shape on disk. Name and Title read better in a file as key and
+// label, which is what the templates were written with.
+type file struct {
+	Key           string                `json:"key"`
+	Label         string                `json:"label"`
+	Types         []string              `json:"types"`
+	Reference     string                `json:"reference"`
+	ReferenceNote string                `json:"referenceNote"`
+	Description   string                `json:"description"`
+	Notes         []string              `json:"notes"`
+	Match         model.TransformMatch  `json:"match"`
+	Rules         []model.TransformRule `json:"rules"`
 }
 
 var presets []Preset
 
 func init() {
-	var file struct {
-		Presets []Preset `yaml:"presets"`
+	entries, err := fs.ReadDir(embedded, "templates")
+	if err != nil {
+		panic("preset: cannot read templates: " + err.Error())
 	}
-	if err := yaml.Unmarshal(embedded, &file); err != nil {
-		panic("preset: cannot read ogc-transforms.yaml: " + err.Error())
+	for _, e := range entries {
+		raw, err := embedded.ReadFile("templates/" + e.Name())
+		if err != nil {
+			panic("preset: cannot read " + e.Name() + ": " + err.Error())
+		}
+		var f file
+		if err := json.Unmarshal(raw, &f); err != nil {
+			panic("preset: cannot parse " + e.Name() + ": " + err.Error())
+		}
+		presets = append(presets, Preset{
+			Name:          f.Key,
+			Types:         f.Types,
+			Title:         f.Label,
+			Description:   f.Description,
+			Reference:     f.Reference,
+			ReferenceNote: f.ReferenceNote,
+			Notes:         f.Notes,
+			Match:         f.Match,
+			Rules:         f.Rules,
+		})
 	}
-	presets = file.Presets
+	sort.Slice(presets, func(i, j int) bool { return presets[i].Name < presets[j].Name })
 }
 
-// All returns every preset.
+// All returns every template.
 func All() []Preset {
 	out := make([]Preset, len(presets))
 	copy(out, presets)
 	return out
 }
 
-// ForType returns the presets that suit a service type. An empty type returns
-// all of them.
+// ForType returns the templates that suit a service type, which is the ones
+// naming it plus the ones that name no type at all. An empty type returns all
+// of them.
 func ForType(serviceType string) []Preset {
 	if serviceType == "" {
 		return All()
 	}
 	var out []Preset
 	for _, p := range presets {
+		if len(p.Types) == 0 {
+			out = append(out, p)
+			continue
+		}
 		for _, t := range p.Types {
 			if t == serviceType {
 				out = append(out, p)
@@ -71,7 +118,7 @@ func ForType(serviceType string) []Preset {
 	return out
 }
 
-// Find looks a preset up by name.
+// Find looks a template up by name.
 func Find(name string) (Preset, bool) {
 	for _, p := range presets {
 		if p.Name == name {
@@ -81,13 +128,17 @@ func Find(name string) (Preset, bool) {
 	return Preset{}, false
 }
 
-// Rewrite returns the preset's rules with the upstream address filled in, one
-// copy per address: a service assembled from several upstreams needs a rule for
-// each of them.
+// Rewrite returns the template's rules with the upstream address filled in, one
+// copy per address. A service assembled from several upstreams needs a rule for
+// each of them. Rules that do not mention the address are returned once.
 func (p Preset) Rewrite(sourceURLs []string) []model.TransformRule {
 	roots := upstreamRoots(sourceURLs)
-	out := make([]model.TransformRule, 0, len(p.Rules)*len(roots))
+	out := make([]model.TransformRule, 0, len(p.Rules))
 	for _, rule := range p.Rules {
+		if !mentionsSourceURL(rule) || len(roots) == 0 {
+			out = append(out, rule)
+			continue
+		}
 		for _, u := range roots {
 			out = append(out, fillSourceURL(rule, u))
 		}
@@ -95,18 +146,37 @@ func (p Preset) Rewrite(sourceURLs []string) []model.TransformRule {
 	return out
 }
 
-// upstreamRoots drops any address that sits under another one in the list.
+func mentionsSourceURL(rule model.TransformRule) bool {
+	return strings.Contains(rule.Params.Find, sourceURLVar) ||
+		strings.Contains(rule.Params.Regex, sourceURLVar)
+}
+
+// upstreamRoots turns the addresses a service points at into the prefixes worth
+// rewriting.
 //
-// A service usually points at several addresses under the same server. The
-// landing page, /collections, and so on. Rewriting each of them separately would
-// map https://host/api/collections onto the gateway root and lose the path.
-// Rewriting the shortest one is enough: everything below it keeps its tail.
+// The query string and fragment are dropped first. A source address often
+// carries the upstream's own credential, which must never reach a stored rule,
+// and a link in a response never repeats it anyway, so a rule that kept it
+// would match nothing.
+//
+// An address that sits under another in the list is then dropped. A service
+// usually points at several addresses on the same server: the landing page,
+// /collections, and so on. Rewriting each separately would map
+// https://host/api/collections onto the gateway root and lose the path.
+// Rewriting the shortest is enough, since everything below it keeps its tail.
 func upstreamRoots(sourceURLs []string) []string {
 	cleaned := make([]string, 0, len(sourceURLs))
+	seen := make(map[string]struct{}, len(sourceURLs))
 	for _, u := range sourceURLs {
-		if u = strings.TrimRight(u, "/"); u != "" {
-			cleaned = append(cleaned, u)
+		u = stripQuery(u)
+		if u = strings.TrimRight(u, "/"); u == "" {
+			continue
 		}
+		if _, dup := seen[u]; dup {
+			continue
+		}
+		seen[u] = struct{}{}
+		cleaned = append(cleaned, u)
 	}
 
 	var roots []string
@@ -123,6 +193,21 @@ func upstreamRoots(sourceURLs []string) []string {
 		}
 	}
 	return roots
+}
+
+// stripQuery removes the query string and fragment, keeping the address itself.
+// An address it cannot parse is cut at the first ? or # instead, so a malformed
+// one still loses its credential.
+func stripQuery(raw string) string {
+	if u, err := url.Parse(raw); err == nil {
+		u.RawQuery = ""
+		u.Fragment = ""
+		return u.String()
+	}
+	if i := strings.IndexAny(raw, "?#"); i >= 0 {
+		return raw[:i]
+	}
+	return raw
 }
 
 // fillSourceURL substitutes the address into the fields that can carry it. The

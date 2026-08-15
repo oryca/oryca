@@ -1,0 +1,41 @@
+{
+  "key": "action-remove",
+  "label": "Remove a field or header",
+  "description": "Deletes a field or header",
+  "types": [],
+  "match": {
+    "path": "/*",
+    "methods": [
+      "GET"
+    ]
+  },
+  "notes": [
+    "No extra params needed. just path/xpath or headerName"
+  ],
+  "rules": [
+    {
+      "type": "json",
+      "target": "body",
+      "action": "remove",
+      "path": "$.items[*].internalId",
+      "conditions": [],
+      "params": {}
+    },
+    {
+      "type": "json",
+      "target": "body",
+      "action": "remove",
+      "path": "$.createdBy",
+      "conditions": [],
+      "params": {}
+    },
+    {
+      "type": "json",
+      "target": "headers",
+      "action": "remove",
+      "headerName": "X-Upstream-Internal-Info",
+      "conditions": [],
+      "params": {}
+    }
+  ]
+}

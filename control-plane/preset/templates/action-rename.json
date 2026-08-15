@@ -1,0 +1,40 @@
+{
+  "key": "action-rename",
+  "label": "Rename a field",
+  "description": "Renames a field while keeping its value",
+  "types": [],
+  "match": {
+    "path": "/*",
+    "methods": [
+      "GET"
+    ]
+  },
+  "notes": [
+    "from/to are key names inside the object at path, not full paths",
+    "Only works on body. not supported for headers"
+  ],
+  "rules": [
+    {
+      "type": "json",
+      "target": "body",
+      "action": "rename",
+      "path": "$.collections[*]",
+      "conditions": [],
+      "params": {
+        "from": "description",
+        "to": "detail"
+      }
+    },
+    {
+      "type": "json",
+      "target": "body",
+      "action": "rename",
+      "path": "$",
+      "conditions": [],
+      "params": {
+        "from": "updated_at",
+        "to": "updatedAt"
+      }
+    }
+  ]
+}
