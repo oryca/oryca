@@ -1,25 +1,28 @@
 'use client';
 
-import React, { useState, useEffect } from 'react';
+import React, { useState } from 'react';
 import { useQuery, useMutation, useQueryClient } from '@tanstack/react-query';
 import { api } from '@/lib/api';
 import NavigationShell from '@/components/NavigationShell';
 import {
-  Network,
+  PageHeader,
+  EmptyState,
+  SkeletonLine,
+  Loading,
+  useToast,
+  useConfirm,
+  SearchableSelect,
+} from '@/components/ui';
+import {
   Users,
   Plus,
   Trash2,
   Edit,
-  Save,
-  CheckCircle,
   AlertTriangle,
-  ChevronDown,
   Layers,
-  Shield,
-  Clock,
   UserCheck,
+  Server,
   Search,
-  Server
 } from 'lucide-react';
 
 interface RateLimitTier {
@@ -56,8 +59,15 @@ interface PackagePath {
 
 interface PackageSvcLink {
   id: string;
-  packageId: string;
-  serviceId: string;
+  packageId?: string;
+  serviceId?: string;
+  service?: {
+    id: string;
+    name: string;
+    description?: string;
+    type?: string;
+    basePath?: string;
+  };
   paths?: PackagePath[];
 }
 
@@ -74,9 +84,12 @@ interface User {
 
 export default function AdminPackagesPage() {
   const queryClient = useQueryClient();
+  const { toast, error: toastError } = useToast();
+  const confirm = useConfirm();
   const [activeTab, setActiveTab] = useState<'packages' | 'users'>('packages');
 
-  // Opening an account for someone, rather than waiting for them to sign up
+  // Search & filter states
+  const [packageSearch, setPackageSearch] = useState('');
   const [userSearch, setUserSearch] = useState('');
   const [isNewUserOpen, setIsNewUserOpen] = useState(false);
   const [newEmail, setNewEmail] = useState('');
@@ -101,7 +114,7 @@ export default function AdminPackagesPage() {
   const [isLinkModalOpen, setIsLinkModalOpen] = useState(false);
   const [selectedServiceId, setSelectedServiceId] = useState('');
   const [linkPath, setLinkPath] = useState('/*');
-  const [linkMethods, setLinkMethods] = useState<string[]>(['GET']);
+  const linkMethods = ['GET'];
   const [linkRateLimitEnabled, setLinkRateLimitEnabled] = useState(false);
   const [linkTiers, setLinkTiers] = useState<RateLimitTier[]>([{ limit: 5, windowSec: 10 }]);
 
@@ -114,7 +127,6 @@ export default function AdminPackagesPage() {
   const [userEnabled, setUserEnabled] = useState(true);
 
   const [formError, setFormError] = useState<string | null>(null);
-  const [success, setSuccess] = useState<string | null>(null);
 
   // Queries
   const { data: packages, isLoading: isLoadingPackages } = useQuery<Package[]>({
@@ -125,7 +137,7 @@ export default function AdminPackagesPage() {
     },
   });
 
-  const { data: services } = useQuery<any[]>({
+  const { data: services } = useQuery<{ id: string; name: string; basePath: string; type?: string }[]>({
     queryKey: ['admin-services-list'],
     queryFn: async () => {
       const res = await api.get('/services');
@@ -166,35 +178,32 @@ export default function AdminPackagesPage() {
     enabled: !!linkingPackage && isLinkModalOpen,
   });
 
-  // Load Package values into form
-  useEffect(() => {
-    if (editingPackage) {
-      setPackageName(editingPackage.name || '');
-      setPackageAlias(editingPackage.alias || '');
-      setPackageDescription(editingPackage.description || '');
-      setRateLimitEnabled(editingPackage.policies?.rateLimit?.enabled !== false);
-      setTiers(editingPackage.policies?.rateLimit?.tiers || [{ limit: 10, windowSec: 60 }]);
-      setIsPackageFormOpen(true);
-    } else {
-      setPackageName('');
-      setPackageAlias('');
-      setPackageDescription('');
-      setRateLimitEnabled(true);
-      setTiers([{ limit: 10, windowSec: 60 }]);
-    }
+  /** เปิดฟอร์มพร้อมเติมค่า — ทำตรงนี้ทีเดียว ไม่ต้องมี effect คอยตามซิงก์ */
+  function openPackageForm(pkg: Package | null) {
+    setEditingPackage(pkg);
+    setPackageName(pkg?.name || '');
+    setPackageAlias(pkg?.alias || '');
+    setPackageDescription(pkg?.description || '');
+    setRateLimitEnabled(pkg ? pkg.policies?.rateLimit?.enabled !== false : true);
+    setTiers(pkg?.policies?.rateLimit?.tiers || [{ limit: 10, windowSec: 60 }]);
     setFormError(null);
-  }, [editingPackage, isPackageFormOpen]);
+    setIsPackageFormOpen(true);
+  }
 
-  // Load User values into form
-  useEffect(() => {
-    if (editingUser) {
-      setUserRole(editingUser.role || 'user');
-      setUserPackageId(editingUser.packageId || '');
-      setUserVerified(editingUser.verified === true);
-      setUserEnabled(editingUser.enabled !== false);
-      setIsUserModalOpen(true);
-    }
-  }, [editingUser]);
+  function closePackageForm() {
+    setIsPackageFormOpen(false);
+    setEditingPackage(null);
+    setFormError(null);
+  }
+
+  function openUserForm(u: User) {
+    setEditingUser(u);
+    setUserRole(u.role || 'user');
+    setUserPackageId(u.packageId || '');
+    setUserVerified(u.verified === true);
+    setUserEnabled(u.enabled !== false);
+    setIsUserModalOpen(true);
+  }
 
   // Mutations
   const savePackageMutation = useMutation({
@@ -223,10 +232,10 @@ export default function AdminPackagesPage() {
       queryClient.invalidateQueries({ queryKey: ['admin-packages'] });
       setIsPackageFormOpen(false);
       setEditingPackage(null);
-      setSuccess('Package tier configuration saved.');
+      toast({ tone: 'ok', message: 'Package saved' });
     },
-    onError: (err: any) => {
-      setFormError(err.message || 'Failed to save package.');
+    onError: (err: unknown) => {
+      setFormError(err instanceof Error && err.message ? err.message : 'Failed to save package.');
     },
   });
 
@@ -236,7 +245,7 @@ export default function AdminPackagesPage() {
     },
     onSuccess: () => {
       queryClient.invalidateQueries({ queryKey: ['admin-packages'] });
-      setSuccess('Package deleted.');
+      toast({ tone: 'ok', message: 'Package deleted' });
     },
   });
 
@@ -269,9 +278,10 @@ export default function AdminPackagesPage() {
       setLinkPath('/*');
       setLinkRateLimitEnabled(false);
     },
-    onError: (err: any) => {
-      alert(err.message || 'Failed to grant service access.');
-    },
+    onError: (err: unknown) =>
+      toastError(
+        err instanceof Error && err.message ? err.message : 'Could not grant access to that service',
+      ),
   });
 
   const unlinkServiceMutation = useMutation({
@@ -303,10 +313,10 @@ export default function AdminPackagesPage() {
       queryClient.invalidateQueries({ queryKey: ['admin-users'] });
       setIsUserModalOpen(false);
       setEditingUser(null);
-      setSuccess('User details updated successfully.');
+      toast({ tone: 'ok', message: 'User updated' });
     },
-    onError: (err: any) => {
-      setFormError(err.message || 'Failed to update user.');
+    onError: (err: unknown) => {
+      setFormError(err instanceof Error && err.message ? err.message : 'Failed to update user.');
     },
   });
 
@@ -336,8 +346,8 @@ export default function AdminPackagesPage() {
       setNewRole('user');
       setNewPackageId('');
     },
-    onError: (err: any) => {
-      setNewUserError(err.message || 'Could not create the account.');
+    onError: (err: unknown) => {
+      setNewUserError(err instanceof Error && err.message ? err.message : 'Could not create the account.');
     },
   });
 
@@ -347,9 +357,42 @@ export default function AdminPackagesPage() {
     },
     onSuccess: () => {
       queryClient.invalidateQueries({ queryKey: ['admin-users'] });
-      setSuccess('User account deleted.');
+      toast({ tone: 'ok', message: 'Account deleted' });
     },
+    onError: (err: unknown) =>
+      toastError(err instanceof Error && err.message ? err.message : 'Could not delete the account'),
   });
+
+  async function askDeletePackage(pkg: Package) {
+    const ok = await confirm({
+      title: `Delete package "${pkg.name}"`,
+      consequences: [
+        'This cannot be undone',
+        'Everyone on this package loses access to the services it grants',
+        'They need moving to another package before they can call the APIs again',
+      ],
+      typeToConfirm: pkg.name,
+      confirmLabel: 'Delete package',
+      danger: true,
+    });
+    if (ok) deletePackageMutation.mutate(pkg.id);
+  }
+
+  async function askDeleteUser(u: User) {
+    const ok = await confirm({
+      title: 'Delete this account for good',
+      description: u.email,
+      consequences: [
+        'This cannot be undone',
+        'Every API key on this account stops working immediately',
+        'Anything calling with those keys will start failing',
+      ],
+      typeToConfirm: u.email,
+      confirmLabel: 'Delete account',
+      danger: true,
+    });
+    if (ok) deleteUserMutation.mutate(u.id);
+  }
 
   // Rate tier manipulation helpers
   const addTier = (isLink = false) => {
@@ -369,6 +412,11 @@ export default function AdminPackagesPage() {
 
   return (
     <NavigationShell>
+      <PageHeader
+        title="Packages & Users"
+        description="Rate-limit tiers, and the accounts attached to each of them"
+      />
+
       <div className="space-y-6">
         {/* Toggle tabs */}
         <div className="flex border-b border-rule pb-px gap-6">
@@ -380,7 +428,7 @@ export default function AdminPackagesPage() {
                 : 'border-transparent text-muted hover:text-ink'
             }`}
           >
-            📦 Package Tiers
+            Package tiers
           </button>
           <button
             onClick={() => setActiveTab('users')}
@@ -390,28 +438,33 @@ export default function AdminPackagesPage() {
                 : 'border-transparent text-muted hover:text-ink'
             }`}
           >
-            👥 User Management
+            Users
           </button>
         </div>
-
-        {success && (
-          <div className="flex items-start gap-3 rounded-control border border-ok-edge bg-ok-wash p-4 text-xs text-ok">
-            <CheckCircle className="w-4 h-4 mt-0.5 flex-shrink-0" />
-            <div>{success}</div>
-          </div>
-        )}
 
         {/* ================================= PACKAGES TAB ================================= */}
         {activeTab === 'packages' && (
           <div className="space-y-6">
-            <div className="flex justify-between items-center">
-              <h2 className="text-xs font-bold text-muted uppercase tracking-wider">Access Limits & Tiers</h2>
+            <div className="flex flex-col gap-3 sm:flex-row sm:items-center sm:justify-between">
+              <div className="flex items-center gap-3 flex-1 max-w-sm">
+                <div className="relative w-full">
+                  <Search className="absolute left-2.5 top-2.5 h-3.5 w-3.5 text-muted pointer-events-none" />
+                  <input
+                    type="text"
+                    value={packageSearch}
+                    onChange={(e) => setPackageSearch(e.target.value)}
+                    placeholder="Search packages by name or alias..."
+                    className="w-full bg-paper border border-rule rounded-control pl-8 pr-3 py-1.5 text-xs text-ink outline-none focus:border-focus"
+                  />
+                </div>
+              </div>
+
               <button
                 onClick={() => {
                   setEditingPackage(null);
                   setIsPackageFormOpen(true);
                 }}
-                className="px-3 py-1.5 bg-accent hover:bg-accent-deep text-accent-ink text-xs font-semibold rounded-control transition duration-short flex items-center gap-1"
+                className="px-3 py-1.5 bg-accent hover:bg-accent-deep text-accent-ink text-xs font-semibold rounded-control transition duration-short flex items-center gap-1 shrink-0 self-start sm:self-auto"
               >
                 <Plus className="w-4 h-4" /> Create Package
               </button>
@@ -553,10 +606,7 @@ export default function AdminPackagesPage() {
                     <div className="flex justify-end gap-3 pt-2">
                       <button
                         type="button"
-                        onClick={() => {
-                          setIsPackageFormOpen(false);
-                          setEditingPackage(null);
-                        }}
+                        onClick={closePackageForm}
                         className="px-4 py-2 border border-rule hover:border-faint rounded-control text-ink-2 hover:bg-paper-2 transition"
                       >
                         Cancel
@@ -593,24 +643,22 @@ export default function AdminPackagesPage() {
                     }}
                     className="space-y-4 text-xs bg-paper-2 p-4 border border-rule rounded-surface"
                   >
-                    <div className="grid grid-cols-2 gap-4">
+                    <div className="grid grid-cols-1 md:grid-cols-2 gap-4">
                       <div>
-                        <label className="text-xs font-semibold text-muted uppercase tracking-wider block mb-1">
-                          Select Service
-                        </label>
-                        <select
-                          required
+                        <SearchableSelect
+                          label="Select Service"
                           value={selectedServiceId}
-                          onChange={(e) => setSelectedServiceId(e.target.value)}
-                          className="w-full bg-paper border border-rule rounded-control px-3 py-1.5 text-xs text-ink outline-none"
-                        >
-                          <option value="">Choose service...</option>
-                          {services?.map((svc) => (
-                            <option key={svc.id} value={svc.id}>
-                              {svc.name} ({svc.basePath})
-                            </option>
-                          ))}
-                        </select>
+                          onChange={setSelectedServiceId}
+                          options={
+                            services?.map((svc) => ({
+                              value: svc.id,
+                              label: svc.name,
+                              subtext: svc.basePath,
+                            })) || []
+                          }
+                          placeholder="Choose service..."
+                          searchPlaceholder="Search by name or path..."
+                        />
                       </div>
 
                       <div>
@@ -621,7 +669,7 @@ export default function AdminPackagesPage() {
                           type="text"
                           value={linkPath}
                           onChange={(e) => setLinkPath(e.target.value)}
-                          className="w-full bg-paper border border-rule rounded-control px-3 py-1.5 text-xs text-ink outline-none font-mono"
+                          className="w-full bg-paper border border-rule rounded-control px-3 py-2 text-xs text-ink outline-none font-mono focus:border-focus"
                         />
                       </div>
                     </div>
@@ -691,23 +739,40 @@ export default function AdminPackagesPage() {
                   <div className="space-y-2 mt-4">
                     <h4 className="text-xs font-bold text-muted uppercase tracking-wider">Access Granted Services</h4>
                     {activeLinks?.length === 0 ? (
-                      <p className="text-xs text-muted text-center py-4">This package has no access to any services yet.</p>
+                      <p className="py-4 text-center text-sm text-muted">This package does not grant access to any service yet.</p>
                     ) : (
                       <div className="divide-y divide-rule border border-rule rounded-surface overflow-hidden bg-paper">
                         {activeLinks?.map((link) => {
-                          const svc = services?.find((s) => s.id === link.serviceId);
+                          const serviceId = link.service?.id || link.serviceId || '';
+                          const svc = link.service || services?.find((s) => s.id === serviceId || (s as any)._id === serviceId);
+                          const svcName = svc?.name || link.service?.name || 'API Service';
+                          const svcBasePath = svc?.basePath || link.service?.basePath || '';
+                          const svcType = svc?.type || link.service?.type;
+
                           return (
                             <div key={link.id} className="p-3 flex items-center justify-between gap-4 text-xs hover:bg-paper-2 transition">
-                              <div className="flex items-center gap-2">
-                                <Server className="w-4 h-4 text-accent" />
+                              <div className="flex items-center gap-2.5">
+                                <div className="p-1.5 rounded-control bg-paper-2 text-accent border border-rule">
+                                  <Server className="w-4 h-4" />
+                                </div>
                                 <div>
-                                  <p className="font-semibold text-ink">{svc?.name || 'API Service'}</p>
-                                  <p className="text-[10px] text-muted font-mono">{link.paths?.[0]?.path || '/*'}</p>
+                                  <div className="flex items-center gap-2">
+                                    <p className="font-semibold text-ink">{svcName}</p>
+                                    {svcType && (
+                                      <span className="text-[9px] uppercase font-bold px-1.5 py-0.2 rounded-chip bg-accent-wash border border-accent-edge text-accent">
+                                        {svcType}
+                                      </span>
+                                    )}
+                                  </div>
+                                  <div className="flex gap-2 text-[10px] text-muted font-mono mt-0.5">
+                                    {svcBasePath && <span>Base: {svcBasePath}</span>}
+                                    <span>Rule: {link.paths?.[0]?.path || '/*'}</span>
+                                  </div>
                                 </div>
                               </div>
                               <button
-                                onClick={() => unlinkServiceMutation.mutate(link.serviceId)}
-                                className="text-xs font-semibold text-danger hover:underline"
+                                onClick={() => unlinkServiceMutation.mutate(serviceId)}
+                                className="px-2 py-1 text-xs font-semibold text-danger hover:bg-danger-wash rounded-control border border-transparent hover:border-danger-edge transition"
                               >
                                 Revoke
                               </button>
@@ -722,18 +787,37 @@ export default function AdminPackagesPage() {
             )}
 
             {isLoadingPackages ? (
-              <div className="space-y-4">
-                {[...Array(2)].map((_, i) => (
-                  <div key={i} className="h-16 bg-paper rounded-surface border border-rule animate-pulse"></div>
-                ))}
-              </div>
+              <Loading label="Loading packages">
+                <div className="grid grid-cols-1 gap-4 md:grid-cols-2">
+                  {[0, 1].map((i) => (
+                    <div key={i} className="ui-card space-y-2 p-4">
+                      <SkeletonLine width="45%" className="h-4" />
+                      <SkeletonLine width="70%" />
+                    </div>
+                  ))}
+                </div>
+              </Loading>
             ) : !packages || packages.length === 0 ? (
-              <div className="p-8 bg-paper border border-rule border-dashed rounded-surface text-center text-xs text-muted">
-                No package tiers created. Create a package to define access rate limits.
+              <div className="ui-card">
+                <EmptyState
+                  icon={<Layers className="h-5 w-5" />}
+                  title="No packages yet"
+                  description="Create one to set how many calls a user gets per window."
+                />
               </div>
             ) : (
               <div className="grid grid-cols-1 md:grid-cols-2 gap-4">
-                {packages.map((pkg) => (
+                {(packages || [])
+                  .filter((pkg) => {
+                    if (!packageSearch.trim()) return true;
+                    const q = packageSearch.toLowerCase();
+                    return (
+                      pkg.name.toLowerCase().includes(q) ||
+                      pkg.alias.toLowerCase().includes(q) ||
+                      pkg.description?.toLowerCase().includes(q)
+                    );
+                  })
+                  .map((pkg) => (
                   <div key={pkg.id} className="bg-paper border border-rule rounded-surface p-4 shadow-sm hover:border-faint transition flex flex-col justify-between h-44">
                     <div>
                       <div className="flex items-center justify-between gap-2">
@@ -767,23 +851,18 @@ export default function AdminPackagesPage() {
 
                       <div className="flex gap-2">
                         <button
-                          onClick={() => setEditingPackage(pkg)}
-                          className="p-1.5 rounded-control text-muted hover:text-ink hover:bg-paper-3 transition"
-                          title="Edit Package"
+                          onClick={() => openPackageForm(pkg)}
+                          className="p-1 rounded-control text-muted hover:text-ink hover:bg-paper-2 transition"
+                          title="Edit package"
                         >
-                          <Edit className="w-4 h-4" />
+                          <Edit className="w-3.5 h-3.5" />
                         </button>
                         <button
-                          onClick={() => {
-                            if (confirm(`Delete package tier "${pkg.name}"?`)) {
-                              deletePackageMutation.mutate(pkg.id);
-                            }
-                          }}
-                          disabled={deletePackageMutation.isPending}
-                          className="p-1.5 rounded-control text-muted hover:text-danger hover:bg-danger-wash border border-transparent hover:border-danger-edge transition"
-                          title="Delete Package"
+                          onClick={() => askDeletePackage(pkg)}
+                          className="p-1 rounded-control text-muted hover:text-danger hover:bg-danger-wash transition"
+                          title="Delete package"
                         >
-                          <Trash2 className="w-4 h-4" />
+                          <Trash2 className="w-3.5 h-3.5" />
                         </button>
                       </div>
                     </div>
@@ -814,7 +893,7 @@ export default function AdminPackagesPage() {
                     setNewPackageId(fallback?.id || '');
                     setIsNewUserOpen(true);
                   }}
-                  className="px-3 py-1.5 rounded-control bg-accent text-white text-xs font-semibold"
+                  className="px-3 py-1.5 rounded-control bg-accent text-accent-ink text-xs font-semibold"
                 >
                   New user
                 </button>
@@ -910,7 +989,7 @@ export default function AdminPackagesPage() {
                       <button
                         type="submit"
                         disabled={createUserMutation.isPending}
-                        className="px-4 py-2 rounded-control bg-accent text-white text-xs font-semibold disabled:opacity-50"
+                        className="px-4 py-2 rounded-control bg-accent text-accent-ink text-xs font-semibold disabled:opacity-50"
                       >
                         {createUserMutation.isPending ? 'Creating...' : 'Create account'}
                       </button>
@@ -948,7 +1027,7 @@ export default function AdminPackagesPage() {
                       </label>
                       <select
                         value={userRole}
-                        onChange={(e) => setUserRole(e.target.value as any)}
+                        onChange={(e) => setUserRole(e.target.value as 'user' | 'admin' | 'root')}
                         disabled={editingUser.role === 'root'} // Disable root editing for safety
                         className="w-full bg-paper-2 border border-rule rounded-control px-3 py-2 text-sm text-ink outline-none focus:border-focus"
                       >
@@ -1032,15 +1111,25 @@ export default function AdminPackagesPage() {
 
             {/* Users Accounts list table */}
             {isLoadingUsers ? (
-              <div className="space-y-4">
-                {[...Array(3)].map((_, i) => (
-                  <div key={i} className="h-10 bg-paper-2 rounded-control animate-pulse"></div>
-                ))}
-              </div>
+              <Loading label="Loading users">
+                <div className="space-y-2">
+                  {[0, 1, 2].map((i) => (
+                    <SkeletonLine key={i} className="h-8" />
+                  ))}
+                </div>
+              </Loading>
             ) : !users || users.length === 0 ? (
-              <p className="text-xs text-muted text-center py-6">
-                {userSearch ? `Nobody matches "${userSearch}".` : 'No users yet.'}
-              </p>
+              <div className="ui-card">
+                <EmptyState
+                  icon={<Users className="h-5 w-5" />}
+                  title={userSearch ? 'Nobody matches that search' : 'No users yet'}
+                  description={
+                    userSearch
+                      ? `No account matches "${userSearch}". Try part of an email address.`
+                      : 'Accounts show up here once people sign up, or once you create one.'
+                  }
+                />
+              </div>
             ) : (
               <div className="bg-paper border border-rule rounded-surface overflow-hidden shadow-sm">
                 <div className="overflow-x-auto">
@@ -1085,18 +1174,14 @@ export default function AdminPackagesPage() {
                             </td>
                             <td className="py-2.5 px-3 text-right space-x-1">
                               <button
-                                onClick={() => setEditingUser(u)}
+                                onClick={() => openUserForm(u)}
                                 className="p-1.5 rounded-control text-muted hover:text-ink hover:bg-paper-3 transition inline-flex items-center align-middle"
                                 title="Edit User"
                               >
                                 <Edit className="w-4 h-4" />
                               </button>
                               <button
-                                onClick={() => {
-                                  if (confirm(`Delete user account "${u.email}" permanently?`)) {
-                                    deleteUserMutation.mutate(u.id);
-                                  }
-                                }}
+                                onClick={() => askDeleteUser(u)}
                                 disabled={deleteUserMutation.isPending || u.role === 'root'}
                                 className="p-1.5 rounded-control text-muted hover:text-danger hover:bg-danger-wash border border-transparent hover:border-danger-edge transition inline-flex items-center align-middle disabled:opacity-30"
                                 title="Delete User"

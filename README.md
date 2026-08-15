@@ -83,13 +83,13 @@ curl localhost:9002/gateway/api/health
 - **A sandbox.** Call a published service the way your users will. Pick a path, add headers or a body, send it with a key, and see the status, the timing, the rate-limit headers, and the same call written as `curl`.
 - **Request charts and logs.** Volume, response time, status breakdown, and a searchable log. Each person sees their own traffic, administrators see everyone's.
 - **Self-service sign-up.** Developers register, get a key, and read the docs without an administrator in the loop.
-- **Rewrite rules you write yourself.** JSON by JSONPath, XML by XPath, headers by name, with a starter template for each action. See [response transforms](docs/response-transforms.md).
+- **Rewrite rules you write yourself.** JSON by JSONPath, XML by XPath, headers by name, with a starter preset for each action. See [response transforms](docs/response-transforms.md).
 - **Serve a path yourself.** A route can answer from a fixed body instead of proxying, for the endpoints your upstream does not have.
 
 **For geospatial servers, on top**
 
 - **Path suggestions per standard.** Pick a service type and ORYCA fills in the paths that kind of server usually exposes (`/conformance`, `/collections`), instead of you typing them by hand.
-- **Rewrite templates, including XML.** Ready-made rules cover JSON answers and capabilities documents, where both the address and the upstream's own key sit inside attributes. An applied template starts switched off, so you read the rules before any traffic meets them.
+- **Rewrite presets, including XML.** Ready-made rules cover JSON answers and capabilities documents, where both the address and the upstream's own key sit inside attributes. An applied preset starts switched off, so you read the rules before any traffic meets them.
 
 ---
 

@@ -1,25 +1,29 @@
 'use client';
 
-import React, { useState, useEffect } from 'react';
-import { useQuery, useMutation, useQueryClient } from '@tanstack/react-query';
+import React, { useState, useEffect, useMemo } from 'react';
+import { useQuery, useMutation, useQueryClient, type QueryClient } from '@tanstack/react-query';
 import { api } from '@/lib/api';
 import NavigationShell from '@/components/NavigationShell';
 import Link from 'next/link';
+import {
+  PageHeader,
+  SkeletonLine,
+  useToast,
+  useConfirm,
+} from '@/components/ui';
 import {
   Database,
   Server,
   Plus,
   Trash2,
   Edit,
-  CheckCircle,
   AlertTriangle,
-  ArrowRight,
   Sparkles,
-  RefreshCw,
-  Eye,
-  Settings,
-  HelpCircle,
-  BookOpen
+  BookOpen,
+  Sliders,
+  Search,
+  X,
+  Filter,
 } from 'lucide-react';
 
 interface GatewaySource {
@@ -82,37 +86,40 @@ export default function AdminServicesPage() {
 
   return (
     <NavigationShell>
-      <div className="space-y-6">
-        <div>
-          <h1 className="font-title text-2xl font-bold tracking-tight text-ink">
-            Gateway Administration
-          </h1>
-          <p className="text-sm text-muted">
-            Configure upstream sources, register API routes, and deploy response transform rules
-          </p>
-        </div>
+      <PageHeader
+        title="Manage Services"
+        description="Upstream servers, the routes you publish from them, and the rules that rewrite responses"
+      />
 
-        {/* Tab selector */}
-        <div className="flex border-b border-rule pb-px gap-6">
+      <div className="space-y-6">
+        <div role="tablist" aria-label="View" className="flex gap-6 border-b border-rule">
           <button
+            role="tab"
+            type="button"
+            aria-selected={activeTab === 'services'}
             onClick={() => setActiveTab('services')}
-            className={`pb-3 text-sm font-semibold border-b-2 transition ${
+            className={`-mb-px flex items-center gap-2 border-b-2 pb-3 text-sm whitespace-nowrap transition-colors duration-200 ${
               activeTab === 'services'
-                ? 'border-accent text-ink font-bold'
+                ? 'border-accent font-medium text-ink'
                 : 'border-transparent text-muted hover:text-ink'
             }`}
           >
-            📡 Published Services
+            <Server className="h-4 w-4" aria-hidden="true" />
+            Published services
           </button>
           <button
+            role="tab"
+            type="button"
+            aria-selected={activeTab === 'sources'}
             onClick={() => setActiveTab('sources')}
-            className={`pb-3 text-sm font-semibold border-b-2 transition ${
+            className={`-mb-px flex items-center gap-2 border-b-2 pb-3 text-sm whitespace-nowrap transition-colors duration-200 ${
               activeTab === 'sources'
-                ? 'border-accent text-ink font-bold'
+                ? 'border-accent font-medium text-ink'
                 : 'border-transparent text-muted hover:text-ink'
             }`}
           >
-            📦 Upstream Sources
+            <Database className="h-4 w-4" aria-hidden="true" />
+            Upstream sources
           </button>
         </div>
 
@@ -159,7 +166,7 @@ function SourcesManager({
   setIsOpen: (val: boolean) => void;
   editingSource: GatewaySource | null;
   setEditingSource: (src: GatewaySource | null) => void;
-  queryClient: any;
+  queryClient: QueryClient;
 }) {
   const [alias, setAlias] = useState('');
   const [name, setName] = useState('');
@@ -171,8 +178,29 @@ function SourcesManager({
   const [body, setBody] = useState('');
 
   const [formError, setFormError] = useState<string | null>(null);
+  const { toast, error: toastError } = useToast();
+  const confirm = useConfirm();
 
-  useEffect(() => {
+  const [searchSourceQuery, setSearchSourceQuery] = useState('');
+
+  const filteredSources = useMemo(() => {
+    return sources.filter((src) => {
+      const q = searchSourceQuery.toLowerCase().trim();
+      return (
+        !q ||
+        src.name.toLowerCase().includes(q) ||
+        src.alias.toLowerCase().includes(q) ||
+        (src.url && src.url.toLowerCase().includes(q)) ||
+        (src.description && src.description.toLowerCase().includes(q))
+      );
+    });
+  }, [sources, searchSourceQuery]);
+
+  // ปรับ state ระหว่าง render ตามแนวทางของ React ไม่ใช่ใน effect (กัน cascading render)
+  const sourceFormKey = editingSource?.id ?? (isOpen ? 'new' : 'closed');
+  const [syncedSourceKey, setSyncedSourceKey] = useState(sourceFormKey);
+  if (sourceFormKey !== syncedSourceKey) {
+    setSyncedSourceKey(sourceFormKey);
     if (editingSource) {
       setAlias(editingSource.alias || '');
       setName(editingSource.name || '');
@@ -182,7 +210,6 @@ function SourcesManager({
       setUrl(editingSource.url || '');
       setContentType(editingSource.contentType || 'application/json');
       setBody(editingSource.body || '');
-      setIsOpen(true);
     } else {
       setAlias('');
       setName('');
@@ -193,35 +220,43 @@ function SourcesManager({
       setContentType('application/json');
       setBody('');
     }
-  }, [editingSource, isOpen, setIsOpen]);
+  }
 
   const saveMutation = useMutation({
     mutationFn: async () => {
       setFormError(null);
-      const payload = {
-        alias,
-        name,
-        description,
-        type,
-        protocol,
-        url,
-        contentType,
-        body: type === 'static' ? body : undefined,
-      };
-
       if (editingSource) {
-        await api.put(`/sources/${editingSource.id}`, payload);
+        await api.put(`/sources/${editingSource.id}`, {
+          alias,
+          name,
+          description,
+          type,
+          protocol,
+          url: type === 'api' ? url : undefined,
+          contentType: type === 'static' ? contentType : undefined,
+          body: type === 'static' ? body : undefined,
+        });
       } else {
-        await api.post('/sources', payload);
+        await api.post('/sources', {
+          alias,
+          name,
+          description,
+          type,
+          protocol,
+          url: type === 'api' ? url : undefined,
+          contentType: type === 'static' ? contentType : undefined,
+          body: type === 'static' ? body : undefined,
+        });
       }
     },
     onSuccess: () => {
       queryClient.invalidateQueries({ queryKey: ['admin-sources'] });
       setIsOpen(false);
       setEditingSource(null);
+      toast({ tone: 'ok', message: 'Upstream saved' });
     },
-    onError: (err: any) => {
-      setFormError(err.message || 'Failed to save source.');
+    onError: (err: unknown) => {
+      toastError(err instanceof Error && err.message ? err.message : 'Could not save the upstream.');
     },
   });
 
@@ -236,32 +271,53 @@ function SourcesManager({
 
   return (
     <div className="space-y-6">
-      <div className="flex justify-between items-center">
-        <h2 className="text-xs font-bold text-muted uppercase tracking-wider">Configure Upstream Targets</h2>
-        <button
-          onClick={() => {
-            setEditingSource(null);
-            setIsOpen(true);
-          }}
-          className="px-3 py-1.5 bg-accent hover:bg-accent-deep text-accent-ink text-xs font-semibold rounded-control transition duration-short flex items-center gap-1"
-        >
-          <Plus className="w-4 h-4" /> Add Source
-        </button>
+      <div className="flex flex-col sm:flex-row justify-between sm:items-center gap-3">
+        <div>
+          <h2 className="text-xs font-bold text-muted uppercase tracking-wider">Upstream Server Sources</h2>
+          <p className="text-xs text-muted mt-0.5">
+            {sources.length} upstream source{sources.length === 1 ? '' : 's'} configured
+          </p>
+        </div>
+        <div className="flex items-center gap-2">
+          {sources.length > 0 && (
+            <div className="relative min-w-[220px]">
+              <Search className="w-3.5 h-3.5 text-muted absolute left-2.5 top-1/2 -translate-y-1/2" />
+              <input
+                type="text"
+                value={searchSourceQuery}
+                onChange={(e) => setSearchSourceQuery(e.target.value)}
+                placeholder="Search upstreams..."
+                className="w-full bg-paper border border-rule rounded-control pl-8 pr-7 py-1.5 text-xs text-ink placeholder:text-muted outline-none focus:border-focus"
+              />
+              {searchSourceQuery && (
+                <button
+                  type="button"
+                  onClick={() => setSearchSourceQuery('')}
+                  className="absolute right-2 top-1/2 -translate-y-1/2 text-muted hover:text-ink"
+                >
+                  <X className="w-3 h-3" />
+                </button>
+              )}
+            </div>
+          )}
+          <button
+            onClick={() => {
+              setEditingSource(null);
+              setIsOpen(true);
+            }}
+            className="px-3 py-1.5 bg-accent hover:bg-accent-deep text-accent-ink text-xs font-semibold rounded-control transition duration-short flex items-center gap-1 shrink-0"
+          >
+            <Plus className="w-4 h-4" /> Add Source
+          </button>
+        </div>
       </div>
 
       {isOpen && (
         <div className="fixed inset-0 z-50 bg-scrim flex items-center justify-center p-4">
           <div className="bg-paper border border-rule rounded-surface p-6 w-full max-w-lg shadow-sm space-y-4 max-h-[90vh] overflow-y-auto">
             <h3 className="font-title text-base font-bold text-ink">
-              {editingSource ? 'Edit Upstream Source' : 'Add Upstream Source'}
+              {editingSource ? 'Edit Upstream Source' : 'New Upstream Source'}
             </h3>
-
-            {formError && (
-              <div className="flex items-start gap-3 rounded-control border border-danger-edge bg-danger-wash p-4 text-xs text-danger">
-                <AlertTriangle className="w-4 h-4 mt-0.5 flex-shrink-0" />
-                <div>{formError}</div>
-              </div>
-            )}
 
             <form
               onSubmit={(e) => {
@@ -273,20 +329,6 @@ function SourcesManager({
               <div className="grid grid-cols-2 gap-4">
                 <div>
                   <label className="text-xs font-semibold text-muted uppercase tracking-wider block mb-1">
-                    Alias (Unique key)
-                  </label>
-                  <input
-                    type="text"
-                    required
-                    value={alias}
-                    onChange={(e) => setAlias(e.target.value)}
-                    placeholder="smoke-upstream"
-                    disabled={!!editingSource}
-                    className="w-full bg-paper-2 border border-rule rounded-control px-3 py-2 text-sm text-ink outline-none focus:border-focus font-mono"
-                  />
-                </div>
-                <div>
-                  <label className="text-xs font-semibold text-muted uppercase tracking-wider block mb-1">
                     Display Name
                   </label>
                   <input
@@ -294,8 +336,21 @@ function SourcesManager({
                     required
                     value={name}
                     onChange={(e) => setName(e.target.value)}
-                    placeholder="My Production API"
+                    placeholder="e.g. Sentinel-2 Imagery"
                     className="w-full bg-paper-2 border border-rule rounded-control px-3 py-2 text-sm text-ink outline-none focus:border-focus"
+                  />
+                </div>
+                <div>
+                  <label className="text-xs font-semibold text-muted uppercase tracking-wider block mb-1">
+                    Alias (Identifier)
+                  </label>
+                  <input
+                    type="text"
+                    required
+                    value={alias}
+                    onChange={(e) => setAlias(e.target.value)}
+                    placeholder="e.g. s2-imagery"
+                    className="w-full bg-paper-2 border border-rule rounded-control px-3 py-2 text-sm text-ink outline-none focus:border-focus font-mono"
                   />
                 </div>
               </div>
@@ -308,40 +363,39 @@ function SourcesManager({
                   type="text"
                   value={description}
                   onChange={(e) => setDescription(e.target.value)}
-                  placeholder="Optional context about the source"
+                  placeholder="Optional notes about this backend"
                   className="w-full bg-paper-2 border border-rule rounded-control px-3 py-2 text-sm text-ink outline-none focus:border-focus"
                 />
               </div>
 
-              <div className="grid grid-cols-2 gap-4">
-                <div>
-                  <label className="text-xs font-semibold text-muted uppercase tracking-wider block mb-1">
-                    Source Type
+              <div>
+                <label className="text-xs font-semibold text-muted uppercase tracking-wider block mb-1">
+                  Source Type
+                </label>
+                <div className="flex gap-4">
+                  <label className="flex items-center gap-2 cursor-pointer">
+                    <input
+                      type="radio"
+                      name="sourceType"
+                      value="api"
+                      checked={type === 'api'}
+                      onChange={() => setType('api')}
+                      className="accent-accent"
+                    />
+                    Forward to a server (Live API)
                   </label>
-                  <select
-                    value={type}
-                    onChange={(e) => setType(e.target.value)}
-                    className="w-full bg-paper-2 border border-rule rounded-control px-3 py-2 text-sm text-ink outline-none focus:border-focus"
-                  >
-                    <option value="api">Proxy Upstream URL</option>
-                    <option value="static">Static JSON Content</option>
-                  </select>
+                  <label className="flex items-center gap-2 cursor-pointer">
+                    <input
+                      type="radio"
+                      name="sourceType"
+                      value="static"
+                      checked={type === 'static'}
+                      onChange={() => setType('static')}
+                      className="accent-accent"
+                    />
+                    Answer with a fixed body
+                  </label>
                 </div>
-                {type === 'api' && (
-                  <div>
-                    <label className="text-xs font-semibold text-muted uppercase tracking-wider block mb-1">
-                      Protocol
-                    </label>
-                    <select
-                      value={protocol}
-                      onChange={(e) => setProtocol(e.target.value)}
-                      className="w-full bg-paper-2 border border-rule rounded-control px-3 py-2 text-sm text-ink outline-none focus:border-focus"
-                    >
-                      <option value="https">HTTPS</option>
-                      <option value="http">HTTP</option>
-                    </select>
-                  </div>
-                )}
               </div>
 
               {type === 'api' ? (
@@ -415,16 +469,20 @@ function SourcesManager({
       {isLoading ? (
         <div className="space-y-4">
           {[...Array(2)].map((_, i) => (
-            <div key={i} className="h-16 bg-paper rounded-surface border border-rule animate-pulse"></div>
+            <SkeletonLine key={i} className="h-16" />
           ))}
         </div>
       ) : sources.length === 0 ? (
         <div className="p-8 bg-paper border border-rule border-dashed rounded-surface text-center text-xs text-muted">
           No upstream sources configured. Configure one to link routing paths to.
         </div>
+      ) : filteredSources.length === 0 ? (
+        <div className="p-8 bg-paper border border-rule border-dashed rounded-surface text-center text-xs text-muted">
+          No upstream sources match &quot;{searchSourceQuery}&quot;.
+        </div>
       ) : (
         <div className="grid grid-cols-1 md:grid-cols-2 gap-4">
-          {sources.map((src) => (
+          {filteredSources.map((src) => (
             <div key={src.id} className="bg-paper border border-rule rounded-surface p-4 shadow-sm hover:border-faint transition flex flex-col justify-between h-40">
               <div>
                 <div className="flex items-center justify-between gap-2">
@@ -436,32 +494,39 @@ function SourcesManager({
                     Alias: {src.alias}
                   </span>
                 </div>
-                <p className="text-xs text-muted mt-2 line-clamp-2">{src.description || 'No description.'}</p>
-                <div className="mt-3 text-[10px] font-mono text-muted truncate">
-                  {src.type === 'api' ? `Proxy: ${src.url}` : `Static Content (${src.contentType})`}
-                </div>
+                <p className="text-xs text-muted mt-2 line-clamp-2">{src.description || 'No description'}</p>
               </div>
-
-              <div className="flex justify-end gap-2 border-t border-rule pt-2 mt-2">
-                <button
-                  onClick={() => setEditingSource(src)}
-                  className="p-1.5 rounded-control text-muted hover:text-ink hover:bg-paper-3 transition"
-                  title="Edit Source"
-                >
-                  <Edit className="w-4 h-4" />
-                </button>
-                <button
-                  onClick={() => {
-                    if (confirm(`Delete upstream source "${src.name}"?`)) {
-                      deleteMutation.mutate(src.id);
-                    }
-                  }}
-                  disabled={deleteMutation.isPending}
-                  className="p-1.5 rounded-control text-muted hover:text-danger hover:bg-danger-wash border border-transparent hover:border-danger-edge transition"
-                  title="Delete Source"
-                >
-                  <Trash2 className="w-4 h-4" />
-                </button>
+              <div className="space-y-2 border-t border-rule pt-2">
+                <div className="flex justify-between items-center text-[10px] font-mono text-muted">
+                  <span className="truncate max-w-[200px]" title={src.url}>{src.type === 'api' ? src.url : 'Fixed Static Body'}</span>
+                  <span className="capitalize">{src.type}</span>
+                </div>
+                <div className="flex justify-end gap-2">
+                  <button
+                    onClick={() => {
+                      setEditingSource(src);
+                      setIsOpen(true);
+                    }}
+                    className="p-1 text-muted hover:text-ink hover:bg-paper-2 rounded-control transition"
+                    title="Edit source"
+                  >
+                    <Edit className="w-3.5 h-3.5" />
+                  </button>
+                  <button
+                    onClick={async () => {
+                      const wants = await confirm({
+                        title: 'Delete this upstream source?',
+                        description: `Any routes pointing to ${src.alias} will stop working until they are pointed somewhere else.`,
+                        confirmLabel: 'Delete source',
+                      });
+                      if (wants) deleteMutation.mutate(src.id);
+                    }}
+                    className="p-1 text-muted hover:text-danger hover:bg-danger-wash rounded-control transition"
+                    title="Delete source"
+                  >
+                    <Trash2 className="w-3.5 h-3.5" />
+                  </button>
+                </div>
               </div>
             </div>
           ))}
@@ -489,7 +554,7 @@ function ServicesManager({
   setIsOpen: (val: boolean) => void;
   editingService: GatewayService | null;
   setEditingService: (svc: GatewayService | null) => void;
-  queryClient: any;
+  queryClient: QueryClient;
 }) {
   const [name, setName] = useState('');
   const [description, setDescription] = useState('');
@@ -501,8 +566,33 @@ function ServicesManager({
     { path: '/', methods: ['GET'], sourceAlias: '' },
   ]);
 
+  const [searchQuery, setSearchQuery] = useState('');
+  const [typeFilter, setTypeFilter] = useState('ALL');
+
+  const serviceTypes = useMemo(() => {
+    const types = Array.from(new Set(services.map((s) => s.type)));
+    return types;
+  }, [services]);
+
+  const filteredServices = useMemo(() => {
+    return services.filter((svc) => {
+      const q = searchQuery.toLowerCase().trim();
+      const matchesSearch =
+        !q ||
+        svc.name.toLowerCase().includes(q) ||
+        svc.basePath.toLowerCase().includes(q) ||
+        (svc.description && svc.description.toLowerCase().includes(q)) ||
+        svc.type.toLowerCase().includes(q);
+
+      const matchesType = typeFilter === 'ALL' || svc.type === typeFilter;
+      return matchesSearch && matchesType;
+    });
+  }, [services, searchQuery, typeFilter]);
+
   const [formError, setFormError] = useState<string | null>(null);
-  const [scaffoldSuggestions, setScaffoldSuggestions] = useState<string[]>([]);
+  const { toast } = useToast();
+  const confirm = useConfirm();
+  const [scaffoldFetched, setScaffoldFetched] = useState<string[]>([]);
   const [isScaffoldingLoading, setIsScaffoldingLoading] = useState(false);
 
   // Adding an upstream from inside this form, so nobody has to leave for the other tab
@@ -549,20 +639,29 @@ function ServicesManager({
         contentType: 'application/json',
       });
       await queryClient.invalidateQueries({ queryKey: ['admin-sources'] });
-      updatePathRow(rowIndex, 'sourceAlias', alias);
+      // Map to all unmapped rows and current row
+      setResourcePaths((prev) =>
+        prev.map((rp, i) =>
+          i === rowIndex || !rp.sourceAlias ? { ...rp, sourceAlias: alias } : rp
+        )
+      );
       setNewSourceRow(null);
       setNewSourceAlias('');
       setNewSourceUrl('');
       setNewSourceBody('');
       setNewSourceKind('api');
-    } catch (err: any) {
-      setNewSourceError(err.message || 'Could not create the upstream.');
+    } catch (err: unknown) {
+      setNewSourceError(err instanceof Error && err.message ? err.message : 'Could not create the upstream.');
     } finally {
       setIsCreatingSource(false);
     }
   };
 
-  useEffect(() => {
+  // ปรับ state ระหว่าง render ตามแนวทางของ React ไม่ใช่ใน effect (กัน cascading render)
+  const serviceFormKey = editingService?.id ?? (isOpen ? 'new' : 'closed');
+  const [syncedServiceKey, setSyncedServiceKey] = useState(serviceFormKey);
+  if (serviceFormKey !== syncedServiceKey) {
+    setSyncedServiceKey(serviceFormKey);
     if (editingService) {
       setName(editingService.name || '');
       setDescription(editingService.description || '');
@@ -575,7 +674,6 @@ function ServicesManager({
           ? editingService.resourcePaths.map((rp) => ({ ...rp }))
           : [{ path: '/', methods: ['GET'], sourceAlias: '' }]
       );
-      setIsOpen(true);
     } else {
       setName('');
       setDescription('');
@@ -585,15 +683,17 @@ function ServicesManager({
       setIsPublic(false);
       setResourcePaths([{ path: '/', methods: ['GET'], sourceAlias: '' }]);
     }
-    setScaffoldSuggestions([]);
-  }, [editingService, isOpen, setIsOpen]);
+    setScaffoldFetched([]);
+  }
 
-  // Scaffolding when service type changes (only OGC types)
+  // ประเภท General ไม่มีเส้นทางมาตรฐานให้แนะนำ กรองตอน render แทนที่จะสั่งล้าง state ใน effect
+  const scaffoldSuggestions = basePath && type !== 'General' ? scaffoldFetched : [];
+
+  // เสนอเส้นทาง OGC ที่ยังขาด เมื่อประเภทหรือ base path เปลี่ยน
   useEffect(() => {
-    if (!basePath || type === 'General') {
-      setScaffoldSuggestions([]);
-      return;
-    }
+    if (!basePath || type === 'General') return;
+
+    let cancelled = false;
 
     async function checkPaths() {
       setIsScaffoldingLoading(true);
@@ -604,33 +704,44 @@ function ServicesManager({
           resourcePaths: resourcePaths.map((r) => r.path),
         };
         const res = await api.post('/services/check-paths', pathsPayload);
-        if (res.data.missingOgcPaths) {
-          setScaffoldSuggestions(res.data.missingOgcPaths);
+        if (!cancelled && res.data.missingOgcPaths) {
+          setScaffoldFetched(res.data.missingOgcPaths);
         }
-      } catch (err) {
-        console.error('Failed path check:', err);
+      } catch {
+        // เช็คเส้นทางล้มเหลวไม่ใช่เรื่องที่ผู้ใช้ต้องรู้ แค่ไม่มีคำแนะนำขึ้น
       } finally {
-        setIsScaffoldingLoading(false);
+        if (!cancelled) setIsScaffoldingLoading(false);
       }
     }
 
-    // Debounce calls during typing
+    // หน่วงระหว่างพิมพ์ ไม่ให้ยิงทุกตัวอักษร
     const delay = setTimeout(checkPaths, 800);
-    return () => clearTimeout(delay);
+    return () => {
+      cancelled = true;
+      clearTimeout(delay);
+    };
   }, [type, basePath, resourcePaths]);
 
   const addPathRow = (pathValue = '/') => {
+    const activeAlias =
+      resourcePaths.find((r) => r.sourceAlias)?.sourceAlias || sources[0]?.alias || '';
     setResourcePaths((prev) => [
       ...prev,
-      { path: pathValue, methods: ['GET'], sourceAlias: sources[0]?.alias || '' },
+      { path: pathValue, methods: ['GET'], sourceAlias: activeAlias },
     ]);
+  };
+
+  const applyUpstreamToAll = (alias: string) => {
+    if (!alias || alias === '__new__') return;
+    setResourcePaths((prev) => prev.map((rp) => ({ ...rp, sourceAlias: alias })));
+    toast({ tone: 'ok', message: `Applied upstream "${alias}" to all routes` });
   };
 
   const removePathRow = (index: number) => {
     setResourcePaths((prev) => prev.filter((_, i) => i !== index));
   };
 
-  const updatePathRow = (index: number, field: keyof ResourcePath, value: any) => {
+  const updatePathRow = (index: number, field: keyof ResourcePath, value: string | string[]) => {
     setResourcePaths((prev) =>
       prev.map((rp, i) => (i === index ? { ...rp, [field]: value } : rp))
     );
@@ -671,10 +782,16 @@ function ServicesManager({
         try {
           const presets = await api.get(`/response-transforms/presets?type=${type}`);
           const preset = (presets.data.items || [])[0];
-          if (preset && confirm(
-            `${name} answers with links to itself, which would send clients past the gateway.\n\n` +
-            `Apply the "${preset.title || preset.name}" preset to rewrite them?`
-          )) {
+          const wantsPreset =
+            preset &&
+            (await confirm({
+              title: 'Rewrite the links this service returns?',
+              description: `${name} answers with links to itself, which would send clients past the gateway.`,
+              consequences: [`Applies the "${preset.title || preset.name}" preset`, 'You can edit or remove it later under Transforms & Presets'],
+              confirmLabel: 'Apply preset',
+              cancelLabel: 'Not now',
+            }));
+          if (wantsPreset) {
             await api.post(`/response-transforms/presets/${preset.name}/apply`, { serviceId });
           }
         } catch (err) {
@@ -686,9 +803,10 @@ function ServicesManager({
       queryClient.invalidateQueries({ queryKey: ['admin-services'] });
       setIsOpen(false);
       setEditingService(null);
+      toast({ tone: 'ok', message: 'Service saved' });
     },
-    onError: (err: any) => {
-      setFormError(err.message || 'Failed to save service.');
+    onError: (err: unknown) => {
+      setFormError(err instanceof Error && err.message ? err.message : 'Failed to save service.');
     },
   });
 
@@ -703,18 +821,83 @@ function ServicesManager({
 
   return (
     <div className="space-y-6">
-      <div className="flex justify-between items-center">
-        <h2 className="text-xs font-bold text-muted uppercase tracking-wider">Publish Routing Gateways</h2>
-        <button
-          onClick={() => {
-            setEditingService(null);
-            setIsOpen(true);
-          }}
-          className="px-3 py-1.5 bg-accent hover:bg-accent-deep text-accent-ink text-xs font-semibold rounded-control transition duration-short flex items-center gap-1"
-        >
-          <Plus className="w-4 h-4" /> Publish Service
-        </button>
+      <div className="flex flex-col sm:flex-row justify-between sm:items-center gap-3">
+        <div>
+          <h2 className="text-xs font-bold text-muted uppercase tracking-wider">Publish Routing Gateways</h2>
+          <p className="text-xs text-muted mt-0.5">
+            {services.length} published gateway service{services.length === 1 ? '' : 's'}
+          </p>
+        </div>
+        <div className="flex items-center gap-2">
+          {services.length > 0 && (
+            <div className="relative min-w-[220px]">
+              <Search className="w-3.5 h-3.5 text-muted absolute left-2.5 top-1/2 -translate-y-1/2" />
+              <input
+                type="text"
+                value={searchQuery}
+                onChange={(e) => setSearchQuery(e.target.value)}
+                placeholder="Search services or paths..."
+                className="w-full bg-paper border border-rule rounded-control pl-8 pr-7 py-1.5 text-xs text-ink placeholder:text-muted outline-none focus:border-focus"
+              />
+              {searchQuery && (
+                <button
+                  type="button"
+                  onClick={() => setSearchQuery('')}
+                  className="absolute right-2 top-1/2 -translate-y-1/2 text-muted hover:text-ink"
+                >
+                  <X className="w-3 h-3" />
+                </button>
+              )}
+            </div>
+          )}
+          <button
+            onClick={() => {
+              setEditingService(null);
+              setIsOpen(true);
+            }}
+            className="px-3 py-1.5 bg-accent hover:bg-accent-deep text-accent-ink text-xs font-semibold rounded-control transition duration-short flex items-center gap-1 shrink-0"
+          >
+            <Plus className="w-4 h-4" /> Publish Service
+          </button>
+        </div>
       </div>
+
+      {/* Type Filter Pills */}
+      {serviceTypes.length > 1 && (
+        <div className="flex flex-wrap gap-1.5 items-center">
+          <span className="text-[11px] text-muted flex items-center gap-1 mr-1">
+            <Filter className="w-3 h-3" /> Type:
+          </span>
+          <button
+            type="button"
+            onClick={() => setTypeFilter('ALL')}
+            className={`px-2.5 py-1 text-[11px] rounded-control transition-colors ${
+              typeFilter === 'ALL'
+                ? 'bg-accent text-accent-ink font-semibold'
+                : 'bg-paper-2 border border-rule text-muted hover:text-ink'
+            }`}
+          >
+            All ({services.length})
+          </button>
+          {serviceTypes.map((t) => {
+            const count = services.filter((s) => s.type === t).length;
+            return (
+              <button
+                key={t}
+                type="button"
+                onClick={() => setTypeFilter(t)}
+                className={`px-2.5 py-1 text-[11px] rounded-control transition-colors ${
+                  typeFilter === t
+                    ? 'bg-accent text-accent-ink font-semibold'
+                    : 'bg-paper-2 border border-rule text-muted hover:text-ink'
+                }`}
+              >
+                {t} ({count})
+              </button>
+            );
+          })}
+        </div>
+      )}
 
       {isOpen && (
         <div className="fixed inset-0 z-50 bg-scrim flex items-center justify-center p-4">
@@ -826,6 +1009,19 @@ function ServicesManager({
               </div>
 
               {/* OGC Path scaffolding notifications */}
+              {/* คำแนะนำเส้นทางมาจาก POST /services/check-paths ซึ่งบังคับต้องมี basePath
+                * (มันทำหน้าที่ตรวจ path ชนกันด้วย) เลือก type อย่างเดียวจึงยังไม่มีอะไรขึ้น
+                * ถ้าไม่บอก ผู้ใช้จะนึกว่าฟีเจอร์พัง */}
+              {type !== 'General' && !basePath && (
+                <p className="mt-2 text-xs text-muted">
+                  Fill in the base path to see the routes this standard expects.
+                </p>
+              )}
+
+              {isScaffoldingLoading && scaffoldSuggestions.length === 0 && (
+                <p className="mt-2 text-xs text-muted">Checking the standard routes for this type…</p>
+              )}
+
               {scaffoldSuggestions.length > 0 && (
                 <div className="bg-accent-wash border border-accent-edge p-4 rounded-control space-y-2">
                   <div className="flex items-center gap-1.5 text-accent font-semibold">
@@ -855,13 +1051,25 @@ function ServicesManager({
                   <label className="text-xs font-semibold text-muted uppercase tracking-wider">
                     Resource Paths & Target Sources
                   </label>
-                  <button
-                    type="button"
-                    onClick={() => addPathRow()}
-                    className="text-xs text-accent font-semibold hover:underline"
-                  >
-                    + Add Path Row
-                  </button>
+                  <div className="flex items-center gap-3">
+                    {resourcePaths.length > 1 && resourcePaths[0]?.sourceAlias && (
+                      <button
+                        type="button"
+                        onClick={() => applyUpstreamToAll(resourcePaths[0].sourceAlias)}
+                        className="text-[11px] text-accent font-semibold hover:underline"
+                        title="Set all routes to use this upstream"
+                      >
+                        ⚡ Apply &quot;{resourcePaths[0].sourceAlias}&quot; to all
+                      </button>
+                    )}
+                    <button
+                      type="button"
+                      onClick={() => addPathRow()}
+                      className="text-xs text-accent font-semibold hover:underline"
+                    >
+                      + Add Path Row
+                    </button>
+                  </div>
                 </div>
 
                 <div className="space-y-2 max-h-52 overflow-y-auto pr-1">
@@ -977,7 +1185,7 @@ function ServicesManager({
                               type="button"
                               onClick={() => createInlineSource(index)}
                               disabled={isCreatingSource}
-                              className="px-3 py-1 text-xs font-semibold rounded-control bg-accent text-white disabled:opacity-50"
+                              className="px-3 py-1 text-xs font-semibold rounded-control bg-accent text-accent-ink disabled:opacity-50"
                             >
                               {isCreatingSource ? 'Adding...' : 'Add'}
                             </button>
@@ -1049,16 +1257,21 @@ function ServicesManager({
       {isLoading ? (
         <div className="space-y-4">
           {[...Array(2)].map((_, i) => (
-            <div key={i} className="h-16 bg-paper rounded-surface border border-rule animate-pulse"></div>
+            <SkeletonLine key={i} className="h-16" />
           ))}
         </div>
       ) : services.length === 0 ? (
         <div className="p-8 bg-paper border border-rule border-dashed rounded-surface text-center text-xs text-muted">
-          No services published yet. Publish one to build routing gateways.
+          No services published yet. Publish one to start routing traffic.
+        </div>
+      ) : filteredServices.length === 0 ? (
+        <div className="p-8 bg-paper border border-rule border-dashed rounded-surface text-center text-xs text-muted">
+          No services match your search &quot;{searchQuery}&quot;
+          {typeFilter !== 'ALL' ? ` in type ${typeFilter}` : ''}.
         </div>
       ) : (
         <div className="space-y-3">
-          {services.map((svc) => (
+          {filteredServices.map((svc) => (
             <div key={svc.id} className="bg-paper border border-rule p-4 rounded-surface shadow-sm hover:border-faint transition flex flex-col sm:flex-row sm:items-center justify-between gap-4">
               <div className="flex items-start gap-3">
                 <div className="p-2 rounded-control bg-paper-2 text-muted mt-1">
@@ -1091,23 +1304,41 @@ function ServicesManager({
 
               <div className="flex items-center gap-2 self-end sm:self-center">
                 <Link
+                  href={`/admin/transforms?serviceId=${svc.id}`}
+                  className="px-2.5 py-1 bg-paper border border-rule hover:border-faint text-[10px] font-semibold rounded-chip text-ink-2 hover:bg-paper-2 transition flex items-center gap-1"
+                >
+                  <Sliders className="w-3.5 h-3.5" /> Transforms
+                </Link>
+                <Link
                   href={`/admin/services/${svc.id}/spec`}
                   className="px-2.5 py-1 bg-paper border border-rule hover:border-faint text-[10px] font-semibold rounded-chip text-ink-2 hover:bg-paper-2 transition flex items-center gap-1"
                 >
                   <BookOpen className="w-3.5 h-3.5" /> Spec Editor
                 </Link>
                 <button
-                  onClick={() => setEditingService(svc)}
+                  onClick={() => {
+                    setEditingService(svc);
+                    setIsOpen(true);
+                  }}
                   className="p-1.5 rounded-control text-muted hover:text-ink hover:bg-paper-3 transition"
                   title="Edit Service"
                 >
                   <Edit className="w-4 h-4" />
                 </button>
                 <button
-                  onClick={() => {
-                    if (confirm(`Delete service "${svc.name}"?`)) {
-                      deleteMutation.mutate(svc.id);
-                    }
+                  onClick={async () => {
+                    const ok = await confirm({
+                      title: `Delete service "${svc.name}"`,
+                      consequences: [
+                        'This cannot be undone',
+                        'Its routes stop answering through the gateway immediately',
+                        'Its spec and rewrite rules go with it',
+                      ],
+                      typeToConfirm: svc.name,
+                      confirmLabel: 'Delete service',
+                      danger: true,
+                    });
+                    if (ok) deleteMutation.mutate(svc.id);
                   }}
                   disabled={deleteMutation.isPending}
                   className="p-1.5 rounded-control text-muted hover:text-danger hover:bg-danger-wash border border-transparent hover:border-danger-edge transition"

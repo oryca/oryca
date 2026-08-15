@@ -5,9 +5,9 @@ A **response transform** changes a response, its headers or its body, on the way
 The reason it exists is that a geospatial API (OGC API Features, STAC, WMTS) answers with links to itself. A client that follows those links leaves the gateway, and with it the API key check and the rate limit. Rewriting the links keeps clients coming back.
 
 > [!TIP]
-> **Start from a template.** The portal carries ready-made rulesets under Transforms & Presets, from single-action starters that suit any API to full link rewriters per standard. Applying one writes a transform switched off, so read what it wrote, adjust it, then enable it. Nothing meets traffic until you do.
+> **Start from a preset.** The portal carries ready-made rulesets under Transforms & Presets, from single-action starters that suit any API to full link rewriters per standard. Applying one writes a transform switched off, so read what it wrote, adjust it, then enable it. Nothing meets traffic until you do.
 
-A template that rewrites links fills in the upstream address of your service,
+A preset that rewrites links fills in the upstream address of your service,
 minus any query string, so the upstream's own credential never lands in a stored
 rule. It also swaps `api_key=...` inside rewritten links for the caller's own
 credential. If your upstream names that parameter differently, `apikey` or

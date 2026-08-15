@@ -10,6 +10,7 @@ import {
   clearAuthData,
   getAccessToken,
 } from '@/lib/api';
+import { ToastProvider, ConfirmProvider } from '@/components/ui';
 
 export interface AppConfig {
   id?: string;
@@ -142,7 +143,9 @@ export function Providers({ children }: { children: React.ReactNode }) {
           refreshUser,
         }}
       >
-        {children}
+        <ToastProvider>
+          <ConfirmProvider>{children}</ConfirmProvider>
+        </ToastProvider>
       </AuthContext.Provider>
     </QueryClientProvider>
   );
