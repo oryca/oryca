@@ -307,7 +307,11 @@ func seedPackages(ctx context.Context, store PackageStore, dir string, log Logge
 // environment or, when that is empty, is generated and printed once. A fresh
 // clone must never boot with a password that is published in this repository.
 func seedRootUser(ctx context.Context, store UserStore, opts Options, log Logger) {
-	if store == nil || opts.RootEmail == "" {
+	if store == nil {
+		return
+	}
+	if opts.RootEmail == "" {
+		log.Info("seed: ORYCA_API_ROOT_EMAIL is not set, no root account created")
 		return
 	}
 	if roots, err := store.FindByRoles(ctx, []string{"root"}); err == nil && len(roots) > 0 {
@@ -371,7 +375,7 @@ func seedRootUser(ctx context.Context, store UserStore, opts Options, log Logger
 func printRootBanner(email, password string, log Logger) {
 	line := "═══════════════════════════════════════════════════════════════"
 	log.Info(line)
-	log.Info("  ROOT ACCOUNT CREATED — this password is shown ONCE")
+	log.Info("  ROOT ACCOUNT CREATED. This password is shown ONCE.")
 	log.Info("    email:    " + email)
 	log.Info("    password: " + password)
 	log.Info("  Sign in and change it, or set ORYCA_API_ROOT_PASSWORD yourself.")

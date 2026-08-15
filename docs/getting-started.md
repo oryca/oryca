@@ -8,7 +8,7 @@ It takes four things, in this order.
 
 | | What it is |
 |---|---|
-| **Upstream source** | One address the gateway forwards to. Yours, or someone else's. |
+| **Source** | One address the gateway forwards to, yours or someone else's, or a fixed body it answers with instead. |
 | **Service** | The route you publish. Its paths point at sources. |
 | **Package** | A rate limit, plus the list of service paths it may reach. |
 | **API key** | What a developer sends. It works because their package grants the path. |
@@ -31,8 +31,10 @@ only if the upstream really implements that standard. ORYCA uses it to suggest
 paths and to offer the right link-rewrite preset.
 
 Under **Resource Paths**, each row is one route you are publishing. For each row,
-pick where it goes from the dropdown; if you have no upstream yet, choose
-**+ New upstream** and add it right there.
+pick where it goes from the dropdown; if you have no source yet, choose
+**+ New upstream** and add it right there. It offers a choice, **Forward to a
+server** or **Answer with a fixed body**. The second is for an endpoint your
+upstream does not have, covered below.
 
 ### The one thing worth getting right
 
@@ -87,7 +89,7 @@ takes for every future developer.
 
 ## 3. Get a key and call it
 
-**Services & Keys** → **Create new key**. The key is shown once, so copy it now.
+**Services & Keys** → **Issue key**. The key is shown once, so copy it now.
 
 Then open **Sandbox**. Pick the service, the path and the key, and send. You get
 the status, how long it took, the body, the headers with the rate-limit ones

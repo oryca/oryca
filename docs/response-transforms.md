@@ -60,7 +60,7 @@ Rules describe exactly what to modify inside headers or body payloads.
 
 | Field | Supported Values | Description |
 | :--- | :--- | :--- |
-| **`type`** | `json` \| `xml` | Document format. If omitted, matching is determined by response content-type. |
+| **`type`** | `json` \| `xml` | Document format. Defaults to `json` when omitted, so set it to `xml` explicitly for a capabilities document, or the rule silently does nothing against it. |
 | **`target`** | `body` \| `headers` | Interception target. |
 | **`action`** | `replace` \| `add` \| `append` \| `remove` \| `rename` | Modification command. |
 | **`path`** | JSONPath (e.g. `$.links[*]`) | Target selector inside JSON documents. |

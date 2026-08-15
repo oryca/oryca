@@ -1,11 +1,15 @@
 # ORYCA
 
 [![CI](https://github.com/oryca/oryca/actions/workflows/ci.yml/badge.svg)](https://github.com/oryca/oryca/actions/workflows/ci.yml)
+[![Stability](https://img.shields.io/badge/stability-alpha-f4d03f.svg)](https://github.com/mkenney/software-guides/blob/master/STABILITY-BADGES.md#alpha)
 [![Release](https://img.shields.io/github/v/release/oryca/oryca?sort=semver&cacheSeconds=300)](https://github.com/oryca/oryca/releases)
 [![Go](https://img.shields.io/github/go-mod/go-version/oryca/oryca?cacheSeconds=300)](go.mod)
 [![License](https://img.shields.io/github/license/oryca/oryca?cacheSeconds=300)](LICENSE)
 
 **An open-source API gateway, at home with geospatial APIs.**
+
+> [!NOTE]
+> ORYCA is under active development, ahead of its first tagged release. The gateway and control plane are the settled pieces. The portal is newer and still being polished, so expect rough edges there in particular, and expect things to move before a release is tagged.
 
 [Quick Start](#quick-start) · [Configuration](#configuration) · [Docs](docs) · [Contributing](CONTRIBUTING.md)
 
@@ -97,24 +101,7 @@ curl localhost:9002/gateway/api/health
 
 Two Go services and a Next.js portal, on MongoDB and Redis.
 
-```
-                  ┌────────────────────────────────────────┐
-                  │            Next.js Portal              │
-                  │   (Dashboard, Keys, Admin Controls)    │
-                  └───────┬────────────────────────┬───────┘
-                          │ browser calls both     │
-                          ▼                        ▼
-             ┌───────────────────┐  polls   ┌────────────────────────┐
-   clients ─►│   ORYCA Gateway   │ ───────► │  ORYCA Control Plane   │
-             │  (Traffic Proxy)  │ ◄─────── │   (Management API)     │
-             └─────────┬─────────┘  events  └───────────┬────────────┘
-                       │                                │ MongoDB
-                       │        ┌──────────────┐        ▼
-                       └───────►│    Redis     │◄──  ┌──────────────────┐
-                    routes,     └──────────────┘     │ Users, Keys,     │
-                    cache,        shared by both     │ Config, Logs     │
-                    rate limit                       └──────────────────┘
-```
+![Architecture. The portal calls the gateway and the control plane from the browser. The gateway carries traffic and reads its routing config from Redis. The control plane owns MongoDB, and pushes changes to Redis for the gateway to pick up.](docs/images/architecture.png)
 
 1. **Gateway** carries the traffic. It finds the route, checks the key, applies the rate limit, serves from cache and rewrites the response. Its configuration comes from the control plane and lives in Redis, so it keeps serving while the control plane restarts. It never opens a database connection of its own.
 2. **Control plane** handles management. Users, services, packages, API keys, the portal's API and the dashboard. It owns MongoDB, and uses Redis to push changes and to read the request logs the gateway writes.
@@ -183,19 +170,38 @@ untouched.
 
 ## Local Development & Tests
 
-One Go module, so everything runs from the root.
+One Go module, so build and test run from the root.
 
 ```sh
-# Build and run tests
 go build ./...
 go test ./...
-
-# Start control plane
-go run ./cmd/oryca-control-plane
-
-# Start gateway
-go run ./cmd/oryca-gateway
 ```
+
+Running a service on its own, outside Docker, needs three things Docker
+otherwise does for you. Mongo and Redis reachable, a `.env` in that service's
+own directory (`godotenv` reads the current directory, not the root), and for
+the control plane, a signing key pair.
+
+```sh
+docker compose up -d mongo redis
+
+cd control-plane
+cp .env.example .env
+openssl genpkey -algorithm RSA -pkeyopt rsa_keygen_bits:2048 -out auth-private.key
+openssl rsa -in auth-private.key -pubout -out auth-public.key
+go run ../cmd/oryca-control-plane
+```
+
+```sh
+cd gateway
+cp .env.example .env
+go run ../cmd/oryca-gateway
+```
+
+`ORYCA_INTERNAL_SECRET` in `control-plane/.env` and `ORYCA_GW_INTERNAL_SECRET`
+in `gateway/.env` have to be the same value, the gateway refuses to start
+without one. The generated key files are gitignored, and this whole dance is
+what the Docker image's entrypoint script does for you on every first start.
 
 `boundary_test.go` fails the build if one binary ever imports the other.
 
