@@ -209,7 +209,7 @@ what the Docker image's entrypoint script does for you on every first start.
 
 `boundary_test.go` fails the build if one binary ever imports the other.
 
-With the stack up, `tools/smoke-test.sh` walks the whole path a person takes. It signs in, publishes a service, issues a key, calls it through the gateway, and checks it reaches the dashboard.
+With the stack up, `tools/smoke-test.sh` walks the whole path a person takes. It signs in, publishes a service, issues a key, calls it through the gateway, and checks it reaches the dashboard. It is a POSIX shell script, so on Windows run it from Git Bash or WSL, not plain PowerShell.
 
 ```sh
 ./tools/smoke-test.sh

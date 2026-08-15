@@ -17,11 +17,21 @@ Found a security problem? Please read [SECURITY.md](SECURITY.md) first.
 
 ## Running it yourself
 
+**macOS / Linux / Git Bash / WSL**
 ```sh
 cp .env.example .env
 echo "ORYCA_INTERNAL_SECRET=$(openssl rand -hex 32)" >> .env
 docker compose up -d
 ./tools/smoke-test.sh
+```
+
+**Windows PowerShell** (no `openssl`, no `$(...)` substitution, and the smoke
+test itself needs a POSIX shell, so run it from Git Bash or WSL)
+```powershell
+cp .env.example .env
+$b=New-Object byte[] 32; (New-Object Security.Cryptography.RNGCryptoServiceProvider).GetBytes($b)
+Add-Content .env "ORYCA_INTERNAL_SECRET=$(($b|%{$_.ToString('x2')}) -join '')"
+docker compose up -d
 ```
 
 The smoke test signs in, publishes a service, calls it through the gateway, and

@@ -14,7 +14,7 @@ The rest of this page is for running the binaries yourself, or for tuning.
 
 | Setting | Default | What it does |
 |---|---|---|
-| `ORYCA_INTERNAL_SECRET` | none | Shared by the two services. The gateway sends it on every `/internal/*` call, and whoever holds it can read every service and API key you have. There is no default: generate one with `openssl rand -hex 32`. |
+| `ORYCA_INTERNAL_SECRET` | none | Shared by the two services. The gateway sends it on every `/internal/*` call, and whoever holds it can read every service and API key you have. There is no default: see [Quick Start](../README.md#quick-start) to generate one (macOS/Linux/WSL and Windows PowerShell both covered). |
 | `ORYCA_INTERNAL_SECRET_PREV` | empty | The previous secret, accepted alongside the current one. Set it while rotating, remove it after. |
 | `ORYCA_API_ROOT_EMAIL` | empty | The first administrator, created on the first start only. `.env.example` ships `admin@localhost`; leaving it truly empty skips creating a root account, and the log says so. |
 | `ORYCA_API_ROOT_PASSWORD` | empty | Leave empty and one is generated and printed to the log once. |
