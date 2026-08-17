@@ -42,6 +42,7 @@ interface Package {
       tiers?: RateLimitTier[];
     };
   };
+  properties?: Record<string, unknown> | null;
   userCount?: number;
   serviceCount?: number;
 }
@@ -71,15 +72,23 @@ interface PackageSvcLink {
   paths?: PackagePath[];
 }
 
+// ต้องมี field ที่หน้านี้ไม่ได้แก้ด้วย เพราะ PUT /users เป็น replace ทั้งก้อน
+// ไม่ส่งไปเท่ากับสั่งให้ล้างทิ้ง
 interface User {
   id: string;
   email: string;
+  username?: string;
   firstName?: string;
   lastName?: string;
+  displayName?: string;
+  organization?: string;
+  avatar?: string;
   role: 'user' | 'admin' | 'root';
   packageId?: string;
   verified?: boolean;
   enabled?: boolean;
+  expiredAt?: string | null;
+  properties?: Record<string, unknown> | null;
 }
 
 export default function AdminPackagesPage() {
@@ -214,6 +223,7 @@ export default function AdminPackagesPage() {
         alias: packageAlias,
         description: packageDescription,
         enabled: true,
+        properties: editingPackage?.properties ?? null,
         policies: {
           rateLimit: {
             enabled: rateLimitEnabled,
@@ -299,9 +309,16 @@ export default function AdminPackagesPage() {
   const saveUserMutation = useMutation({
     mutationFn: async () => {
       if (!editingUser) return;
+      // ส่งทั้งก้อนที่อ่านมา แล้วทับเฉพาะที่ฟอร์มนี้แก้
       const payload = {
+        username: editingUser.username || '',
         firstName: editingUser.firstName || '',
         lastName: editingUser.lastName || '',
+        displayName: editingUser.displayName || '',
+        organization: editingUser.organization || '',
+        avatar: editingUser.avatar || '',
+        expiredAt: editingUser.expiredAt ?? null,
+        properties: editingUser.properties ?? null,
         role: userRole,
         packageId: userPackageId || undefined,
         verified: userVerified,

@@ -54,6 +54,7 @@ interface GatewayService {
   enabled?: boolean;
   isPublic?: boolean;
   resourcePaths?: ResourcePath[];
+  ogc?: { version?: string; parts?: string[] } | null;
 }
 
 export default function AdminServicesPage() {
@@ -233,6 +234,8 @@ function SourcesManager({
           type,
           protocol,
           url: type === 'api' ? url : undefined,
+          // ฟอร์มนี้ไม่ได้แก้ headers แต่ PUT เป็น replace ไม่ส่งคืนไปเท่ากับล้างทิ้ง
+          headers: editingSource.headers ?? [],
           contentType: type === 'static' ? contentType : undefined,
           body: type === 'static' ? body : undefined,
         });
@@ -766,6 +769,8 @@ function ServicesManager({
         enabled,
         isPublic,
         resourcePaths,
+        // ฟอร์มนี้ไม่ได้แก้ ogc แต่ PUT เป็น replace ไม่ส่งคืนไปเท่ากับล้างทิ้ง
+        ogc: editingService?.ogc ?? undefined,
       };
 
       let serviceId = editingService?.id;
