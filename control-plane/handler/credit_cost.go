@@ -134,8 +134,11 @@ func findBestRateLimit(resourcePath string, rateLimitMap map[string]map[string]*
 		if !strings.HasSuffix(pattern, "/*") || len(rl) == 0 {
 			continue
 		}
+		// The root wildcard "/*" trims to an empty prefix, which is also the zero value of
+		// bestPrefix. Comparing lengths alone would drop it, so a package granting "/*"
+		// would hand the gateway a resource with no limit on it at all.
 		prefix := strings.TrimSuffix(pattern, "/*")
-		if strings.HasPrefix(normalized, prefix+"/") && len(prefix) > len(bestPrefix) {
+		if strings.HasPrefix(normalized, prefix+"/") && (best == nil || len(prefix) > len(bestPrefix)) {
 			bestPrefix = prefix
 			best = rl
 		}
