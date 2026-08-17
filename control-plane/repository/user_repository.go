@@ -108,7 +108,7 @@ func (r *UserRepository) FindByID(ctx context.Context, id bson.ObjectID) (*model
 	return &result, nil
 }
 
-// FindByRoles คืน user ทั้งหมดที่ role อยู่ใน roles ที่กำหนด. ใช้ fan-out แจ้งเตือนถึง admin (เช่น payment_failed ตอน pending_manual_review)
+// FindByRoles คืน user ทั้งหมดที่ role อยู่ใน roles ที่กำหนด. ใช้ fan-out แจ้งเตือนถึง admin
 func (r *UserRepository) FindByRoles(ctx context.Context, roles []string) ([]*model.User, error) {
 	filter := bson.M{"role": bson.M{"$in": roles}, "deletedAt": bson.M{opExists: false}}
 	cursor, err := r.db.Collection(collectionUser).Find(ctx, filter)

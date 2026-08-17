@@ -12,8 +12,8 @@ import (
 	"go.mongodb.org/mongo-driver/v2/bson"
 )
 
-// applyPricingDefaults ตั้งค่า default สำหรับ rateLimit.algorithm
-func applyPricingDefaults(policies *model.PackagePolicies) {
+// applyPolicyDefaults ตั้งค่า default สำหรับ rateLimit.algorithm
+func applyPolicyDefaults(policies *model.PackagePolicies) {
 	if policies == nil {
 		return
 	}
@@ -83,7 +83,7 @@ func (s *PackageService) Create(ctx context.Context, body *model.PackageCreate, 
 	}
 	body.Alias = alias
 
-	applyPricingDefaults(body.Policies)
+	applyPolicyDefaults(body.Policies)
 
 	now := tool.NowUTC()
 	enabled := true
@@ -128,7 +128,7 @@ func (s *PackageService) Update(ctx context.Context, id string, body *model.Pack
 		}
 	}
 
-	applyPricingDefaults(body.Policies)
+	applyPolicyDefaults(body.Policies)
 
 	enabled := true
 	if body.Enabled != nil {
