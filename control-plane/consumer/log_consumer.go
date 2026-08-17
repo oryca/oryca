@@ -247,12 +247,14 @@ func (c *LogConsumer) flush(ctx context.Context, batch *[]*model.AccessLog, ids 
 
 // streamLog mirrors the JSON the gateway publishes (oryca-gateway/logger/log_model.go).
 type streamLog struct {
-	Time      *time.Time `json:"time"`
-	TraceID   string     `json:"traceId"`
-	UserID    string     `json:"userId"`
-	ApiKeyID  string     `json:"apiKeyId"`
-	ServiceID string     `json:"serviceId"`
-	Request   *struct {
+	Time        *time.Time `json:"time"`
+	TraceID     string     `json:"traceId"`
+	UserID      string     `json:"userId"`
+	ApiKeyID    string     `json:"apiKeyId"`
+	ServiceID   string     `json:"serviceId"`
+	PackageID   string     `json:"packageId"`
+	CacheStatus string     `json:"cacheStatus"`
+	Request     *struct {
 		Host   string `json:"host"`
 		IP     string `json:"ip"`
 		Method string `json:"method"`
@@ -262,7 +264,21 @@ type streamLog struct {
 		StatusCode *int   `json:"statusCode"`
 		Size       *int64 `json:"size"`
 		Duration   *int64 `json:"duration"`
+		Timing     *struct {
+			AuthMs         *int64 `json:"authMs"`
+			RateLimitMs    *int64 `json:"rateLimitMs"`
+			CacheCheckMs   *int64 `json:"cacheCheckMs"`
+			SingleflightMs *int64 `json:"singleflightMs"`
+			BodyReadMs     *int64 `json:"bodyReadMs"`
+			PostUpstreamMs *int64 `json:"postUpstreamMs"`
+		} `json:"timing"`
 	} `json:"response"`
+	Target *struct {
+		Response *struct {
+			StatusCode *int   `json:"statusCode"`
+			Duration   *int64 `json:"duration"`
+		} `json:"response"`
+	} `json:"target"`
 }
 
 // decodeMessage turns one stream entry into a document, or nil if it is not
@@ -280,11 +296,13 @@ func decodeMessage(msg redis.XMessage) *model.AccessLog {
 	}
 
 	doc := &model.AccessLog{
-		ID:        bson.NewObjectID(),
-		TraceID:   sl.TraceID,
-		UserID:    sl.UserID,
-		ApiKeyID:  sl.ApiKeyID,
-		ServiceID: sl.ServiceID,
+		ID:          bson.NewObjectID(),
+		TraceID:     sl.TraceID,
+		UserID:      sl.UserID,
+		ApiKeyID:    sl.ApiKeyID,
+		ServiceID:   sl.ServiceID,
+		PackageID:   sl.PackageID,
+		CacheStatus: sl.CacheStatus,
 	}
 	if sl.Time != nil {
 		doc.Time = sl.Time.UTC()
@@ -297,16 +315,51 @@ func decodeMessage(msg redis.XMessage) *model.AccessLog {
 		doc.Method = sl.Request.Method
 		doc.Path = sl.Request.Path
 	}
-	if sl.Response != nil {
-		if sl.Response.StatusCode != nil {
-			doc.StatusCode = *sl.Response.StatusCode
-		}
-		if sl.Response.Size != nil {
-			doc.Size = *sl.Response.Size
-		}
-		if sl.Response.Duration != nil {
-			doc.DurationMs = *sl.Response.Duration
-		}
-	}
+	sl.applyResponse(doc)
+	sl.applyTarget(doc)
 	return doc
+}
+
+// applyResponse คัดลอกฝั่ง response รวม timing แยกขั้นของ gateway
+func (sl *streamLog) applyResponse(doc *model.AccessLog) {
+	if sl.Response == nil {
+		return
+	}
+	doc.StatusCode = int(derefInt(sl.Response.StatusCode))
+	doc.Size = derefInt64(sl.Response.Size)
+	doc.DurationMs = derefInt64(sl.Response.Duration)
+
+	t := sl.Response.Timing
+	if t == nil {
+		return
+	}
+	doc.AuthMs = derefInt64(t.AuthMs)
+	doc.RateLimitMs = derefInt64(t.RateLimitMs)
+	doc.CacheCheckMs = derefInt64(t.CacheCheckMs)
+	doc.SingleflightMs = derefInt64(t.SingleflightMs)
+	doc.BodyReadMs = derefInt64(t.BodyReadMs)
+	doc.PostUpstreamMs = derefInt64(t.PostUpstreamMs)
+}
+
+// applyTarget คัดลอกฝั่ง upstream ไม่มี target เมื่อ request ไม่ได้ยิงออกไป
+func (sl *streamLog) applyTarget(doc *model.AccessLog) {
+	if sl.Target == nil || sl.Target.Response == nil {
+		return
+	}
+	doc.UpstreamStatus = int(derefInt(sl.Target.Response.StatusCode))
+	doc.UpstreamDurationMs = derefInt64(sl.Target.Response.Duration)
+}
+
+func derefInt64(v *int64) int64 {
+	if v == nil {
+		return 0
+	}
+	return *v
+}
+
+func derefInt(v *int) int {
+	if v == nil {
+		return 0
+	}
+	return *v
 }

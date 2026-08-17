@@ -62,6 +62,16 @@ interface AccessLog {
   statusCode: number;
   size?: number;
   durationMs: number;
+  packageId?: string;
+  cacheStatus?: string;
+  upstreamStatus?: number;
+  upstreamDurationMs?: number;
+  authMs?: number;
+  rateLimitMs?: number;
+  cacheCheckMs?: number;
+  singleflightMs?: number;
+  bodyReadMs?: number;
+  postUpstreamMs?: number;
 }
 
 interface AccessLogPage {
@@ -105,6 +115,35 @@ function statusTone(code: number) {
   if (code >= 500) return 'border-danger-edge bg-danger-wash text-danger';
   if (code >= 400) return 'border-warn-edge bg-warn-wash text-warn';
   return 'border-ok-edge bg-ok-wash text-ok';
+}
+
+function cacheTone(status?: string) {
+  if (status === 'HIT') return 'border-ok-edge bg-ok-wash text-ok';
+  if (status === 'MISS') return 'border-rule bg-paper-2 text-muted';
+  return 'border-rule bg-paper-2 text-ink-3';
+}
+
+/** เวลาที่ gateway เพิ่มเข้ามาเอง คือเวลารวมลบเวลาที่ upstream ใช้
+ *  คืน null เมื่อไม่ได้ยิง upstream เช่น cache HIT หรือถูกปฏิเสธที่ auth */
+function gatewayOverhead(log: AccessLog): number | null {
+  if (!log.upstreamDurationMs && log.upstreamStatus === undefined) return null;
+  const overhead = log.durationMs - (log.upstreamDurationMs ?? 0);
+  return overhead < 0 ? 0 : overhead;
+}
+
+/** เวลาที่ทำให้ตอบช้าอยู่ขั้นไหนของ gateway ใช้ตอน hover ดูรายละเอียด */
+function timingBreakdown(log: AccessLog): string {
+  const steps: Array<[string, number | undefined]> = [
+    ['auth', log.authMs],
+    ['rate limit', log.rateLimitMs],
+    ['cache', log.cacheCheckMs],
+    ['coalesce', log.singleflightMs],
+    ['read body', log.bodyReadMs],
+    ['transform', log.postUpstreamMs],
+  ];
+  const shown = steps.filter(([, v]) => v !== undefined);
+  if (shown.length === 0) return 'No timing recorded for this request';
+  return shown.map(([label, v]) => `${label} ${v ?? 0} ms`).join(' · ');
 }
 
 function StatTile({
@@ -538,7 +577,10 @@ export default function DashboardPage() {
                     <th className="px-3 py-2 font-medium whitespace-nowrap">Status</th>
                     <th className="px-3 py-2 font-medium whitespace-nowrap">Method</th>
                     <th className="px-3 py-2 font-medium whitespace-nowrap">Path</th>
-                    <th className="px-3 py-2 font-medium whitespace-nowrap">Duration</th>
+                    <th className="px-3 py-2 font-medium whitespace-nowrap">Total</th>
+                    <th className="px-3 py-2 font-medium whitespace-nowrap">Upstream</th>
+                    <th className="px-3 py-2 font-medium whitespace-nowrap">Gateway</th>
+                    <th className="px-3 py-2 font-medium whitespace-nowrap">Cache</th>
                     <th className="px-3 py-2 font-medium whitespace-nowrap">IP</th>
                     <th className="px-3 py-2 font-medium whitespace-nowrap">Time</th>
                   </tr>
@@ -559,8 +601,28 @@ export default function DashboardPage() {
                       <td className="max-w-xs truncate px-3 py-2.5 text-ink-3" title={log.path}>
                         {log.path || '/'}
                       </td>
-                      <td className="px-3 py-2.5 whitespace-nowrap text-muted">
+                      <td className="px-3 py-2.5 font-medium whitespace-nowrap text-ink">
                         {log.durationMs} ms
+                      </td>
+                      <td className="px-3 py-2.5 whitespace-nowrap text-muted">
+                        {log.upstreamDurationMs !== undefined ? `${log.upstreamDurationMs} ms` : '—'}
+                      </td>
+                      <td
+                        className="px-3 py-2.5 whitespace-nowrap text-muted"
+                        title={timingBreakdown(log)}
+                      >
+                        {gatewayOverhead(log) !== null ? `${gatewayOverhead(log)} ms` : '—'}
+                      </td>
+                      <td className="px-3 py-2.5 whitespace-nowrap">
+                        {log.cacheStatus ? (
+                          <span
+                            className={`rounded-chip border px-2 py-0.5 text-[11px] font-medium ${cacheTone(log.cacheStatus)}`}
+                          >
+                            {log.cacheStatus}
+                          </span>
+                        ) : (
+                          <span className="text-muted">—</span>
+                        )}
                       </td>
                       <td className="px-3 py-2.5 whitespace-nowrap text-muted">{log.ip || '—'}</td>
                       <td className="px-3 py-2.5 whitespace-nowrap text-muted">

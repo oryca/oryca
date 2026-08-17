@@ -16,6 +16,7 @@ type AccessLog struct {
 	UserID    string        `json:"userId,omitempty" bson:"userId,omitempty"`
 	ApiKeyID  string        `json:"apiKeyId,omitempty" bson:"apiKeyId,omitempty"`
 	ServiceID string        `json:"serviceId,omitempty" bson:"serviceId,omitempty"`
+	PackageID string        `json:"packageId,omitempty" bson:"packageId,omitempty"`
 
 	Method     string `json:"method,omitempty" bson:"method,omitempty"`
 	Path       string `json:"path,omitempty" bson:"path,omitempty"`
@@ -24,6 +25,22 @@ type AccessLog struct {
 	StatusCode int    `json:"statusCode" bson:"statusCode"`
 	Size       int64  `json:"size,omitempty" bson:"size,omitempty"`
 	DurationMs int64  `json:"durationMs" bson:"durationMs"`
+
+	// CacheStatus บอกว่า request นี้ยิง upstream จริงไหม HIT = ไม่ยิง
+	CacheStatus string `json:"cacheStatus,omitempty" bson:"cacheStatus,omitempty"`
+
+	// Upstream* คือฝั่งต้นทาง ไม่มีค่าเมื่อไม่ได้ยิงออกไป (cache HIT, ตายที่ auth)
+	// durationMs - upstreamDurationMs คือ overhead ที่ gateway เพิ่มเข้ามา
+	UpstreamStatus     int   `json:"upstreamStatus,omitempty" bson:"upstreamStatus,omitempty"`
+	UpstreamDurationMs int64 `json:"upstreamDurationMs,omitempty" bson:"upstreamDurationMs,omitempty"`
+
+	// Timing แยก overhead ของ gateway ออกเป็นขั้น หน่วยเป็น ms
+	AuthMs         int64 `json:"authMs,omitempty" bson:"authMs,omitempty"`
+	RateLimitMs    int64 `json:"rateLimitMs,omitempty" bson:"rateLimitMs,omitempty"`
+	CacheCheckMs   int64 `json:"cacheCheckMs,omitempty" bson:"cacheCheckMs,omitempty"`
+	SingleflightMs int64 `json:"singleflightMs,omitempty" bson:"singleflightMs,omitempty"`
+	BodyReadMs     int64 `json:"bodyReadMs,omitempty" bson:"bodyReadMs,omitempty"`
+	PostUpstreamMs int64 `json:"postUpstreamMs,omitempty" bson:"postUpstreamMs,omitempty"`
 }
 
 // AccessLogQuery is the filter shared by every dashboard endpoint. Scoping is
