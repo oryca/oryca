@@ -311,3 +311,28 @@ func SyntheticETag(body []byte) string {
 	h := sha256.Sum256(body)
 	return fmt.Sprintf(`W/"gw-%x"`, h)
 }
+
+// ClientETag is the validator for what the client actually receives, which is the
+// cached body after the transform has run over it. The cache holds the untransformed
+// body, so its ETag alone would stay the same after a rule changes: the client would
+// send If-None-Match, get a 304, and keep showing output from the old rules until the
+// entry expired. Mixing the ruleset in changes the validator the moment the rules do.
+// An empty fingerprint means no transform applies, and the ETag is left alone.
+func ClientETag(rawETag, transformFingerprint string) string {
+	if rawETag == "" || transformFingerprint == "" {
+		return rawETag
+	}
+	// Rebuild rather than append, because an upstream that sends an unquoted or padded
+	// validator would otherwise produce an unbalanced one. The W/ prefix is kept as it
+	// came: turning a strong validator weak is not ours to decide.
+	core := strings.TrimSpace(rawETag)
+	weak := strings.HasPrefix(core, "W/")
+	core = strings.TrimPrefix(core, "W/")
+	core = strings.Trim(strings.TrimSpace(core), `"`)
+
+	out := `"` + core + "-t" + transformFingerprint + `"`
+	if weak {
+		return "W/" + out
+	}
+	return out
+}

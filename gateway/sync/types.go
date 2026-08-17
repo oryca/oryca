@@ -1,6 +1,11 @@
 package sync
 
-import "time"
+import (
+	"crypto/sha256"
+	"encoding/hex"
+	"encoding/json"
+	"time"
+)
 
 // RateLimitTierPayload คือ 1 tier ของ sliding window rate limit ที่ sync มาจาก CP
 type RateLimitTierPayload struct {
@@ -111,4 +116,36 @@ type TransformConfigPayload struct {
 	Match     TransformMatchPayload  `json:"match"`
 	Enabled   bool                   `json:"enabled"`
 	Rules     []TransformRulePayload `json:"rules"`
+
+	// fingerprint คือ hash ของ rules ไม่ได้มาจาก CP
+	// ใช้ผสมเข้า ETag ที่ส่งให้ client เพื่อให้ validator เปลี่ยนทันทีที่ rule เปลี่ยน
+	fingerprint string
+}
+
+// ComputeFingerprint คิดลายนิ้วมือของ ruleset ต้องเรียกตอน sync ก่อนวางลง trie
+// คิดตรงนี้ครั้งเดียวเพราะหลังจากนั้น payload ถูกอ่านพร้อมกันหลาย goroutine
+// เขียนทีหลังแบบ lazy จะเป็น data race
+func (p *TransformConfigPayload) ComputeFingerprint() {
+	if p == nil || !p.Enabled || len(p.Rules) == 0 {
+		p.fingerprint = ""
+		return
+	}
+	p.fingerprint = hashRules(p.Rules)
+}
+
+// Fingerprint อ่านอย่างเดียว ปลอดภัยกับการเรียกพร้อมกัน
+func (p *TransformConfigPayload) Fingerprint() string {
+	if p == nil {
+		return ""
+	}
+	return p.fingerprint
+}
+
+func hashRules(rules []TransformRulePayload) string {
+	raw, err := json.Marshal(rules)
+	if err != nil {
+		return ""
+	}
+	sum := sha256.Sum256(raw)
+	return hex.EncodeToString(sum[:8])
 }

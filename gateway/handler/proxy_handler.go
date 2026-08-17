@@ -15,6 +15,7 @@ import (
 	"github.com/oryca/oryca/gateway/logger"
 	"github.com/oryca/oryca/gateway/model"
 	"github.com/oryca/oryca/gateway/service"
+	gwsync "github.com/oryca/oryca/gateway/sync"
 	"github.com/oryca/oryca/gateway/tool"
 	"github.com/oryca/oryca/gateway/transform"
 	transformmodel "github.com/oryca/oryca/gateway/transform/model"
@@ -370,6 +371,12 @@ func (h *Handler) Proxy(c echo.Context) error {
 
 	upstreamURL = service.BuildUpstreamURL(source, resource, match.PathParams, match.Remaining, req.URL.RawQuery)
 
+	// look the transform config up once, for the ETag the client sees, the buffer-mode
+	// decision, and the apply itself. It has to be read before the cache check, because a
+	// 304 is decided against the client-facing ETag, which the ruleset is part of
+	tcfg := h.hybridTrie.FindTransformConfig(svc.ID, resource.Path, req.Method)
+	transformFingerprint := tcfg.Fingerprint()
+
 	// upstream cache check (GET/HEAD only). CacheKey is reused by singleflight at Step 8
 	cd := parseCacheDirective(req.Header.Get(headerCacheControl))
 	var cacheKey string
@@ -393,8 +400,12 @@ func (h *Handler) Proxy(c echo.Context) error {
 						remaining = 0
 					}
 
+					// the entry holds the untransformed body, so its ETag is not what the
+					// client is holding. Compare against the validator we actually handed out
+					clientETag := cache.ClientETag(entry.ETag, transformFingerprint)
+
 					// answer 304 first. The client receives not one byte of the body (RFC 9110 §15.4.5)
-					if req.Header.Get(headerIfNoneMatch) != "" && req.Header.Get(headerIfNoneMatch) == entry.ETag {
+					if req.Header.Get(headerIfNoneMatch) != "" && req.Header.Get(headerIfNoneMatch) == clientETag {
 						statusCode = http.StatusNotModified
 						upstreamStatus = entry.StatusCode
 						cacheStatus = "HIT"
@@ -402,8 +413,8 @@ func (h *Handler) Proxy(c echo.Context) error {
 						c.Response().Header().Set(headerXCache, "HIT")
 						c.Response().Header().Set("Age", strconv.Itoa(entryAge))
 						c.Response().Header().Set(headerCacheControl, publicCacheControl(remaining))
-						if entry.ETag != "" {
-							c.Response().Header().Set("ETag", entry.ETag)
+						if clientETag != "" {
+							c.Response().Header().Set("ETag", clientETag)
 						}
 						return c.NoContent(http.StatusNotModified)
 					}
@@ -423,13 +434,13 @@ func (h *Handler) Proxy(c echo.Context) error {
 					c.Response().Header().Set(headerXCache, "HIT")
 					c.Response().Header().Set("Age", strconv.Itoa(entryAge))
 					c.Response().Header().Set(headerCacheControl, publicCacheControl(remaining))
-					if entry.ETag != "" {
-						c.Response().Header().Set("ETag", entry.ETag)
+					if clientETag != "" {
+						c.Response().Header().Set("ETag", clientETag)
 					}
 
 					hitBody := entry.Body
 					if entry.StatusCode >= 200 && entry.StatusCode < 300 && transformableCT(http.Header(entry.Headers).Get("Content-Type")) {
-						if transformedBody, transformHeaders := h.applyTransform(entry.Body, req, svc.ID, svc.BasePath, resource.Path, req.Method); transformedBody != nil {
+						if transformedBody, transformHeaders := h.applyTransform(entry.Body, req, tcfg, svc.BasePath); transformedBody != nil {
 							for k, v := range transformHeaders {
 								c.Response().Header().Set(k, v)
 							}
@@ -457,9 +468,6 @@ func (h *Handler) Proxy(c echo.Context) error {
 	}
 
 	// proxy via circuit breaker. Singleflight can only coalesce when cacheKey != "" (GET/HEAD)
-	// look the transform config up once, for both the buffer-mode decision and the apply
-	tcfg := h.hybridTrie.FindTransformConfig(svc.ID, resource.Path, req.Method)
-
 	proxyCallStart := timeNow()
 	var ur upstreamResult
 	if cacheKey != "" {
@@ -558,8 +566,10 @@ func (h *Handler) Proxy(c echo.Context) error {
 		etag := ur.headers.Get("ETag")
 		if etag == "" {
 			etag = cache.SyntheticETag(ur.body)
-			c.Response().Header().Set("ETag", etag)
 		}
+		// the entry keeps the upstream's own validator for the untransformed body it stores,
+		// while the client gets one that also covers the rules applied on the way out
+		c.Response().Header().Set("ETag", cache.ClientETag(etag, transformFingerprint))
 		entry := &cache.UpstreamCacheEntry{
 			StatusCode: ur.statusCode,
 			Headers:    map[string][]string(ur.headers),
@@ -650,8 +660,7 @@ func (h *Handler) resolvedOrigin(req *http.Request) string {
 }
 
 // applyTransform runs the transform engine over rawBody. Returns nil when there is no config, or nothing matches
-func (h *Handler) applyTransform(rawBody []byte, req *http.Request, svcID, basePath, resourcePath, method string) (body []byte, headers map[string]string) {
-	tcfg := h.hybridTrie.FindTransformConfig(svcID, resourcePath, method)
+func (h *Handler) applyTransform(rawBody []byte, req *http.Request, tcfg *gwsync.TransformConfigPayload, basePath string) (body []byte, headers map[string]string) {
 	if tcfg == nil {
 		return nil, nil
 	}

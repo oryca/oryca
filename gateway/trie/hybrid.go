@@ -158,6 +158,8 @@ func (h *HybridTrie) syncTransformConfigs(ctx context.Context) {
 		if !cfg.Enabled {
 			continue
 		}
+		// ต้องคิดที่นี่ ก่อนที่ config จะถูกอ่านพร้อมกันหลาย goroutine
+		cfg.ComputeFingerprint()
 		newMap[cfg.ServiceID] = append(newMap[cfg.ServiceID], cfg)
 	}
 
