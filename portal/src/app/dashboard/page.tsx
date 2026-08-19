@@ -8,6 +8,15 @@ import { useQuery } from '@tanstack/react-query';
 import { api } from '@/lib/api';
 import { useAuth } from '@/app/providers';
 import NavigationShell from '@/components/NavigationShell';
+import { LatencyChart, LatencyLegend, type LatencyLabelFormat } from '@/components/LatencyChart';
+import { TrafficChart, type TrafficBucket } from '@/components/TrafficChart';
+import {
+  bucketLatency,
+  latencyInterval,
+  truncateTo,
+  STEP_MS,
+  type LatencyLog,
+} from './latencyBuckets';
 import {
   Button,
   PageHeader,
@@ -17,7 +26,7 @@ import {
   Loading,
   useToast,
 } from '@/components/ui';
-import { ArrowRight, RefreshCw, Server, Activity } from 'lucide-react';
+import { ArrowRight, ChevronDown, RefreshCw, Server, Activity } from 'lucide-react';
 
 interface DashboardBucket {
   time: string;
@@ -91,8 +100,34 @@ interface UserOption {
   role: string;
 }
 
+/** /dashboard/logs caps at 100 per page, so the chart walks the cursor. Five pages =
+ *  the 500 newest requests in range; a busier window shows only its tail. */
+const LATENCY_PAGE_SIZE = 100;
+const LATENCY_MAX_PAGES = 5;
+
 type Range = '1h' | '24h' | '7d' | '30d';
 const RANGES: Range[] = ['1h', '24h', '7d', '30d'];
+
+const RANGE_TICK_FORMAT: Record<Range, LatencyLabelFormat> = {
+  '1h': 'time',
+  '24h': 'time',
+  '7d': 'date',
+  '30d': 'dateRange',
+};
+
+/** The service buckets anything up to 7 days by hour, so a week arrives as 168 bars while
+ *  its axis is labelled by date. Fold those into days for the chart instead of changing
+ *  the interval the endpoint picks, which the latency chart and its callers still follow. */
+function rollUpToDays(buckets: TrafficBucket[]): TrafficBucket[] {
+  const days = new Map<number, number>();
+  for (const bucket of buckets) {
+    const key = truncateTo(new Date(bucket.time), 'day');
+    days.set(key, (days.get(key) ?? 0) + bucket.count);
+  }
+  return [...days.entries()]
+    .sort(([a], [b]) => a - b)
+    .map(([key, count]) => ({ time: new Date(key).toISOString(), count }));
+}
 
 const RANGE_LABEL: Record<Range, string> = {
   '1h': 'Last hour',
@@ -169,61 +204,6 @@ function StatTile({
       <p className="text-xs text-muted">{label}</p>
       <p className={`tabular mt-1 font-title text-xl font-semibold ${valueColor}`}>{value}</p>
       <p className="mt-1 text-xs text-muted">{note}</p>
-    </div>
-  );
-}
-
-function TrafficChart({ buckets, interval }: { buckets: DashboardBucket[]; interval: string }) {
-  const maxCount = Math.max(...buckets.map((b) => b.count), 1);
-  const total = buckets.reduce((sum, b) => sum + b.count, 0);
-  const width = 100 / buckets.length;
-
-  return (
-    <div>
-      <svg
-        className="h-56 w-full"
-        viewBox="0 0 100 100"
-        preserveAspectRatio="none"
-        role="img"
-        aria-label={`Request volume across ${buckets.length} buckets — ${total.toLocaleString()} requests in total, peaking at ${maxCount.toLocaleString()} per bucket`}
-      >
-        {[25, 50, 75].map((y) => (
-          <line
-            key={y}
-            x1="0"
-            y1={y}
-            x2="100"
-            y2={y}
-            stroke="var(--color-rule)"
-            strokeWidth="0.25"
-            strokeDasharray="2"
-          />
-        ))}
-        {buckets.map((b, idx) => {
-          const height = (b.count / maxCount) * 80;
-          return (
-            <rect
-              key={b.time}
-              x={idx * width + 0.5}
-              y={100 - height}
-              width={Math.max(width - 1, 0.2)}
-              height={height}
-              fill="var(--color-accent)"
-            >
-              {/* เบราว์เซอร์แสดง <title> เป็น tooltip ให้เอง ไม่ต้องเขียน hover เอง */}
-              <title>
-                {new Date(b.time).toLocaleString()} — {b.count.toLocaleString()} requests
-              </title>
-            </rect>
-          );
-        })}
-      </svg>
-
-      <div className="tabular mt-2 flex justify-between border-t border-rule pt-2 text-xs text-muted">
-        <span>{new Date(buckets[0].time).toLocaleTimeString()}</span>
-        <span>bucketed by {interval}</span>
-        <span>{new Date(buckets[buckets.length - 1].time).toLocaleTimeString()}</span>
-      </div>
     </div>
   );
 }
@@ -306,6 +286,33 @@ export default function DashboardPage() {
         .data,
   });
 
+  // The chart needs upstreamDurationMs, which only exists on the per-request log —
+  // /dashboard/stats gives just avgTimeMs, so sweep the logs and aggregate here.
+  // `truncated` says the sweep hit its page cap with more rows still behind the cursor.
+  const {
+    data: latencySweep,
+    isLoading: isLoadingLatency,
+    isError: isLatencyError,
+    refetch: refetchLatency,
+  } = useQuery<{ rows: LatencyLog[]; truncated: boolean }>({
+    queryKey: ['latency-logs', filterKey],
+    queryFn: async () => {
+      const rows: LatencyLog[] = [];
+      let cursor: string | undefined;
+      for (let page = 0; page < LATENCY_MAX_PAGES; page++) {
+        const res = await api.get<AccessLogPage>('/dashboard/logs', {
+          params: { ...scopedParams, limit: LATENCY_PAGE_SIZE, ...(cursor ? { cursor } : {}) },
+        });
+        rows.push(...(res.data.data ?? []));
+        cursor = res.data.nextCursor;
+        if (!cursor) break;
+      }
+      return { rows, truncated: !!cursor };
+    },
+    // the card is hidden under "all services", so skip five pages of wasted fetching
+    enabled: !!selectedServiceId,
+  });
+
   const logs = [...(firstLogPage?.data ?? []), ...(extraLogs?.rows ?? [])];
   const nextCursor = extraLogs ? extraLogs.cursor : firstLogPage?.nextCursor;
 
@@ -313,7 +320,7 @@ export default function DashboardPage() {
     setIsRefreshing(true);
     setExtraLogs(null);
     try {
-      await Promise.all([refetchSummary(), refetchStats(), refetchLogs()]);
+      await Promise.all([refetchSummary(), refetchStats(), refetchLogs(), refetchLatency()]);
     } finally {
       setIsRefreshing(false);
     }
@@ -338,6 +345,27 @@ export default function DashboardPage() {
   }
 
   const buckets = stats?.buckets ?? [];
+  // 7d is the one range where what the endpoint returns is finer than the axis reads
+  const rollUp = range === '7d' && (stats?.interval ?? 'hour') === 'hour';
+  const trafficInterval = rollUp ? 'day' : (stats?.interval ?? 'hour');
+  const trafficBuckets = useMemo<TrafficBucket[]>(
+    () => (rollUp ? rollUpToDays(buckets) : buckets),
+    [buckets, rollUp],
+  );
+
+  // bucket size follows the width of the selected window
+  const latencyBucketInterval = latencyInterval(Date.parse(fromTime), Date.parse(toTime));
+  const latencyLogs = latencySweep?.rows;
+  const latencyBuckets = useMemo(
+    () => bucketLatency(latencyLogs ?? [], latencyBucketInterval),
+    [latencyLogs, latencyBucketInterval],
+  );
+  // every bucket cached = nothing to compare against, which is not the same as no traffic
+  const hasUpstreamSamples = latencyBuckets.some((b) => b.sampleCount > 0);
+  // the sweep walks newest first, so a truncated result covers only the end of the window
+  const latencyCoverage = latencySweep?.truncated
+    ? `Showing the ${latencyLogs?.length.toLocaleString()} most recent requests in this window - older ones are not included.`
+    : null;
 
   return (
     <NavigationShell>
@@ -353,7 +381,7 @@ export default function DashboardPage() {
             <div
               role="group"
               aria-label="Time range"
-              className="flex overflow-hidden rounded-control border border-rule bg-paper"
+              className="flex h-10 overflow-hidden rounded-control border border-rule bg-paper"
             >
               {RANGES.map((r) => (
                 <button
@@ -361,7 +389,7 @@ export default function DashboardPage() {
                   type="button"
                   aria-pressed={range === r}
                   onClick={() => setRange(r)}
-                  className={`px-3 py-2 text-xs font-medium whitespace-nowrap transition-colors duration-200 ${
+                  className={`px-3 text-xs font-medium whitespace-nowrap transition-colors duration-200 ${
                     range === r
                       ? 'bg-accent-wash text-accent'
                       : 'text-ink-3 hover:bg-paper-2 hover:text-ink'
@@ -386,35 +414,41 @@ export default function DashboardPage() {
         <div className="flex flex-wrap gap-4">
           <label className="min-w-0 flex-1 basis-56">
             <span className="ui-field__label">Service</span>
-            <select
-              className="ui-input"
-              value={selectedServiceId}
-              onChange={(e) => setSelectedServiceId(e.target.value)}
-            >
-              <option value="">All services</option>
-              {services?.map((svc) => (
-                <option key={svc.id} value={svc.id}>
-                  {svc.name} ({svc.basePath})
-                </option>
-              ))}
-            </select>
+            <div className="relative">
+              <select
+                className="ui-input appearance-none"
+                value={selectedServiceId}
+                onChange={(e) => setSelectedServiceId(e.target.value)}
+              >
+                <option value="">All services</option>
+                {services?.map((svc) => (
+                  <option key={svc.id} value={svc.id}>
+                    {svc.name} ({svc.basePath})
+                  </option>
+                ))}
+              </select>
+              <ChevronDown className="pointer-events-none absolute right-3 top-1/2 h-4 w-4 -translate-y-1/2 text-muted" />
+            </div>
           </label>
 
           {isAdmin && (
             <label className="min-w-0 flex-1 basis-56">
               <span className="ui-field__label">Consumer</span>
-              <select
-                className="ui-input"
-                value={selectedUserId}
-                onChange={(e) => setSelectedUserId(e.target.value)}
-              >
-                <option value="">Everyone</option>
-                {users?.map((u) => (
-                  <option key={u.id} value={u.id}>
-                    {u.email} ({u.role})
-                  </option>
-                ))}
-              </select>
+              <div className="relative">
+                <select
+                  className="ui-input appearance-none"
+                  value={selectedUserId}
+                  onChange={(e) => setSelectedUserId(e.target.value)}
+                >
+                  <option value="">Everyone</option>
+                  {users?.map((u) => (
+                    <option key={u.id} value={u.id}>
+                      {u.email} ({u.role})
+                    </option>
+                  ))}
+                </select>
+                <ChevronDown className="pointer-events-none absolute right-3 top-1/2 h-4 w-4 -translate-y-1/2 text-muted" />
+              </div>
             </label>
           )}
         </div>
@@ -488,7 +522,6 @@ export default function DashboardPage() {
         <SectionCard
           className="lg:col-span-2"
           title="Requests over time"
-          description={`Bucketed by ${stats?.interval ?? 'hour'}`}
         >
           {isLoadingStats && (
             <Loading label="Loading chart">
@@ -501,8 +534,13 @@ export default function DashboardPage() {
               description="Widen the time range, or clear the service filter."
             />
           )}
-          {!isLoadingStats && buckets.length > 0 && (
-            <TrafficChart buckets={buckets} interval={stats?.interval ?? 'hour'} />
+          {!isLoadingStats && trafficBuckets.length > 0 && (
+            <TrafficChart
+              buckets={trafficBuckets}
+              interval={trafficInterval}
+              stepMs={STEP_MS[trafficInterval] ?? STEP_MS.hour}
+              labelFormat={RANGE_TICK_FORMAT[range]}
+            />
           )}
         </SectionCard>
 
@@ -548,6 +586,60 @@ export default function DashboardPage() {
           )}
         </SectionCard>
       </div>
+
+      {/* ---- Where the round trip goes: the gateway or the origin ----
+        * Only for a single service. Every service has its own origin at its own speed,
+        * so averaging them together yields a middling number that belongs to no one. */}
+      {selectedServiceId && (
+        <SectionCard
+          className="mb-6"
+          title="Average Latency"
+          actions={<LatencyLegend />}
+        >
+          {isLoadingLatency && (
+            <Loading label="Loading latency chart">
+              <div className="ui-skeleton h-[280px] w-full" />
+            </Loading>
+          )}
+          {!isLoadingLatency && isLatencyError && (
+            <EmptyState
+              icon={<Activity className="h-5 w-5" />}
+              title="Could not load latency"
+              description="The request log did not come back, so there is nothing to chart yet."
+              action={
+                <button
+                  onClick={() => refetchLatency()}
+                  className="rounded-control border border-rule px-3 py-1.5 text-xs font-medium text-ink-2 transition hover:bg-paper-2"
+                >
+                  Try again
+                </button>
+              }
+            />
+          )}
+          {!isLoadingLatency && !isLatencyError && latencyBuckets.length === 0 && (
+            <EmptyState
+              title="Nothing in this range"
+              description="This service saw no traffic in the selected window. Widen the time range."
+            />
+          )}
+          {!isLoadingLatency && !isLatencyError && latencyBuckets.length > 0 && !hasUpstreamSamples && (
+            <EmptyState
+              icon={<Activity className="h-5 w-5" />}
+              title="No origin latency in this range"
+            />
+          )}
+          {!isLoadingLatency && !isLatencyError && latencyBuckets.length > 0 && hasUpstreamSamples && (
+            <>
+              <LatencyChart
+                buckets={latencyBuckets}
+                labelFormat={RANGE_TICK_FORMAT[range]}
+                stepMs={STEP_MS[latencyBucketInterval]}
+              />
+              {latencyCoverage && <p className="mt-2 text-xs text-muted">{latencyCoverage}</p>}
+            </>
+          )}
+        </SectionCard>
+      )}
 
       {/* ---- log ดิบ ---- */}
       <SectionCard title="Recent requests" flush>
@@ -605,13 +697,13 @@ export default function DashboardPage() {
                         {log.durationMs} ms
                       </td>
                       <td className="px-3 py-2.5 whitespace-nowrap text-muted">
-                        {log.upstreamDurationMs !== undefined ? `${log.upstreamDurationMs} ms` : '—'}
+                        {log.upstreamDurationMs !== undefined ? `${log.upstreamDurationMs} ms` : '-'}
                       </td>
                       <td
                         className="px-3 py-2.5 whitespace-nowrap text-muted"
                         title={timingBreakdown(log)}
                       >
-                        {gatewayOverhead(log) !== null ? `${gatewayOverhead(log)} ms` : '—'}
+                        {gatewayOverhead(log) !== null ? `${gatewayOverhead(log)} ms` : '-'}
                       </td>
                       <td className="px-3 py-2.5 whitespace-nowrap">
                         {log.cacheStatus ? (
@@ -621,10 +713,10 @@ export default function DashboardPage() {
                             {log.cacheStatus}
                           </span>
                         ) : (
-                          <span className="text-muted">—</span>
+                          <span className="text-muted">-</span>
                         )}
                       </td>
-                      <td className="px-3 py-2.5 whitespace-nowrap text-muted">{log.ip || '—'}</td>
+                      <td className="px-3 py-2.5 whitespace-nowrap text-muted">{log.ip || '-'}</td>
                       <td className="px-3 py-2.5 whitespace-nowrap text-muted">
                         {new Date(log.time).toLocaleTimeString()}
                       </td>

@@ -44,6 +44,11 @@
     --color-tok-key:      oklch(76%   0.140 256);
     --color-tok-muted:    oklch(60%   0.014 256);
 
+    /* ---- Chart series: accent leads, teal answers. Legend-labelled, never colour alone.
+     * Equal weight, neither above the other — close in L, ~90° apart in hue. ---- */
+    --color-series-1:     var(--color-accent);
+    --color-series-2:     oklch(54%   0.115 165);
+
     /* ---- Functional state. Text-labelled, never colour-alone. ---- */
     --color-ok:           oklch(52%   0.130 158);
     --color-ok-edge:      oklch(86%   0.055 158);
