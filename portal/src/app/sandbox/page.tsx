@@ -29,6 +29,7 @@ import {
   Link2,
   Compass,
   ArrowRight,
+  ChevronDown,
   Eye,
   FileText,
 } from 'lucide-react';
@@ -74,6 +75,7 @@ const RATE_LIMIT_HEADERS = [
   'retry-after',
 ];
 
+
 /** จัดรูป JSON ให้อ่านง่าย ถ้าไม่ใช่ JSON ก็ปล่อยตามเดิม */
 function pretty(raw: unknown): string {
   if (typeof raw !== 'string') return JSON.stringify(raw, null, 2);
@@ -96,12 +98,11 @@ function toHeaderRecord(raw: unknown): Record<string, string> {
   );
 }
 
-/** สถานะตอบกลับสื่อด้วยสี + ตัวเลข + คำอธิบาย ไม่ใช่สีอย่างเดียว */
+/** สถานะตอบกลับสื่อด้วยสี + ตัวเลข ไม่ใช่สีอย่างเดียว */
 function statusTone(status: number) {
-  if (status < 300) return { cls: 'border-ok-edge bg-ok-wash text-ok', label: 'OK' };
-  if (status < 500)
-    return { cls: 'border-warn-edge bg-warn-wash text-warn', label: 'Bad request' };
-  return { cls: 'border-danger-edge bg-danger-wash text-danger', label: 'Server error' };
+  if (status < 300) return 'border-ok-edge bg-ok-wash text-ok';
+  if (status < 500) return 'border-warn-edge bg-warn-wash text-warn';
+  return 'border-danger-edge bg-danger-wash text-danger';
 }
 
 export default function SandboxPage() {
@@ -121,6 +122,7 @@ export default function SandboxPage() {
   const [responseHeaders, setResponseHeaders] = useState<Record<string, string>>({});
   const [isSending, setIsSending] = useState(false);
   const [copied, setCopied] = useState(false);
+  const [urlCopied, setUrlCopied] = useState(false);
   const [responseView, setResponseView] = useState<'preview' | 'raw' | 'links' | 'headers'>('preview');
 
   const { data: services } = useQuery<GatewayService[]>({
@@ -259,6 +261,10 @@ export default function SandboxPage() {
   }, [contentTypeHeader]);
 
   const isPreviewable = isMapDisplayable || isHtml || isImage;
+
+  // มุมมองที่แสดงจริง: ถ้าตอบกลับไม่มี preview ให้ตกไป raw พร้อมไฮไลต์ปุ่มตั้งแต่ครั้งแรก
+  const effectiveView =
+    responseView === 'preview' && !isPreviewable ? 'raw' : responseView;
 
   const responseSizeKb = useMemo(() => {
     if (!responseBody) return null;
@@ -404,29 +410,21 @@ export default function SandboxPage() {
     headers.filter((h) => h.name).forEach((h) => (sent[h.name] = h.value));
 
     try {
-      const res = await axios({
+      const res = await fetch(url, {
         method,
-        url,
         headers: sent,
-        data: body && method !== 'GET' ? body : undefined,
-        timeout: 15000,
-        transformResponse: [(d) => d],
+        body: body && method !== 'GET' ? body : undefined,
+        signal: AbortSignal.timeout(15000),  
+        cache: 'no-store',                    
       });
       setStatus(res.status);
-      setResponseBody(pretty(res.data));
-      setResponseHeaders(toHeaderRecord(res.headers));
+      setResponseBody(pretty(await res.text()));                        
+      setResponseHeaders(Object.fromEntries(res.headers.entries()));
     } catch (err) {
-      // 4xx/5xx คือคำตอบที่ถูกต้องของ sandbox ไม่ใช่ความผิดพลาดของหน้า
-      if (axios.isAxiosError(err) && err.response) {
-        setStatus(err.response.status);
-        setResponseBody(pretty(err.response.data));
-        setResponseHeaders(toHeaderRecord(err.response.headers));
-      } else {
         setStatus(null);
         setTransportError(
           err instanceof Error ? err.message : 'The request never got a reply.',
         );
-      }
     } finally {
       setElapsedMs(Math.round(performance.now() - startedAt));
       setIsSending(false);
@@ -466,6 +464,32 @@ export default function SandboxPage() {
         {/* ---- คำขอ ---- */}
         <SectionCard title="Request">
           <div className="space-y-4">
+            <div>
+              <span className="ui-field__label block mb-1">Preview URL</span>
+              <div className="flex items-center gap-2 rounded-control border border-rule bg-paper-2 px-3 py-1.5">
+                <p className="ui-scroll-x min-w-0 flex-1 overflow-x-auto whitespace-nowrap font-mono text-xs text-muted">
+                  {url || '—'}
+                </p>
+                <button
+                  type="button"
+                  aria-label="Copy request URL"
+                  onClick={async () => {
+                    if (!url) return;
+                    await navigator.clipboard.writeText(url);
+                    setUrlCopied(true);
+                    setTimeout(() => setUrlCopied(false), 2500);
+                  }}
+                  className="shrink-0 rounded-control p-1 text-muted transition-colors hover:bg-paper-3 hover:text-ink"
+                >
+                  {urlCopied ? (
+                    <Check className="h-3.5 w-3.5 text-ok" />
+                  ) : (
+                    <Copy className="h-3.5 w-3.5" />
+                  )}
+                </button>
+              </div>
+            </div>
+
             <div className="grid grid-cols-1 gap-4 sm:grid-cols-2">
               <SearchableSelect
                 label="Service"
@@ -484,34 +508,40 @@ export default function SandboxPage() {
 
               <label className="block">
                 <span className="ui-field__label">API key</span>
-                <select
-                  className="ui-input"
-                  value={apiKey}
-                  onChange={(e) => setApiKey(e.target.value)}
-                >
-                  <option value="">No key (expect 401)</option>
-                  {(apiKeys || []).map((k) => (
-                    <option key={k.id} value={k.apiKey || k.key || ''}>
-                      {k.name}
-                    </option>
-                  ))}
-                </select>
+                <div className="relative">
+                  <select
+                    className="ui-input appearance-none pr-8"
+                    value={apiKey}
+                    onChange={(e) => setApiKey(e.target.value)}
+                  >
+                    <option value="">No key (expect 401)</option>
+                    {(apiKeys || []).map((k) => (
+                      <option key={k.id} value={k.apiKey || k.key || ''}>
+                        {k.name}
+                      </option>
+                    ))}
+                  </select>
+                  <ChevronDown className="pointer-events-none absolute right-3 top-1/2 h-4 w-4 -translate-y-1/2 text-muted" />
+                </div>
               </label>
             </div>
 
             <div>
               <label className="ui-field__label block mb-1">Method and path</label>
               <div className="flex gap-2">
-                <select
-                  className="ui-input w-auto shrink-0 font-mono"
-                  aria-label="HTTP method"
-                  value={method}
-                  onChange={(e) => setMethod(e.target.value)}
-                >
-                  {METHODS.map((m) => (
-                    <option key={m}>{m}</option>
-                  ))}
-                </select>
+                <div className="relative shrink-0">
+                  <select
+                    className="ui-input w-auto appearance-none pr-8 font-mono"
+                    aria-label="HTTP method"
+                    value={method}
+                    onChange={(e) => setMethod(e.target.value)}
+                  >
+                    {METHODS.map((m) => (
+                      <option key={m}>{m}</option>
+                    ))}
+                  </select>
+                  <ChevronDown className="pointer-events-none absolute right-3 top-1/2 h-4 w-4 -translate-y-1/2 text-muted" />
+                </div>
                 <input
                   className="ui-input min-w-0 flex-1 font-mono"
                   aria-label="Path"
@@ -547,44 +577,39 @@ export default function SandboxPage() {
               )}
             </div>
 
-              {/* Path Parameters Helper */}
-              {pathParams.length > 0 && (
-                <div className="mt-2.5 rounded-control border border-accent-edge bg-accent-wash/30 p-3 space-y-2">
-                  <div className="flex items-center justify-between text-xs font-semibold text-accent">
-                    <span>Path Parameters</span>
-                    <span className="text-[10px] font-normal text-muted">
-                      Type ID below to automatically replace in path
-                    </span>
-                  </div>
-                  <div className="grid grid-cols-1 sm:grid-cols-2 gap-2">
-                    {pathParams.map((param) => (
-                      <div key={param}>
-                        <label className="text-[11px] font-mono font-semibold text-ink block mb-1">
-                          {`{${param}}`}
-                        </label>
-                        <input
-                          type="text"
-                          placeholder={
-                            param === 'z'
-                              ? 'e.g. 6'
-                              : param === 'x'
-                              ? 'e.g. 50'
-                              : param === 'y'
-                              ? 'e.g. 28'
-                              : `Enter ${param}...`
-                          }
-                          value={pathParamValues[param] || ''}
-                          onChange={(e) => {
-                            const val = e.target.value;
-                            setPathParamValues((prev) => ({ ...prev, [param]: val }));
-                          }}
-                          className="w-full bg-paper border border-rule rounded-control px-2.5 py-1 text-xs font-mono text-ink outline-none focus:border-focus"
-                        />
-                      </div>
-                    ))}
-                  </div>
+            {/* Path Parameters */}
+            {pathParams.length > 0 && (
+              <div>
+                <span className="ui-field__label block mb-1">Path Parameters</span>
+                <div className="grid grid-cols-1 gap-2 sm:grid-cols-2">
+                  {pathParams.map((param) => (
+                    <label key={param} className="block">
+                      <span className="mb-1 block font-mono text-[11px] font-semibold text-ink">
+                        {`{${param}}`}
+                      </span>
+                      <input
+                        type="text"
+                        className="ui-input font-mono"
+                        placeholder={
+                          param === 'z'
+                            ? 'e.g. 6'
+                            : param === 'x'
+                            ? 'e.g. 50'
+                            : param === 'y'
+                            ? 'e.g. 28'
+                            : `Enter ${param}...`
+                        }
+                        value={pathParamValues[param] || ''}
+                        onChange={(e) => {
+                          const val = e.target.value;
+                          setPathParamValues((prev) => ({ ...prev, [param]: val }));
+                        }}
+                      />
+                    </label>
+                  ))}
                 </div>
-              )}
+              </div>
+            )}
 
             <label className="block">
               <span className="ui-field__label">Query string</span>
@@ -679,38 +704,37 @@ export default function SandboxPage() {
               >
                 Send
               </Button>
-              <p className="ui-scroll-x mt-2 whitespace-nowrap font-mono text-xs text-muted">
-                {url}
-              </p>
             </div>
           </div>
         </SectionCard>
 
         {/* ---- คำตอบ ---- */}
-        <SectionCard
-          title="Response"
-          actions={
-            <div className="flex flex-wrap items-center gap-2" aria-live="polite">
-              {status !== null && (
-                <span
-                  className={`tabular rounded-chip border px-2 py-0.5 font-mono text-xs font-semibold ${statusTone(status).cls}`}
-                >
-                  {status} · {statusTone(status).label}
-                </span>
+        <SectionCard title="Response">
+          <div className="space-y-4">
+            {/* สรุปคำตอบ: แถวเดียวรวมสถานะ+เวลา+ขนาด (ซ่อนตอนยังไม่เรียก) แล้วตามด้วยปุ่มเลือกมุมมอง */}
+            <div className="space-y-1.5 border-b border-rule pb-3" aria-live="polite">
+              {(status !== null || elapsedMs !== null || responseSizeKb) && (
+                <div className="flex min-h-6 flex-wrap items-center gap-2">
+                  {status !== null && (
+                    <span
+                      className={`tabular rounded-chip border px-2 py-0.5 font-mono text-xs font-semibold ${statusTone(status)}`}
+                    >
+                      {status}
+                    </span>
+                  )}
+                  <span className="tabular flex items-center gap-2 font-mono text-xs text-muted">
+                    {elapsedMs !== null && <span>{elapsedMs} ms</span>}
+                    {responseSizeKb && <span>{responseSizeKb} KB</span>}
+                  </span>
+                </div>
               )}
-              {elapsedMs !== null && (
-                <span className="tabular font-mono text-xs text-muted">{elapsedMs} ms</span>
-              )}
-              {responseSizeKb && (
-                <span className="tabular font-mono text-xs text-muted">{responseSizeKb} KB</span>
-              )}
-              <div className="ml-1 flex rounded-control border border-rule bg-paper-2 p-0.5 text-xs">
+              <div className="flex w-fit rounded-control border border-rule bg-paper-2 p-0.5 text-xs">
                 {isPreviewable && (
                   <button
                     type="button"
                     onClick={() => setResponseView('preview')}
                     className={`flex items-center gap-1 rounded-chip px-2.5 py-1 text-2xs font-medium transition-colors ${
-                      responseView === 'preview'
+                      effectiveView === 'preview'
                         ? 'bg-accent text-accent-ink shadow-xs font-semibold'
                         : 'text-muted hover:text-ink'
                     }`}
@@ -738,7 +762,7 @@ export default function SandboxPage() {
                   type="button"
                   onClick={() => setResponseView('raw')}
                   className={`flex items-center gap-1 rounded-chip px-2.5 py-1 text-2xs font-medium transition-colors ${
-                    responseView === 'raw'
+                    effectiveView === 'raw'
                       ? 'bg-accent text-accent-ink shadow-xs font-semibold'
                       : 'text-muted hover:text-ink'
                   }`}
@@ -750,7 +774,7 @@ export default function SandboxPage() {
                     type="button"
                     onClick={() => setResponseView('links')}
                     className={`flex items-center gap-1 rounded-chip px-2.5 py-1 text-2xs font-medium transition-colors ${
-                      responseView === 'links'
+                      effectiveView === 'links'
                         ? 'bg-accent text-accent-ink shadow-xs font-semibold'
                         : 'text-muted hover:text-ink'
                     }`}
@@ -762,7 +786,7 @@ export default function SandboxPage() {
                   type="button"
                   onClick={() => setResponseView('headers')}
                   className={`flex items-center gap-1 rounded-chip px-2.5 py-1 text-2xs font-medium transition-colors ${
-                    responseView === 'headers'
+                    effectiveView === 'headers'
                       ? 'bg-accent text-accent-ink shadow-xs font-semibold'
                       : 'text-muted hover:text-ink'
                   }`}
@@ -771,9 +795,7 @@ export default function SandboxPage() {
                 </button>
               </div>
             </div>
-          }
-        >
-          <div className="space-y-4">
+
             {transportError && (
               <p className="rounded-control border border-danger-edge bg-danger-wash p-3 text-sm text-danger">
                 {transportError}
@@ -794,13 +816,13 @@ export default function SandboxPage() {
             )}
 
             {/* TAB 1: PREVIEW (Map / HTML / Image) */}
-            {responseView === 'preview' && isMapDisplayable ? (
+            {effectiveView === 'preview' && isMapDisplayable ? (
               <GeoMapPreview
                 data={responseBody}
                 tileUrl={tileTemplateUrl}
                 onNavigateLink={handleFollowLink}
               />
-            ) : responseView === 'preview' && isHtml ? (
+            ) : effectiveView === 'preview' && isHtml ? (
               <div className="rounded-control border border-rule overflow-hidden bg-white shadow-xs">
                 <div className="bg-paper-2 px-3 py-1.5 border-b border-rule flex items-center justify-between text-xs text-muted">
                   <span className="flex items-center gap-1.5">
@@ -816,7 +838,7 @@ export default function SandboxPage() {
                   sandbox="allow-same-origin allow-scripts"
                 />
               </div>
-            ) : responseView === 'preview' && isImage ? (
+            ) : effectiveView === 'preview' && isImage ? (
               <div className="rounded-control border border-rule overflow-hidden bg-paper-2 p-6 flex flex-col items-center justify-center min-h-[380px]">
                 <img
                   src={url}
@@ -824,7 +846,7 @@ export default function SandboxPage() {
                   className="max-h-96 max-w-full rounded-control border border-rule object-contain shadow-md"
                 />
               </div>
-            ) : responseView === 'links' && responseLinks.length > 0 ? (
+            ) : effectiveView === 'links' && responseLinks.length > 0 ? (
               /* TAB 2: RESOURCE & NAVIGATION LINKS */
               <div className="rounded-control border border-rule bg-paper p-3.5 space-y-3">
                 <div className="flex items-center justify-between border-b border-rule pb-2">
@@ -846,7 +868,7 @@ export default function SandboxPage() {
                       key={`${lnk.href}-${idx}`}
                       type="button"
                       onClick={() => handleFollowLink(lnk.href)}
-                      className="flex items-center justify-between gap-2 p-2.5 rounded-control bg-paper-2 hover:bg-accent-wash hover:border-accent-edge border border-rule text-xs text-ink transition-colors cursor-pointer text-left group"
+                      className="flex min-w-0 items-center justify-between gap-2 p-2.5 rounded-control bg-paper-2 hover:bg-accent-wash hover:border-accent-edge border border-rule text-xs text-ink transition-colors cursor-pointer text-left group"
                       title={lnk.href}
                     >
                       <div className="min-w-0 flex-1">
@@ -865,7 +887,7 @@ export default function SandboxPage() {
                   ))}
                 </div>
               </div>
-            ) : responseView === 'headers' ? (
+            ) : effectiveView === 'headers' ? (
               /* TAB 3: HEADERS & CURL */
               <div className="space-y-4">
                 <div>
