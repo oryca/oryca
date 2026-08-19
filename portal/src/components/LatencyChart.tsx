@@ -197,7 +197,7 @@ export function LatencyChart({
           className="w-full"
           viewBox={`0 0 ${width} ${VIEW_H}`}
           role="img"
-          aria-label={`Average gateway latency against average origin latency across ${buckets.length} buckets — a request takes ${meanGateway.toFixed(0)} milliseconds through the gateway on average, of which the origin accounts for ${meanOrigin.toFixed(0)} milliseconds.`}
+          aria-label={`Average gateway latency against average origin latency across ${buckets.length} buckets - a request takes ${meanGateway.toFixed(0)} milliseconds through the gateway on average, of which the origin accounts for ${meanOrigin.toFixed(0)} milliseconds.`}
         >
           <defs>
             {SERIES.map((s) => (

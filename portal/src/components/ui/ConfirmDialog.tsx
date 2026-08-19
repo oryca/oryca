@@ -115,7 +115,7 @@ export function ConfirmProvider({ children }: { children: React.ReactNode }) {
                 {req.consequences.map((c) => (
                   <li key={c} className="flex gap-2">
                     <span aria-hidden="true" className="text-muted">
-                      —
+                      -
                     </span>
                     <span className="min-w-0">{c}</span>
                   </li>

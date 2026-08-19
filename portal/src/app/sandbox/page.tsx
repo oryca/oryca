@@ -440,7 +440,7 @@ export default function SandboxPage() {
       <NavigationShell>
         <PageHeader
           title="Sandbox"
-          description="Call a published service the way your users will — through the gateway, with a key"
+          description="Call a published service the way your users will - through the gateway, with a key"
         />
         <div className="ui-card">
           <EmptyState
@@ -457,7 +457,7 @@ export default function SandboxPage() {
     <NavigationShell>
       <PageHeader
         title="Sandbox"
-        description="Call a published service the way your users will — through the gateway, with a key"
+        description="Call a published service the way your users will - through the gateway, with a key"
       />
 
       <div className="grid grid-cols-1 gap-6 lg:grid-cols-2">
@@ -468,7 +468,7 @@ export default function SandboxPage() {
               <span className="ui-field__label block mb-1">Preview URL</span>
               <div className="flex items-center gap-2 rounded-control border border-rule bg-paper-2 px-3 py-1.5">
                 <p className="ui-scroll-x min-w-0 flex-1 overflow-x-auto whitespace-nowrap font-mono text-xs text-muted">
-                  {url || '—'}
+                  {url || '-'}
                 </p>
                 <button
                   type="button"

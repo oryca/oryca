@@ -677,7 +677,7 @@ export default function ServicesAndKeysPage() {
                                       <span className="font-mono text-sm text-ink">{path}</span>
                                       {details.summary && (
                                         <span className="text-xs text-muted">
-                                          — {details.summary}
+                                          - {details.summary}
                                         </span>
                                       )}
                                     </div>
@@ -733,7 +733,7 @@ export default function ServicesAndKeysPage() {
                                 </option>
                               ))
                             ) : (
-                              <option value="">No keys yet — issue one on the next tab</option>
+                              <option value="">No keys yet - issue one on the next tab</option>
                             )}
                           </select>
                         </label>
@@ -1061,7 +1061,7 @@ export default function ServicesAndKeysPage() {
                             )}
                           </td>
                           <td className="tabular px-3 py-3 whitespace-nowrap text-muted">
-                            {key.createdAt ? new Date(key.createdAt).toLocaleDateString() : '—'}
+                            {key.createdAt ? new Date(key.createdAt).toLocaleDateString() : '-'}
                           </td>
                           <td className="px-3 py-3">
                             <span className="flex justify-end gap-1">
