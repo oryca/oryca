@@ -6,7 +6,8 @@
     "dev": "next dev",
     "build": "next build",
     "start": "next start",
-    "lint": "eslint"
+    "lint": "eslint",
+    "postinstall": "node scripts/copy-maplibre-assets.mjs"
   },
   "dependencies": {
     "@tanstack/react-query": "^5.101.4",
