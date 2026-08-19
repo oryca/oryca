@@ -546,7 +546,7 @@ export default function AdminPackagesPage() {
                     <div className="grid grid-cols-2 gap-4">
                       <div>
                         <label className="text-xs font-semibold text-muted uppercase tracking-wider block mb-1">
-                          Alias Key
+                          Alias Key<span className="ui-field__req" aria-hidden="true">*</span>
                         </label>
                         <input
                           type="text"
@@ -560,7 +560,7 @@ export default function AdminPackagesPage() {
                       </div>
                       <div>
                         <label className="text-xs font-semibold text-muted uppercase tracking-wider block mb-1">
-                          Display Name
+                          Display Name<span className="ui-field__req" aria-hidden="true">*</span>
                         </label>
                         <input
                           type="text"
@@ -995,64 +995,91 @@ export default function AdminPackagesPage() {
                     }}
                     className="space-y-3 text-xs"
                   >
-                    <input
-                      required
-                      type="email"
-                      value={newEmail}
-                      onChange={(e) => setNewEmail(e.target.value)}
-                      placeholder="Email address"
-                      className="w-full bg-paper-2 border border-rule rounded-control px-3 py-2 text-sm text-ink outline-none focus:border-focus"
-                    />
-                    <div className="flex gap-2">
+                    <div>
+                      <label className="text-xs font-semibold text-muted uppercase tracking-wider block mb-1">
+                        Email Address<span className="ui-field__req" aria-hidden="true">*</span>
+                      </label>
                       <input
                         required
-                        value={newFirstName}
-                        onChange={(e) => setNewFirstName(e.target.value)}
-                        placeholder="First name"
-                        className="flex-1 min-w-0 bg-paper-2 border border-rule rounded-control px-3 py-2 text-sm text-ink outline-none focus:border-focus"
-                      />
-                      <input
-                        required
-                        value={newLastName}
-                        onChange={(e) => setNewLastName(e.target.value)}
-                        placeholder="Last name"
-                        className="flex-1 min-w-0 bg-paper-2 border border-rule rounded-control px-3 py-2 text-sm text-ink outline-none focus:border-focus"
+                        type="email"
+                        value={newEmail}
+                        onChange={(e) => setNewEmail(e.target.value)}
+                        className="w-full bg-paper-2 border border-rule rounded-control px-3 py-2 text-sm text-ink outline-none focus:border-focus"
                       />
                     </div>
-                    <input
-                      required
-                      type="text"
-                      value={newPassword}
-                      onChange={(e) => setNewPassword(e.target.value)}
-                      placeholder="Password to hand over"
-                      className="w-full bg-paper-2 border border-rule rounded-control px-3 py-2 text-sm text-ink outline-none focus:border-focus font-mono"
-                    />
                     <div className="flex gap-2">
-                      <div className="relative flex-1">
-                        <select
-                          value={newRole}
-                          onChange={(e) => setNewRole(e.target.value as 'user' | 'admin')}
-                          className="w-full appearance-none bg-paper-2 border border-rule rounded-control pl-3 pr-9 py-2 text-sm text-ink outline-none focus:border-focus"
-                        >
-                          <option value="user">User</option>
-                          <option value="admin">Administrator</option>
-                        </select>
-                        <ChevronDown className="pointer-events-none absolute right-3 top-1/2 h-4 w-4 -translate-y-1/2 text-muted" />
+                      <div className="flex-1 min-w-0">
+                        <label className="text-xs font-semibold text-muted uppercase tracking-wider block mb-1">
+                          First Name<span className="ui-field__req" aria-hidden="true">*</span>
+                        </label>
+                        <input
+                          required
+                          value={newFirstName}
+                          onChange={(e) => setNewFirstName(e.target.value)}
+                          className="w-full bg-paper-2 border border-rule rounded-control px-3 py-2 text-sm text-ink outline-none focus:border-focus"
+                        />
                       </div>
-                      <div className="relative flex-1">
-                        <select
-                          value={newPackageId}
-                          onChange={(e) => setNewPackageId(e.target.value)}
-                          className="w-full appearance-none bg-paper-2 border border-rule rounded-control pl-3 pr-9 py-2 text-sm text-ink outline-none focus:border-focus font-mono"
-                        >
-                          <option value="">No package (cannot call anything)</option>
-                          {packages?.map((pkg) => (
-                            <option key={pkg.id} value={pkg.id}>
-                              {pkg.name} ({pkg.alias})
-                            </option>
-                          ))}
-                        </select>
-                        <ChevronDown className="pointer-events-none absolute right-3 top-1/2 h-4 w-4 -translate-y-1/2 text-muted" />
+                      <div className="flex-1 min-w-0">
+                        <label className="text-xs font-semibold text-muted uppercase tracking-wider block mb-1">
+                          Last Name<span className="ui-field__req" aria-hidden="true">*</span>
+                        </label>
+                        <input
+                          required
+                          value={newLastName}
+                          onChange={(e) => setNewLastName(e.target.value)}
+                          className="w-full bg-paper-2 border border-rule rounded-control px-3 py-2 text-sm text-ink outline-none focus:border-focus"
+                        />
+                      </div>
+                    </div>
+                    <div>
+                      <label className="text-xs font-semibold text-muted uppercase tracking-wider block mb-1">
+                        Password<span className="ui-field__req" aria-hidden="true">*</span>
+                      </label>
+                      <input
+                        required
+                        type="text"
+                        value={newPassword}
+                        onChange={(e) => setNewPassword(e.target.value)}
+                        placeholder="Password to hand over"
+                        className="w-full bg-paper-2 border border-rule rounded-control px-3 py-2 text-sm text-ink outline-none focus:border-focus font-mono"
+                      />
+                    </div>
+                    <div className="flex gap-2">
+                      <div className="flex-1 min-w-0">
+                        <label className="text-xs font-semibold text-muted uppercase tracking-wider block mb-1">
+                          System Role
+                        </label>
+                        <div className="relative">
+                          <select
+                            value={newRole}
+                            onChange={(e) => setNewRole(e.target.value as 'user' | 'admin')}
+                            className="w-full appearance-none bg-paper-2 border border-rule rounded-control pl-3 pr-9 py-2 text-sm text-ink outline-none focus:border-focus"
+                          >
+                            <option value="user">User</option>
+                            <option value="admin">Administrator</option>
+                          </select>
+                          <ChevronDown className="pointer-events-none absolute right-3 top-1/2 h-4 w-4 -translate-y-1/2 text-muted" />
+                        </div>
+                      </div>
+                      <div className="flex-1 min-w-0">
+                        <label className="text-xs font-semibold text-muted uppercase tracking-wider block mb-1">
+                          Assigned Package Tier
+                        </label>
+                        <div className="relative">
+                          <select
+                            value={newPackageId}
+                            onChange={(e) => setNewPackageId(e.target.value)}
+                            className="w-full appearance-none bg-paper-2 border border-rule rounded-control pl-3 pr-9 py-2 text-sm text-ink outline-none focus:border-focus font-mono"
+                          >
+                            <option value="">No package (cannot call anything)</option>
+                            {packages?.map((pkg) => (
+                              <option key={pkg.id} value={pkg.id}>
+                                {pkg.name} ({pkg.alias})
+                              </option>
+                            ))}
+                          </select>
+                          <ChevronDown className="pointer-events-none absolute right-3 top-1/2 h-4 w-4 -translate-y-1/2 text-muted" />
+                        </div>
                       </div>
                     </div>
 
@@ -1060,7 +1087,7 @@ export default function AdminPackagesPage() {
                       <button
                         type="button"
                         onClick={() => setIsNewUserOpen(false)}
-                        className="px-4 py-2 text-xs font-semibold text-muted"
+                        className="px-4 py-2 border border-rule hover:border-faint rounded-control text-ink-2 hover:bg-paper-2 transition"
                       >
                         Cancel
                       </button>
