@@ -15,6 +15,7 @@ import {
   SectionCard,
   EmptyState,
   SearchableSelect,
+  Select,
   GeoMapPreview,
 } from '@/components/ui';
 import {
@@ -29,7 +30,6 @@ import {
   Link2,
   Compass,
   ArrowRight,
-  ChevronDown,
   Eye,
   FileText,
 } from 'lucide-react';
@@ -506,42 +506,34 @@ export default function SandboxPage() {
                 searchPlaceholder="Search services by name or path..."
               />
 
-              <label className="block">
-                <span className="ui-field__label">API key</span>
-                <div className="relative">
-                  <select
-                    className="ui-input appearance-none pr-8"
-                    value={apiKey}
-                    onChange={(e) => setApiKey(e.target.value)}
-                  >
-                    <option value="">No key (expect 401)</option>
-                    {(apiKeys || []).map((k) => (
-                      <option key={k.id} value={k.apiKey || k.key || ''}>
-                        {k.name}
-                      </option>
-                    ))}
-                  </select>
-                  <ChevronDown className="pointer-events-none absolute right-3 top-1/2 h-4 w-4 -translate-y-1/2 text-muted" />
-                </div>
-              </label>
+              <Select
+                label="API key"
+                value={apiKey}
+                onChange={(e) => setApiKey(e.target.value)}
+              >
+                <option value="">No key (expect 401)</option>
+                {(apiKeys || []).map((k) => (
+                  <option key={k.id} value={k.apiKey || k.key || ''}>
+                    {k.name}
+                  </option>
+                ))}
+              </Select>
             </div>
 
             <div>
               <label className="ui-field__label block mb-1">Method and path</label>
               <div className="flex gap-2">
-                <div className="relative shrink-0">
-                  <select
-                    className="ui-input w-auto appearance-none pr-8 font-mono"
-                    aria-label="HTTP method"
-                    value={method}
-                    onChange={(e) => setMethod(e.target.value)}
-                  >
-                    {METHODS.map((m) => (
-                      <option key={m}>{m}</option>
-                    ))}
-                  </select>
-                  <ChevronDown className="pointer-events-none absolute right-3 top-1/2 h-4 w-4 -translate-y-1/2 text-muted" />
-                </div>
+                <Select
+                  className="shrink-0"
+                  controlClassName="w-auto font-mono"
+                  aria-label="HTTP method"
+                  value={method}
+                  onChange={(e) => setMethod(e.target.value)}
+                >
+                  {METHODS.map((m) => (
+                    <option key={m}>{m}</option>
+                  ))}
+                </Select>
                 <input
                   className="ui-input min-w-0 flex-1 font-mono"
                   aria-label="Path"

@@ -13,6 +13,7 @@ import {
   useToast,
   useConfirm,
   SearchableSelect,
+  Select,
 } from '@/components/ui';
 import {
   Users,
@@ -25,7 +26,6 @@ import {
   Server,
   Search,
   X,
-  ChevronDown,
 } from 'lucide-react';
 
 interface RateLimitTier {
@@ -1004,7 +1004,7 @@ export default function AdminPackagesPage() {
                         type="email"
                         value={newEmail}
                         onChange={(e) => setNewEmail(e.target.value)}
-                        className="w-full bg-paper-2 border border-rule rounded-control px-3 py-2 text-sm text-ink outline-none focus:border-focus"
+                        className="ui-input"
                       />
                     </div>
                     <div className="flex gap-2">
@@ -1016,7 +1016,7 @@ export default function AdminPackagesPage() {
                           required
                           value={newFirstName}
                           onChange={(e) => setNewFirstName(e.target.value)}
-                          className="w-full bg-paper-2 border border-rule rounded-control px-3 py-2 text-sm text-ink outline-none focus:border-focus"
+                          className="ui-input"
                         />
                       </div>
                       <div className="flex-1 min-w-0">
@@ -1027,7 +1027,7 @@ export default function AdminPackagesPage() {
                           required
                           value={newLastName}
                           onChange={(e) => setNewLastName(e.target.value)}
-                          className="w-full bg-paper-2 border border-rule rounded-control px-3 py-2 text-sm text-ink outline-none focus:border-focus"
+                          className="ui-input"
                         />
                       </div>
                     </div>
@@ -1041,7 +1041,7 @@ export default function AdminPackagesPage() {
                         value={newPassword}
                         onChange={(e) => setNewPassword(e.target.value)}
                         placeholder="Password to hand over"
-                        className="w-full bg-paper-2 border border-rule rounded-control px-3 py-2 text-sm text-ink outline-none focus:border-focus font-mono"
+                        className="ui-input font-mono"
                       />
                     </div>
                     <div className="flex gap-2">
@@ -1049,37 +1049,30 @@ export default function AdminPackagesPage() {
                         <label className="text-xs font-semibold text-muted uppercase tracking-wider block mb-1">
                           System Role
                         </label>
-                        <div className="relative">
-                          <select
-                            value={newRole}
-                            onChange={(e) => setNewRole(e.target.value as 'user' | 'admin')}
-                            className="w-full appearance-none bg-paper-2 border border-rule rounded-control pl-3 pr-9 py-2 text-sm text-ink outline-none focus:border-focus"
-                          >
-                            <option value="user">User</option>
-                            <option value="admin">Administrator</option>
-                          </select>
-                          <ChevronDown className="pointer-events-none absolute right-3 top-1/2 h-4 w-4 -translate-y-1/2 text-muted" />
-                        </div>
+                        <Select
+                          value={newRole}
+                          onChange={(e) => setNewRole(e.target.value as 'user' | 'admin')}
+                        >
+                          <option value="user">User</option>
+                          <option value="admin">Administrator</option>
+                        </Select>
                       </div>
                       <div className="flex-1 min-w-0">
                         <label className="text-xs font-semibold text-muted uppercase tracking-wider block mb-1">
                           Assigned Package Tier
                         </label>
-                        <div className="relative">
-                          <select
-                            value={newPackageId}
-                            onChange={(e) => setNewPackageId(e.target.value)}
-                            className="w-full appearance-none bg-paper-2 border border-rule rounded-control pl-3 pr-9 py-2 text-sm text-ink outline-none focus:border-focus font-mono"
-                          >
-                            <option value="">No package (cannot call anything)</option>
-                            {packages?.map((pkg) => (
-                              <option key={pkg.id} value={pkg.id}>
-                                {pkg.name} ({pkg.alias})
-                              </option>
-                            ))}
-                          </select>
-                          <ChevronDown className="pointer-events-none absolute right-3 top-1/2 h-4 w-4 -translate-y-1/2 text-muted" />
-                        </div>
+                        <Select
+                          controlClassName="font-mono"
+                          value={newPackageId}
+                          onChange={(e) => setNewPackageId(e.target.value)}
+                        >
+                          <option value="">No package (cannot call anything)</option>
+                          {packages?.map((pkg) => (
+                            <option key={pkg.id} value={pkg.id}>
+                              {pkg.name} ({pkg.alias})
+                            </option>
+                          ))}
+                        </Select>
                       </div>
                     </div>
 
@@ -1130,42 +1123,33 @@ export default function AdminPackagesPage() {
                       <label className="text-xs font-semibold text-muted uppercase tracking-wider block mb-1">
                         System Role
                       </label>
-                      <div className="relative">
-                        <select
-                          value={userRole}
-                          onChange={(e) => setUserRole(e.target.value as 'user' | 'admin' | 'root')}
-                          disabled={editingUser.role === 'root'} // Disable root editing for safety
-                          className="peer w-full appearance-none bg-paper-2 border border-rule rounded-control pl-3 pr-9 py-2 text-sm text-ink outline-none focus:border-focus disabled:opacity-55"
-                        >
-                          <option value="user">User</option>
-                          <option value="admin">Administrator</option>
-                          {editingUser.role === 'root' && <option value="root">Root</option>}
-                        </select>
-                        {/* the custom arrow sits outside the select, so it needs its own
-                            dimming — peer-disabled keeps it in step when the field is locked */}
-                        <ChevronDown className="pointer-events-none absolute right-3 top-1/2 h-4 w-4 -translate-y-1/2 text-muted peer-disabled:opacity-55" />
-                      </div>
+                      <Select
+                        value={userRole}
+                        onChange={(e) => setUserRole(e.target.value as 'user' | 'admin' | 'root')}
+                        disabled={editingUser.role === 'root'} // Disable root editing for safety
+                      >
+                        <option value="user">User</option>
+                        <option value="admin">Administrator</option>
+                        {editingUser.role === 'root' && <option value="root">Root</option>}
+                      </Select>
                     </div>
 
                     <div>
                       <label className="text-xs font-semibold text-muted uppercase tracking-wider block mb-1">
                         Assigned Package Tier
                       </label>
-                      <div className="relative">
-                        <select
-                          value={userPackageId}
-                          onChange={(e) => setUserPackageId(e.target.value)}
-                          className="w-full appearance-none bg-paper-2 border border-rule rounded-control pl-3 pr-9 py-2 text-sm text-ink outline-none focus:border-focus font-mono"
-                        >
-                          <option value="">No Package Assigned</option>
-                          {packages?.map((pkg) => (
-                            <option key={pkg.id} value={pkg.id}>
-                              {pkg.name} ({pkg.alias})
-                            </option>
-                          ))}
-                        </select>
-                        <ChevronDown className="pointer-events-none absolute right-3 top-1/2 h-4 w-4 -translate-y-1/2 text-muted" />
-                      </div>
+                      <Select
+                        controlClassName="font-mono"
+                        value={userPackageId}
+                        onChange={(e) => setUserPackageId(e.target.value)}
+                      >
+                        <option value="">No Package Assigned</option>
+                        {packages?.map((pkg) => (
+                          <option key={pkg.id} value={pkg.id}>
+                            {pkg.name} ({pkg.alias})
+                          </option>
+                        ))}
+                      </Select>
                     </div>
 
                     <div className="flex flex-col gap-2 pt-2 border-t border-rule">

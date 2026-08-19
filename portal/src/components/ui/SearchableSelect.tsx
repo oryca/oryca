@@ -92,29 +92,33 @@ export function SearchableSelect({
     <div className={`relative ${className}`} ref={containerRef}>
       {label && <span className="ui-field__label block mb-1">{label}</span>}
 
-      <button
-        type="button"
-        disabled={disabled}
-        onClick={() => {
-          setIsOpen(!isOpen);
-          setVisibleCount(OPTION_PAGE_SIZE);
-        }}
-        className="ui-input flex w-full items-center justify-between gap-2 text-left text-xs text-ink cursor-pointer focus:border-focus"
-      >
-        <span className="truncate">
-          {selectedOption ? (
-            <span className="flex items-center gap-1.5">
-              <span className="font-semibold text-ink">{selectedOption.label}</span>
-              {selectedOption.subtext && (
-                <span className="font-mono text-2xs text-muted">({selectedOption.subtext})</span>
-              )}
-            </span>
-          ) : (
-            <span className="text-muted">{placeholder}</span>
-          )}
-        </span>
-        <ChevronDown className="h-4 w-4 shrink-0 text-muted" />
-      </button>
+      {/* same shell as Select, so the chevron lands on the gutter .ui-input
+          already reserves and lines up with every other dropdown */}
+      <div className="ui-select">
+        <button
+          type="button"
+          disabled={disabled}
+          onClick={() => {
+            setIsOpen(!isOpen);
+            setVisibleCount(OPTION_PAGE_SIZE);
+          }}
+          className="ui-input ui-select__control flex w-full items-center text-left text-ink"
+        >
+          <span className="min-w-0 truncate">
+            {selectedOption ? (
+              <span className="flex items-center gap-1.5">
+                <span className="font-semibold text-ink">{selectedOption.label}</span>
+                {selectedOption.subtext && (
+                  <span className="font-mono text-2xs text-muted">({selectedOption.subtext})</span>
+                )}
+              </span>
+            ) : (
+              <span className="text-muted">{placeholder}</span>
+            )}
+          </span>
+        </button>
+        <ChevronDown className="ui-select__chevron" aria-hidden="true" />
+      </div>
 
       {isOpen && (
         <div className="absolute z-50 mt-1 w-full rounded-surface border border-rule bg-paper shadow-lg">
@@ -130,7 +134,7 @@ export function SearchableSelect({
                 setVisibleCount(OPTION_PAGE_SIZE);
               }}
               placeholder={searchPlaceholder}
-              className="w-full bg-transparent text-xs text-ink placeholder:text-muted outline-none"
+              className="w-full bg-transparent text-sm text-ink placeholder:text-muted outline-none"
             />
             {searchQuery && (
               <button
@@ -147,7 +151,7 @@ export function SearchableSelect({
           </div>
 
           {/* Options List — render ทีละส่วนแล้วโหลดเพิ่มเมื่อเลื่อนลง */}
-          <div className="max-h-56 overflow-y-auto p-1 text-xs" onScroll={handleOptionsScroll}>
+          <div className="max-h-56 overflow-y-auto p-1 text-sm" onScroll={handleOptionsScroll}>
             {filteredOptions.length === 0 ? (
               <div className="py-3 text-center text-xs text-muted">
                 No matching options found

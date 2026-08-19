@@ -22,6 +22,7 @@ import {
   EmptyState,
   SkeletonLine,
   Loading,
+  Select,
   useToast,
   useConfirm,
   GeoMapPreview,
@@ -698,45 +699,40 @@ export default function ServicesAndKeysPage() {
                   {detailTab === 'try' && (
                     <div className="space-y-4">
                       <div className="grid grid-cols-1 gap-4 md:grid-cols-2">
-                        <label className="block">
-                          <span className="ui-field__label">Route to call</span>
-                          <select
-                            className="ui-input font-mono"
-                            value={selectedPath}
-                            onChange={(e) => {
-                              setSelectedPath(e.target.value);
-                              const match = selectedService.resourcePaths?.find(
-                                (r) => r.path === e.target.value,
-                              );
-                              if (match?.methods[0]) setSelectedMethod(match.methods[0]);
-                            }}
-                          >
-                            {selectedService.resourcePaths?.map((rp) => (
-                              <option key={rp.path} value={rp.path}>
-                                {rp.path}
-                              </option>
-                            ))}
-                          </select>
-                        </label>
+                        <Select
+                          label="Route to call"
+                          controlClassName="font-mono"
+                          value={selectedPath}
+                          onChange={(e) => {
+                            setSelectedPath(e.target.value);
+                            const match = selectedService.resourcePaths?.find(
+                              (r) => r.path === e.target.value,
+                            );
+                            if (match?.methods[0]) setSelectedMethod(match.methods[0]);
+                          }}
+                        >
+                          {selectedService.resourcePaths?.map((rp) => (
+                            <option key={rp.path} value={rp.path}>
+                              {rp.path}
+                            </option>
+                          ))}
+                        </Select>
 
-                        <label className="block">
-                          <span className="ui-field__label">API key</span>
-                          <select
-                            className="ui-input"
-                            value={selectedApiKey}
-                            onChange={(e) => setSelectedApiKey(e.target.value)}
-                          >
-                            {apiKeys && apiKeys.length > 0 ? (
-                              apiKeys.map((k) => (
-                                <option key={k.id} value={k.apiKey}>
-                                  {k.name}
-                                </option>
-                              ))
-                            ) : (
-                              <option value="">No keys yet - issue one on the next tab</option>
-                            )}
-                          </select>
-                        </label>
+                        <Select
+                          label="API key"
+                          value={selectedApiKey}
+                          onChange={(e) => setSelectedApiKey(e.target.value)}
+                        >
+                          {apiKeys && apiKeys.length > 0 ? (
+                            apiKeys.map((k) => (
+                              <option key={k.id} value={k.apiKey}>
+                                {k.name}
+                              </option>
+                            ))
+                          ) : (
+                            <option value="">No keys yet - issue one on the next tab</option>
+                          )}
+                        </Select>
                       </div>
 
                       {/* Path Parameters Helper */}

@@ -7,6 +7,9 @@ export type { ButtonProps } from './Button';
 export { Field, TextAreaField } from './Field';
 export type { FieldProps, TextAreaFieldProps } from './Field';
 
+export { Select } from './Select';
+export type { SelectProps } from './Select';
+
 export { PageHeader } from './PageHeader';
 export { SectionCard } from './SectionCard';
 export { EmptyState } from './EmptyState';
