@@ -72,6 +72,20 @@ table, .tabular {
     font-variant-numeric: tabular-nums;
 }
 
+/* Tailwind v4 resets button to cursor:default — restore pointer on anything clickable.
+ * In @layer base so .ui-btn states (not-allowed, progress) and utilities still win. */
+@layer base {
+    :where(button, summary, [role="button"], [role="tab"],
+           label:has(> input[type="checkbox"]), label:has(> input[type="radio"]),
+           input[type="checkbox"], input[type="radio"], select) {
+        cursor: pointer;
+    }
+    :where(button, [role="button"], input, select):disabled,
+    :where(button, [role="button"])[aria-disabled="true"] {
+        cursor: not-allowed;
+    }
+}
+
 /* Custom scrollbars */
 ::-webkit-scrollbar {
   width: 8px;
