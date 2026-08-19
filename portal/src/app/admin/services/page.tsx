@@ -1,6 +1,6 @@
 'use client';
 
-import React, { useState, useEffect, useMemo } from 'react';
+import { useState, useMemo, useRef } from 'react';
 import { useQuery, useMutation, useQueryClient, type QueryClient } from '@tanstack/react-query';
 import { api } from '@/lib/api';
 import NavigationShell from '@/components/NavigationShell';
@@ -18,12 +18,12 @@ import {
   Trash2,
   Edit,
   AlertTriangle,
-  Sparkles,
   BookOpen,
   Sliders,
   Search,
   X,
   Filter,
+  ChevronDown,
 } from 'lucide-react';
 
 interface GatewaySource {
@@ -39,10 +39,22 @@ interface GatewaySource {
   body?: string;
 }
 
+/** The upstream a route carries with it, saved in the same call as the service */
+interface InlineSource {
+  type: 'api' | 'static';
+  protocol?: string;
+  url?: string;
+  contentType?: string;
+  body?: string;
+  headers?: Array<{ key: string; value: string }>;
+}
+
 interface ResourcePath {
   path: string;
   methods: string[];
   sourceAlias: string;
+  /** Present when this route defines its own upstream instead of reusing a saved one */
+  source?: InlineSource;
 }
 
 interface GatewayService {
@@ -53,8 +65,70 @@ interface GatewayService {
   basePath: string;
   enabled?: boolean;
   isPublic?: boolean;
-  resourcePaths?: ResourcePath[];
+  resourcePaths?: Array<ResourcePath & { source?: GatewaySource }>;
   ogc?: { version?: string; parts?: string[] } | null;
+}
+
+/** Aliases the control plane generates for a route's own upstream (`src-<objectid>`).
+ *  Those belong to the route, so the form edits them in place; anything else is a
+ *  named source that other services may share, and is only ever referenced. */
+const GENERATED_ALIAS = /^src-[0-9a-f]{24}$/i;
+
+/** A saved route becomes an editable row, with the upstream it resolved to opened
+ *  up for editing in place — one route, one target. */
+function toFormRow(rp: ResourcePath & { source?: GatewaySource }): ResourcePath {
+  const base = { path: rp.path, methods: rp.methods, sourceAlias: rp.sourceAlias };
+  if (!rp.source) return base;
+  // the API hands back a source without its url or body when the caller is not
+  // allowed to see them; editing that as if it were empty would erase it
+  const isStatic = rp.source.type === 'static';
+  if (isStatic ? !rp.source.body : !rp.source.url) return base;
+  return {
+    ...base,
+    source: {
+      type: rp.source.type === 'static' ? 'static' : 'api',
+      protocol: rp.source.protocol,
+      url: rp.source.url || '',
+      contentType: rp.source.contentType || 'application/json',
+      body: rp.source.body || '',
+      // PUT replaces the whole source, so headers set elsewhere ride along untouched
+      headers: rp.source.headers || [],
+    },
+  };
+}
+
+/** A row as the service payload wants it. An inline target rides along under
+ *  `source`; an empty alias tells the control plane to mint one for it. */
+function toApiRow(rp: ResourcePath): ResourcePath {
+  const row = { path: rp.path, methods: rp.methods, sourceAlias: rp.sourceAlias };
+  if (!rp.source) return row;
+  if (rp.source.type === 'static') {
+    return {
+      ...row,
+      source: {
+        ...rp.source,
+        protocol: 'https',
+        url: '',
+        contentType: (rp.source.contentType || '').trim() || 'application/json',
+      },
+    };
+  }
+  const url = (rp.source.url || '').trim();
+  const withScheme = /^https?:\/\//i.test(url) ? url : `https://${url}`;
+  return {
+    ...row,
+    source: {
+      ...rp.source,
+      url: withScheme,
+      protocol: withScheme.toLowerCase().startsWith('http://') ? 'http' : 'https',
+      body: '',
+    },
+  };
+}
+
+function targetSelectValue(rp: ResourcePath): string {
+  if (!rp.source) return '';
+  return rp.source.type === 'static' ? '__static__' : '__api__';
 }
 
 export default function AdminServicesPage() {
@@ -137,7 +211,6 @@ export default function AdminServicesPage() {
         ) : (
           <ServicesManager
             services={services || []}
-            sources={sources || []}
             isLoading={isLoadingServices}
             isOpen={isServiceFormOpen}
             setIsOpen={setIsServiceFormOpen}
@@ -318,9 +391,19 @@ function SourcesManager({
       {isOpen && (
         <div className="fixed inset-0 z-50 bg-scrim flex items-center justify-center p-4">
           <div className="bg-paper border border-rule rounded-surface p-6 w-full max-w-lg shadow-sm space-y-4 max-h-[90vh] overflow-y-auto">
-            <h3 className="font-title text-base font-bold text-ink">
-              {editingSource ? 'Edit Upstream Source' : 'New Upstream Source'}
-            </h3>
+            <div className="flex items-center justify-between">
+              <h3 className="font-title text-base font-bold text-ink">
+                {editingSource ? 'Edit Upstream Source' : 'New Upstream Source'}
+              </h3>
+              <button
+                onClick={() => setIsOpen(false)}
+                className="p-1.5 rounded-control text-muted transition hover:bg-paper-3 hover:text-ink cursor-pointer"
+                aria-label="Close"
+                title="Close"
+              >
+                <X className="h-4 w-4" />
+              </button>
+            </div>
 
             <form
               onSubmit={(e) => {
@@ -332,7 +415,7 @@ function SourcesManager({
               <div className="grid grid-cols-2 gap-4">
                 <div>
                   <label className="text-xs font-semibold text-muted uppercase tracking-wider block mb-1">
-                    Display Name
+                    Display Name<span className="ui-field__req" aria-hidden="true">*</span>
                   </label>
                   <input
                     type="text"
@@ -345,7 +428,7 @@ function SourcesManager({
                 </div>
                 <div>
                   <label className="text-xs font-semibold text-muted uppercase tracking-wider block mb-1">
-                    Alias (Identifier)
+                    Alias (Identifier)<span className="ui-field__req" aria-hidden="true">*</span>
                   </label>
                   <input
                     type="text"
@@ -404,7 +487,7 @@ function SourcesManager({
               {type === 'api' ? (
                 <div>
                   <label className="text-xs font-semibold text-muted uppercase tracking-wider block mb-1">
-                    Target Base URL
+                    Target Base URL<span className="ui-field__req" aria-hidden="true">*</span>
                   </label>
                   <input
                     type="text"
@@ -419,7 +502,7 @@ function SourcesManager({
                 <div className="space-y-4">
                   <div>
                     <label className="text-xs font-semibold text-muted uppercase tracking-wider block mb-1">
-                      Content Type
+                      Content Type<span className="ui-field__req" aria-hidden="true">*</span>
                     </label>
                     <input
                       type="text"
@@ -452,14 +535,14 @@ function SourcesManager({
                     setIsOpen(false);
                     setEditingSource(null);
                   }}
-                  className="px-4 py-2 border border-rule hover:border-faint rounded-control text-ink-2 hover:bg-paper-2 transition"
+                  className="px-4 py-2 border border-rule hover:border-faint rounded-control text-ink-2 hover:bg-paper-2 transition cursor-pointer"
                 >
                   Cancel
                 </button>
                 <button
                   type="submit"
                   disabled={saveMutation.isPending}
-                  className="px-4 py-2 bg-accent hover:bg-accent-deep text-accent-ink font-semibold rounded-control transition"
+                  className="px-4 py-2 bg-accent hover:bg-accent-deep text-accent-ink font-semibold rounded-control transition cursor-pointer"
                 >
                   {saveMutation.isPending ? 'Saving...' : 'Save Source'}
                 </button>
@@ -491,13 +574,19 @@ function SourcesManager({
                 <div className="flex items-center justify-between gap-2">
                   <div className="flex items-center gap-2">
                     <Database className="w-4 h-4 text-accent" />
-                    <span className="font-title text-sm font-semibold text-ink">{src.name}</span>
+                    <span className="font-title text-sm font-semibold text-ink truncate max-w-[180px]" title={src.name}>
+                      {src.name}
+                    </span>
                   </div>
                   <span className="text-[10px] font-mono px-2 py-0.5 rounded-chip bg-accent-wash border border-accent-edge text-accent">
                     Alias: {src.alias}
                   </span>
                 </div>
-                <p className="text-xs text-muted mt-2 line-clamp-2">{src.description || 'No description'}</p>
+                <p className="text-xs text-muted mt-2 line-clamp-2">
+                  {GENERATED_ALIAS.test(src.alias)
+                    ? src.description || 'Defined on a route, in the service that uses it'
+                    : src.description || 'No description'}
+                </p>
               </div>
               <div className="space-y-2 border-t border-rule pt-2">
                 <div className="flex justify-between items-center text-[10px] font-mono text-muted">
@@ -542,7 +631,6 @@ function SourcesManager({
 // ================================= SERVICES SUB-COMPONENT =================================
 function ServicesManager({
   services,
-  sources,
   isLoading,
   isOpen,
   setIsOpen,
@@ -551,7 +639,6 @@ function ServicesManager({
   queryClient
 }: {
   services: GatewayService[];
-  sources: GatewaySource[];
   isLoading: boolean;
   isOpen: boolean;
   setIsOpen: (val: boolean) => void;
@@ -595,70 +682,7 @@ function ServicesManager({
   const [formError, setFormError] = useState<string | null>(null);
   const { toast } = useToast();
   const confirm = useConfirm();
-  const [scaffoldFetched, setScaffoldFetched] = useState<string[]>([]);
-  const [isScaffoldingLoading, setIsScaffoldingLoading] = useState(false);
-
-  // Adding an upstream from inside this form, so nobody has to leave for the other tab
-  const [newSourceRow, setNewSourceRow] = useState<number | null>(null);
-  const [newSourceAlias, setNewSourceAlias] = useState('');
-  const [newSourceUrl, setNewSourceUrl] = useState('');
-  const [newSourceKind, setNewSourceKind] = useState<'api' | 'static'>('api');
-  const [newSourceBody, setNewSourceBody] = useState('');
-  const [newSourceError, setNewSourceError] = useState<string | null>(null);
-  const [isCreatingSource, setIsCreatingSource] = useState(false);
-
-  const createInlineSource = async (rowIndex: number) => {
-    setNewSourceError(null);
-    const alias = newSourceAlias.trim();
-    const url = newSourceUrl.trim();
-    if (!alias) {
-      setNewSourceError('The upstream needs a short name.');
-      return;
-    }
-    if (newSourceKind === 'api' && !url) {
-      setNewSourceError('Where should this path go? Give it a URL.');
-      return;
-    }
-    if (newSourceKind === 'static' && !newSourceBody.trim()) {
-      setNewSourceError('A fixed reply needs a body.');
-      return;
-    }
-    if (sources.some((s) => s.alias === alias)) {
-      setNewSourceError(`An upstream called "${alias}" already exists.`);
-      return;
-    }
-    const withScheme = /^https?:\/\//i.test(url) ? url : `https://${url}`;
-    setIsCreatingSource(true);
-    try {
-      await api.post('/sources', {
-        alias,
-        name: alias,
-        type: newSourceKind,
-        protocol: newSourceKind === 'static'
-          ? 'https'
-          : withScheme.toLowerCase().startsWith('http://') ? 'http' : 'https',
-        url: newSourceKind === 'static' ? '' : withScheme,
-        body: newSourceKind === 'static' ? newSourceBody : undefined,
-        contentType: 'application/json',
-      });
-      await queryClient.invalidateQueries({ queryKey: ['admin-sources'] });
-      // Map to all unmapped rows and current row
-      setResourcePaths((prev) =>
-        prev.map((rp, i) =>
-          i === rowIndex || !rp.sourceAlias ? { ...rp, sourceAlias: alias } : rp
-        )
-      );
-      setNewSourceRow(null);
-      setNewSourceAlias('');
-      setNewSourceUrl('');
-      setNewSourceBody('');
-      setNewSourceKind('api');
-    } catch (err: unknown) {
-      setNewSourceError(err instanceof Error && err.message ? err.message : 'Could not create the upstream.');
-    } finally {
-      setIsCreatingSource(false);
-    }
-  };
+  const [isApplyingOgcTemplate, setIsApplyingOgcTemplate] = useState(false);
 
   // ปรับ state ระหว่าง render ตามแนวทางของ React ไม่ใช่ใน effect (กัน cascading render)
   const serviceFormKey = editingService?.id ?? (isOpen ? 'new' : 'closed');
@@ -674,7 +698,7 @@ function ServicesManager({
       setIsPublic(editingService.isPublic === true);
       setResourcePaths(
         editingService.resourcePaths && editingService.resourcePaths.length > 0
-          ? editingService.resourcePaths.map((rp) => ({ ...rp }))
+          ? editingService.resourcePaths.map(toFormRow)
           : [{ path: '/', methods: ['GET'], sourceAlias: '' }]
       );
     } else {
@@ -686,58 +710,106 @@ function ServicesManager({
       setIsPublic(false);
       setResourcePaths([{ path: '/', methods: ['GET'], sourceAlias: '' }]);
     }
-    setScaffoldFetched([]);
   }
 
-  // ประเภท General ไม่มีเส้นทางมาตรฐานให้แนะนำ กรองตอน render แทนที่จะสั่งล้าง state ใน effect
-  const scaffoldSuggestions = basePath && type !== 'General' ? scaffoldFetched : [];
+  // A path that cannot match any real standard path, sent as the current
+  // resourcePaths so every core path of the type comes back as "missing" —
+  // that missing list is the full template. Reuses the same backend data
+  // /services/check-paths already serves, just asked for differently.
+  const OGC_TEMPLATE_PROBE_PATH = '/__ogc-template-probe__';
+  // check-paths requires a non-empty basePath to also check for conflicts;
+  // there is no real basePath yet at the point a type is picked, and the
+  // conflict result is discarded here, so a placeholder is enough.
+  const OGC_TEMPLATE_PROBE_BASE_PATH = '/__ogc-template-probe__';
 
-  // เสนอเส้นทาง OGC ที่ยังขาด เมื่อประเภทหรือ base path เปลี่ยน
-  useEffect(() => {
-    if (!basePath || type === 'General') return;
+  async function fetchOgcCorePaths(svcType: string): Promise<string[]> {
+    const res = await api.post('/services/check-paths', {
+      type: svcType,
+      basePath: OGC_TEMPLATE_PROBE_BASE_PATH,
+      resourcePaths: [OGC_TEMPLATE_PROBE_PATH],
+    });
+    return res.data.missingOgcPaths || [];
+  }
 
-    let cancelled = false;
+  /** Counts type changes so a slow template fetch cannot land after a newer one */
+  const ogcTemplateRequest = useRef(0);
 
-    async function checkPaths() {
-      setIsScaffoldingLoading(true);
-      try {
-        const pathsPayload = {
-          type,
-          basePath,
-          resourcePaths: resourcePaths.map((r) => r.path),
-        };
-        const res = await api.post('/services/check-paths', pathsPayload);
-        if (!cancelled && res.data.missingOgcPaths) {
-          setScaffoldFetched(res.data.missingOgcPaths);
-        }
-      } catch {
-        // เช็คเส้นทางล้มเหลวไม่ใช่เรื่องที่ผู้ใช้ต้องรู้ แค่ไม่มีคำแนะนำขึ้น
-      } finally {
-        if (!cancelled) setIsScaffoldingLoading(false);
-      }
+  /** Path work a retype would destroy: a saved service's routes, or rows already
+   *  mapped to an upstream. A fresh template has neither, so it stays quiet. */
+  function hasPathWork(): boolean {
+    if (resourcePaths.length === 0) return false;
+    return !!editingService || resourcePaths.some((rp) => rp.sourceAlias !== '' || !!rp.source);
+  }
+
+  /** Picking a standard replaces the path list outright with what it expects —
+   *  there is no partial state to preserve once the type itself has changed. */
+  async function applyServiceType(newType: string) {
+    if (newType === type) return;
+    if (hasPathWork()) {
+      const wants = await confirm({
+        title: 'Replace the routes below?',
+        description: `Switching to ${newType === 'General' ? 'General API' : newType} rewrites the path list from scratch.`,
+        consequences: [
+          `The ${resourcePaths.length} route${resourcePaths.length === 1 ? '' : 's'} configured here are discarded`,
+          'Their methods and upstream mappings go with them',
+        ],
+        confirmLabel: 'Replace routes',
+        cancelLabel: 'Keep current type',
+      });
+      if (!wants) return;
     }
 
-    // หน่วงระหว่างพิมพ์ ไม่ให้ยิงทุกตัวอักษร
-    const delay = setTimeout(checkPaths, 800);
-    return () => {
-      cancelled = true;
-      clearTimeout(delay);
-    };
-  }, [type, basePath, resourcePaths]);
+    const request = ++ogcTemplateRequest.current;
+    setType(newType);
+    if (newType === 'General') {
+      setResourcePaths([{ path: '/', methods: ['GET'], sourceAlias: '' }]);
+      return;
+    }
+    setIsApplyingOgcTemplate(true);
+    try {
+      const paths = await fetchOgcCorePaths(newType);
+      if (request !== ogcTemplateRequest.current) return;
+      // left unmapped on purpose — the standard only supplies the routes,
+      // not which upstream answers each one, so that stays a manual choice
+      setResourcePaths(
+        (paths.length > 0 ? paths : ['/']).map((path) => ({
+          path,
+          methods: ['GET'],
+          sourceAlias: '',
+        })),
+      );
+    } catch {
+      // could not reach the standard's path list — leave the rows as they were
+    } finally {
+      if (request === ogcTemplateRequest.current) setIsApplyingOgcTemplate(false);
+    }
+  }
 
   const addPathRow = (pathValue = '/') => {
-    const activeAlias =
-      resourcePaths.find((r) => r.sourceAlias)?.sourceAlias || sources[0]?.alias || '';
-    setResourcePaths((prev) => [
-      ...prev,
-      { path: pathValue, methods: ['GET'], sourceAlias: activeAlias },
-    ]);
+    setResourcePaths((prev) => [...prev, { path: pathValue, methods: ['GET'], sourceAlias: '' }]);
   };
 
-  const applyUpstreamToAll = (alias: string) => {
-    if (!alias || alias === '__new__') return;
-    setResourcePaths((prev) => prev.map((rp) => ({ ...rp, sourceAlias: alias })));
-    toast({ tone: 'ok', message: `Applied upstream "${alias}" to all routes` });
+  /** Switches what a route answers with. The alias rides along untouched: an empty one
+   *  has the control plane mint an upstream, an existing one is rewritten in place. */
+  const setRowTarget = (index: number, value: string) => {
+    setResourcePaths((prev) =>
+      prev.map((rp, i) => {
+        if (i !== index) return rp;
+        if (value !== '__api__' && value !== '__static__') return { ...rp, source: undefined };
+        const type = value === '__api__' ? 'api' : 'static';
+        if (rp.source) return { ...rp, source: { ...rp.source, type } };
+        return {
+          ...rp,
+          source: { type, protocol: 'https', url: '', contentType: 'application/json', body: '' },
+        };
+      }),
+    );
+  };
+
+  const updateRowSource = (index: number, patch: Partial<InlineSource>) => {
+    setResourcePaths((prev) =>
+      prev.map((rp, i) => (i === index && rp.source ? { ...rp, source: { ...rp.source, ...patch } } : rp)),
+    );
   };
 
   const removePathRow = (index: number) => {
@@ -753,10 +825,18 @@ function ServicesManager({
   const saveMutation = useMutation({
     mutationFn: async () => {
       setFormError(null);
-      // Validate mapping aliases
-      if (resourcePaths.some((r) => !r.sourceAlias)) {
-        throw new Error('All resource paths must be mapped to an upstream source.');
-      }
+      resourcePaths.forEach((rp) => {
+        if (rp.source) {
+          if (rp.source.type === 'api' && !(rp.source.url || '').trim()) {
+            throw new Error(`${rp.path} needs a URL to forward to.`);
+          }
+          if (rp.source.type === 'static' && !(rp.source.body || '').trim()) {
+            throw new Error(`${rp.path} needs a body to answer with.`);
+          }
+        } else if (!rp.sourceAlias) {
+          throw new Error(`${rp.path} has no target yet.`);
+        }
+      });
       if (!basePath.startsWith('/')) {
         throw new Error('Base Path must start with /');
       }
@@ -768,7 +848,7 @@ function ServicesManager({
         basePath,
         enabled,
         isPublic,
-        resourcePaths,
+        resourcePaths: resourcePaths.map(toApiRow),
         // ฟอร์มนี้ไม่ได้แก้ ogc แต่ PUT เป็น replace ไม่ส่งคืนไปเท่ากับล้างทิ้ง
         ogc: editingService?.ogc ?? undefined,
       };
@@ -806,6 +886,8 @@ function ServicesManager({
     },
     onSuccess: () => {
       queryClient.invalidateQueries({ queryKey: ['admin-services'] });
+      // saving a service now creates, updates, and retires upstreams too
+      queryClient.invalidateQueries({ queryKey: ['admin-sources'] });
       setIsOpen(false);
       setEditingService(null);
       toast({ tone: 'ok', message: 'Service saved' });
@@ -907,9 +989,19 @@ function ServicesManager({
       {isOpen && (
         <div className="fixed inset-0 z-50 bg-scrim flex items-center justify-center p-4">
           <div className="bg-paper border border-rule rounded-surface p-6 w-full max-w-2xl shadow-sm space-y-4 max-h-[95vh] overflow-y-auto">
-            <h3 className="font-title text-base font-bold text-ink">
-              {editingService ? 'Edit Gateway Service' : 'Publish New Service'}
-            </h3>
+            <div className="flex items-center justify-between">
+              <h3 className="font-title text-base font-bold text-ink">
+                {editingService ? 'Edit Gateway Service' : 'Publish New Service'}
+              </h3>
+              <button
+                onClick={() => setIsOpen(false)}
+                className="p-1.5 rounded-control text-muted transition hover:bg-paper-3 hover:text-ink cursor-pointer"
+                aria-label="Close"
+                title="Close"
+              >
+                <X className="h-4 w-4" />
+              </button>
+            </div>
 
             {formError && (
               <div className="flex items-start gap-3 rounded-control border border-danger-edge bg-danger-wash p-4 text-xs text-danger">
@@ -928,7 +1020,7 @@ function ServicesManager({
               <div className="grid grid-cols-2 gap-4">
                 <div>
                   <label className="text-xs font-semibold text-muted uppercase tracking-wider block mb-1">
-                    Service Name
+                    Service Name<span className="ui-field__req" aria-hidden="true">*</span>
                   </label>
                   <input
                     type="text"
@@ -941,7 +1033,7 @@ function ServicesManager({
                 </div>
                 <div>
                   <label className="text-xs font-semibold text-muted uppercase tracking-wider block mb-1">
-                    Base Path (Prefix route)
+                    Base Path (Prefix route)<span className="ui-field__req" aria-hidden="true">*</span>
                   </label>
                   <input
                     type="text"
@@ -970,20 +1062,30 @@ function ServicesManager({
               <div className="grid grid-cols-3 gap-4 items-center">
                 <div>
                   <label className="text-xs font-semibold text-muted uppercase tracking-wider block mb-1">
-                    Service Type
+                    Service Type<span className="ui-field__req" aria-hidden="true">*</span>
                   </label>
-                  <select
-                    value={type}
-                    onChange={(e) => setType(e.target.value)}
-                    className="w-full bg-paper-2 border border-rule rounded-control px-3 py-2 text-sm text-ink outline-none focus:border-focus"
-                  >
-                    <option value="General">General API</option>
-                    <option value="OGC_API_Features">OGC API Features</option>
-                    <option value="OGC_API_STAC">OGC API STAC</option>
-                    <option value="OGC_API_Styles">OGC API Styles</option>
-                    <option value="OGC_API_SensorThings">OGC API SensorThings</option>
-                    <option value="OGC_API_Tiles">OGC API Tiles</option>
-                  </select>
+                  <div className="relative">
+                    <select
+                      required
+                      value={type}
+                      onChange={(e) => {
+                        // hold the select on the current type until confirmed —
+                        // setType moves it if applyServiceType gets that far
+                        const picked = e.target.value;
+                        e.target.value = type;
+                        applyServiceType(picked);
+                      }}
+                      className="w-full appearance-none bg-paper-2 border border-rule rounded-control pl-3 pr-9 py-2 text-sm text-ink outline-none focus:border-focus"
+                    >
+                      <option value="General">General API</option>
+                      <option value="OGC_API_Features">OGC API Features</option>
+                      <option value="OGC_API_STAC">OGC API STAC</option>
+                      <option value="OGC_API_Styles">OGC API Styles</option>
+                      <option value="OGC_API_SensorThings">OGC API SensorThings</option>
+                      <option value="OGC_API_Tiles">OGC API Tiles</option>
+                    </select>
+                    <ChevronDown className="pointer-events-none absolute right-3 top-1/2 h-4 w-4 -translate-y-1/2 text-muted" />
+                  </div>
                 </div>
 
                 <div className="flex items-center gap-2 pt-5">
@@ -992,7 +1094,7 @@ function ServicesManager({
                     id="svc-enabled"
                     checked={enabled}
                     onChange={(e) => setEnabled(e.target.checked)}
-                    className="w-4 h-4 accent-accent"
+                    className="w-4 h-4 accent-accent cursor-pointer"
                   />
                   <label htmlFor="svc-enabled" className="text-xs font-semibold text-ink-2 select-none cursor-pointer">
                     Enable Routing
@@ -1005,7 +1107,7 @@ function ServicesManager({
                     id="svc-public"
                     checked={isPublic}
                     onChange={(e) => setIsPublic(e.target.checked)}
-                    className="w-4 h-4 accent-accent"
+                    className="w-4 h-4 accent-accent cursor-pointer"
                   />
                   <label htmlFor="svc-public" className="text-xs font-semibold text-ink-2 select-none cursor-pointer">
                     Public access (no API key)
@@ -1013,201 +1115,118 @@ function ServicesManager({
                 </div>
               </div>
 
-              {/* OGC Path scaffolding notifications */}
-              {/* คำแนะนำเส้นทางมาจาก POST /services/check-paths ซึ่งบังคับต้องมี basePath
-                * (มันทำหน้าที่ตรวจ path ชนกันด้วย) เลือก type อย่างเดียวจึงยังไม่มีอะไรขึ้น
-                * ถ้าไม่บอก ผู้ใช้จะนึกว่าฟีเจอร์พัง */}
-              {type !== 'General' && !basePath && (
-                <p className="mt-2 text-xs text-muted">
-                  Fill in the base path to see the routes this standard expects.
-                </p>
-              )}
-
-              {isScaffoldingLoading && scaffoldSuggestions.length === 0 && (
-                <p className="mt-2 text-xs text-muted">Checking the standard routes for this type…</p>
-              )}
-
-              {scaffoldSuggestions.length > 0 && (
-                <div className="bg-accent-wash border border-accent-edge p-4 rounded-control space-y-2">
-                  <div className="flex items-center gap-1.5 text-accent font-semibold">
-                    <Sparkles className="w-4 h-4" /> Recommended OGC Paths
-                  </div>
-                  <p className="text-[10px] text-muted">
-                    This service standard recommends implementing the following resource paths:
-                  </p>
-                  <div className="flex flex-wrap gap-2">
-                    {scaffoldSuggestions.map((path) => (
-                      <button
-                        key={path}
-                        type="button"
-                        onClick={() => addPathRow(path)}
-                        className="px-2.5 py-1 bg-paper hover:bg-paper-3 border border-rule text-[10px] font-mono rounded-chip text-accent flex items-center gap-1"
-                      >
-                        + {path}
-                      </button>
-                    ))}
-                  </div>
-                </div>
+              {/* Picking a standard already filled the paths below in with its template */}
+              {isApplyingOgcTemplate && (
+                <p className="mt-2 text-xs text-muted">Loading the standard routes for this type…</p>
               )}
 
               {/* Resource paths editor mapping */}
               <div className="space-y-2">
                 <div className="flex items-center justify-between">
                   <label className="text-xs font-semibold text-muted uppercase tracking-wider">
-                    Resource Paths & Target Sources
+                    Resource Paths & Target Sources<span className="ui-field__req" aria-hidden="true">*</span>
                   </label>
-                  <div className="flex items-center gap-3">
-                    {resourcePaths.length > 1 && resourcePaths[0]?.sourceAlias && (
-                      <button
-                        type="button"
-                        onClick={() => applyUpstreamToAll(resourcePaths[0].sourceAlias)}
-                        className="text-[11px] text-accent font-semibold hover:underline"
-                        title="Set all routes to use this upstream"
-                      >
-                        ⚡ Apply &quot;{resourcePaths[0].sourceAlias}&quot; to all
-                      </button>
-                    )}
-                    <button
-                      type="button"
-                      onClick={() => addPathRow()}
-                      className="text-xs text-accent font-semibold hover:underline"
-                    >
-                      + Add Path Row
-                    </button>
-                  </div>
+                  <button
+                    type="button"
+                    onClick={() => addPathRow()}
+                    className="text-xs text-accent font-semibold underline underline-offset-2 cursor-pointer"
+                  >
+                    + Add Path
+                  </button>
                 </div>
 
                 <div className="space-y-2 max-h-52 overflow-y-auto pr-1">
                   {resourcePaths.map((rp, index) => (
-                    <React.Fragment key={index}>
-                      <div className="flex gap-2 items-center bg-paper-2 p-2 border border-rule rounded-control">
-                      <div className="flex-[2] min-w-0">
-                        <input
-                          type="text"
-                          required
-                          value={rp.path}
-                          onChange={(e) => updatePathRow(index, 'path', e.target.value)}
-                          placeholder="/collections/*"
-                          className="w-full bg-paper border border-rule rounded-control px-2.5 py-1 text-xs text-ink outline-none focus:border-focus font-mono"
-                        />
-                      </div>
+                    <div
+                      key={index}
+                      className="bg-paper-2 p-2 border border-rule rounded-control space-y-2"
+                    >
+                      <div className="flex gap-2 items-center">
+                        <div className="flex-[2] min-w-0">
+                          <input
+                            type="text"
+                            required
+                            value={rp.path}
+                            onChange={(e) => updatePathRow(index, 'path', e.target.value)}
+                            placeholder="/collections/*"
+                            className="w-full bg-paper border border-rule rounded-control px-2.5 py-1 text-xs text-ink outline-none focus:border-focus font-mono"
+                          />
+                        </div>
 
-                      <div className="flex-1">
-                        <select
-                          value={rp.methods[0] || 'GET'}
-                          onChange={(e) => updatePathRow(index, 'methods', [e.target.value])}
-                          className="w-full bg-paper border border-rule rounded-control px-2.5 py-1 text-xs text-ink outline-none"
-                        >
-                          <option value="GET">GET</option>
-                          <option value="POST">POST</option>
-                          <option value="PUT">PUT</option>
-                          <option value="DELETE">DELETE</option>
-                        </select>
-                      </div>
+                        <div className="relative flex-1">
+                          <select
+                            value={rp.methods[0] || 'GET'}
+                            onChange={(e) => updatePathRow(index, 'methods', [e.target.value])}
+                            className="w-full appearance-none bg-paper border border-rule rounded-control pl-2.5 pr-7 py-1 text-xs text-ink outline-none"
+                          >
+                            <option value="GET">GET</option>
+                            <option value="POST">POST</option>
+                            <option value="PUT">PUT</option>
+                            <option value="DELETE">DELETE</option>
+                          </select>
+                          <ChevronDown className="pointer-events-none absolute right-2 top-1/2 h-3.5 w-3.5 -translate-y-1/2 text-muted" />
+                        </div>
 
-                      <div className="flex-[2]">
-                        <select
-                          required
-                          value={rp.sourceAlias}
-                          onChange={(e) => {
-                            if (e.target.value === '__new__') {
-                              setNewSourceError(null);
-                              setNewSourceRow(index);
-                              return;
-                            }
-                            updatePathRow(index, 'sourceAlias', e.target.value);
-                          }}
-                          className="w-full bg-paper border border-rule rounded-control px-2.5 py-1 text-xs text-ink outline-none"
-                        >
-                          <option value="">
-                            {sources.length === 0 ? 'No upstreams yet' : 'Map upstream...'}
-                          </option>
-                          {sources.map((src) => (
-                            <option key={src.id} value={src.alias}>
-                              {src.name} ({src.alias})
+                        <div className="relative flex-[2]">
+                          <select
+                            required
+                            value={targetSelectValue(rp)}
+                            onChange={(e) => setRowTarget(index, e.target.value)}
+                            className="w-full appearance-none bg-paper border border-rule rounded-control pl-2.5 pr-7 py-1 text-xs text-ink outline-none"
+                          >
+                            <option value="" disabled>
+                              Map upstream...
                             </option>
-                          ))}
-                          <option value="__new__">+ New upstream...</option>
-                        </select>
+                            <option value="__api__">Forward to a URL</option>
+                            <option value="__static__">Answer with a fixed body</option>
+                          </select>
+                          <ChevronDown className="pointer-events-none absolute right-2 top-1/2 h-3.5 w-3.5 -translate-y-1/2 text-muted" />
+                        </div>
+
+                        <button
+                          type="button"
+                          onClick={() => removePathRow(index)}
+                          disabled={resourcePaths.length <= 1}
+                          className="p-1 rounded-control text-muted hover:text-danger hover:bg-danger-wash disabled:opacity-30 cursor-pointer"
+                        >
+                          <Trash2 className="w-4 h-4" />
+                        </button>
                       </div>
 
-                      <button
-                        type="button"
-                        onClick={() => removePathRow(index)}
-                        disabled={resourcePaths.length <= 1}
-                        className="p-1 rounded-control text-muted hover:text-danger hover:bg-danger-wash disabled:opacity-30"
-                      >
-                        <Trash2 className="w-4 h-4" />
-                      </button>
-                      </div>
-
-                      {newSourceRow === index && (
-                        <div className="ml-2 mb-2 p-2.5 bg-accent-wash border border-accent/30 rounded-control space-y-2">
-                          <div className="flex items-center gap-3 text-[11px]">
-                            <label className="flex items-center gap-1.5 cursor-pointer">
-                              <input
-                                type="radio"
-                                checked={newSourceKind === 'api'}
-                                onChange={() => setNewSourceKind('api')}
-                                className="accent-accent"
-                              />
-                              Forward to a server
-                            </label>
-                            <label className="flex items-center gap-1.5 cursor-pointer">
-                              <input
-                                type="radio"
-                                checked={newSourceKind === 'static'}
-                                onChange={() => setNewSourceKind('static')}
-                                className="accent-accent"
-                              />
-                              Answer with a fixed body
-                            </label>
-                          </div>
-
-                          <p className="text-[11px] text-ink-2">
-                            {newSourceKind === 'api'
-                              ? 'The whole destination address, not a prefix: this path is sent exactly there.'
-                              : 'Nothing is forwarded. The gateway answers with this body, for an endpoint your server does not have.'}
-                          </p>
-                          <div className="flex gap-2">
-                            <input
-                              type="text"
-                              value={newSourceAlias}
-                              onChange={(e) => setNewSourceAlias(e.target.value)}
-                              placeholder="my-features"
-                              className="flex-1 min-w-0 bg-paper border border-rule rounded-control px-2.5 py-1 text-xs text-ink outline-none focus:border-focus font-mono"
-                            />
-                            {newSourceKind === 'api' && (
+                      {rp.source && (
+                        <div className="space-y-2 border-t border-rule pt-2">
+                          {rp.source.type === 'api' ? (
+                            <>
+                              <p className="text-[11px] text-ink-2">
+                                The whole destination address, not a prefix: this path is sent exactly there.
+                              </p>
                               <input
                                 type="text"
-                                value={newSourceUrl}
-                                onChange={(e) => setNewSourceUrl(e.target.value)}
+                                required
+                                value={rp.source.url || ''}
+                                onChange={(e) => updateRowSource(index, { url: e.target.value })}
                                 placeholder="https://demo.pygeoapi.io/master/collections"
-                                className="flex-[2] min-w-0 bg-paper border border-rule rounded-control px-2.5 py-1 text-xs text-ink outline-none focus:border-focus font-mono"
+                                className="w-full bg-paper border border-rule rounded-control px-2.5 py-1 text-xs text-ink outline-none focus:border-focus font-mono"
                               />
-                            )}
-                            <button
-                              type="button"
-                              onClick={() => createInlineSource(index)}
-                              disabled={isCreatingSource}
-                              className="px-3 py-1 text-xs font-semibold rounded-control bg-accent text-accent-ink disabled:opacity-50"
-                            >
-                              {isCreatingSource ? 'Adding...' : 'Add'}
-                            </button>
-                            <button
-                              type="button"
-                              onClick={() => setNewSourceRow(null)}
-                              className="px-2 py-1 text-xs text-muted hover:text-ink"
-                            >
-                              Cancel
-                            </button>
-                          </div>
-                          {newSourceKind === 'static' && (
+                            </>
+                          ) : (
                             <>
+                              <p className="text-[11px] text-ink-2">
+                                Nothing is forwarded. The gateway answers with this body, for an
+                                endpoint your server does not have.
+                              </p>
+                              <input
+                                type="text"
+                                value={rp.source.contentType || ''}
+                                onChange={(e) => updateRowSource(index, { contentType: e.target.value })}
+                                placeholder="application/json"
+                                className="w-full bg-paper border border-rule rounded-control px-2.5 py-1 text-xs text-ink outline-none focus:border-focus font-mono"
+                              />
                               <textarea
-                                value={newSourceBody}
-                                onChange={(e) => setNewSourceBody(e.target.value)}
+                                required
                                 rows={4}
+                                value={rp.source.body || ''}
+                                onChange={(e) => updateRowSource(index, { body: e.target.value })}
                                 placeholder={'{ "links": [] }'}
                                 className="w-full bg-paper border border-rule rounded-control px-2.5 py-1.5 text-[11px] text-ink outline-none focus:border-focus font-mono"
                               />
@@ -1221,16 +1240,10 @@ function ServicesManager({
                             </>
                           )}
 
-                          {newSourceError && (
-                            <p className="text-[11px] text-danger">{newSourceError}</p>
-                          )}
-                          <p className="text-[11px] text-muted">
-                            More settings, like a static body or a different content type, live under
-                            the Upstream Sources tab.
-                          </p>
+                        
                         </div>
                       )}
-                    </React.Fragment>
+                    </div>
                   ))}
                 </div>
               </div>
@@ -1242,14 +1255,14 @@ function ServicesManager({
                     setIsOpen(false);
                     setEditingService(null);
                   }}
-                  className="px-4 py-2 border border-rule hover:border-faint rounded-control text-ink-2 hover:bg-paper-2 transition"
+                  className="px-4 py-2 border border-rule hover:border-faint rounded-control text-ink-2 hover:bg-paper-2 transition cursor-pointer"
                 >
                   Cancel
                 </button>
                 <button
                   type="submit"
                   disabled={saveMutation.isPending}
-                  className="px-4 py-2 bg-accent hover:bg-accent-deep text-accent-ink font-semibold rounded-control transition"
+                  className="px-4 py-2 bg-accent hover:bg-accent-deep text-accent-ink font-semibold rounded-control transition cursor-pointer"
                 >
                   {saveMutation.isPending ? 'Publishing...' : 'Save Service'}
                 </button>
