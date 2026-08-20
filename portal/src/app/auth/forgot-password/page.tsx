@@ -45,7 +45,7 @@ export default function ForgotPasswordPage() {
         <Notice tone="ok" title="Request sent">
           If that email is registered, a reset link is on its way.
           <br />
-          If SMTP is not configured yet, the link is printed in the control-plane container logs.
+          If email is not configured, ask an administrator to reset your password.
         </Notice>
       )}
 
