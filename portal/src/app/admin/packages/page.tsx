@@ -2,7 +2,8 @@
 
 import React, { useState } from 'react';
 import { useQuery, useMutation, useQueryClient } from '@tanstack/react-query';
-import { api } from '@/lib/api';
+import { api, type UserSession } from '@/lib/api';
+import { useAuth } from '@/app/providers';
 import NavigationShell from '@/components/NavigationShell';
 import {
   PageHeader,
@@ -23,6 +24,8 @@ import {
   UserCheck,
   Server,
   Search,
+  X,
+  ChevronDown,
 } from 'lucide-react';
 
 interface RateLimitTier {
@@ -91,7 +94,35 @@ interface User {
   properties?: Record<string, unknown> | null;
 }
 
+/** "5/10s", or "none". Window stays in raw seconds, no unit rounding. */
+function formatLimit(tiers: RateLimitTier[]): string {
+  const first = tiers[0];
+  if (!first) return 'none';
+  return `${first.limit}/${first.windowSec}s`;
+}
+
+/* Mirror canUpdateTarget / canDeleteUser in control-plane/handler/user_handler.go — the API
+ * decides, these just hide buttons it would refuse. Keep in sync. */
+
+/** nobody edits a root; below that, root edits anyone and admin only users */
+function canEditUser(actor: UserSession | null, target: User): boolean {
+  if (!actor) return false;
+  if (target.role === 'root') return false;
+  if (actor.role === 'root') return true;
+  return actor.role === 'admin' && target.role === 'user';
+}
+
+/** nobody deletes themselves and nobody deletes a root, not even another root */
+function canDeleteUser(actor: UserSession | null, target: User): boolean {
+  if (!actor) return false;
+  if (target.id === actor.id) return false;
+  if (target.role === 'root') return false;
+  if (actor.role === 'root') return true;
+  return actor.role === 'admin' && target.role === 'user';
+}
+
 export default function AdminPackagesPage() {
+  const { user: currentUser } = useAuth();
   const queryClient = useQueryClient();
   const { toast, error: toastError } = useToast();
   const confirm = useConfirm();
@@ -262,8 +293,11 @@ export default function AdminPackagesPage() {
   // Package Service Links Mutations
   const linkServiceMutation = useMutation({
     mutationFn: async () => {
-      if (!linkingPackage || !selectedServiceId) return;
-      
+      // throw, not return — a bare return runs onSuccess and clears the form
+      // as if the link had been made
+      if (!linkingPackage) throw new Error('No package is open to link against');
+      if (!selectedServiceId) throw new Error('Choose a service to grant access to');
+
       const payload = {
         serviceId: selectedServiceId,
         paths: [
@@ -462,29 +496,29 @@ export default function AdminPackagesPage() {
         {/* ================================= PACKAGES TAB ================================= */}
         {activeTab === 'packages' && (
           <div className="space-y-6">
-            <div className="flex flex-col gap-3 sm:flex-row sm:items-center sm:justify-between">
-              <div className="flex items-center gap-3 flex-1 max-w-sm">
-                <div className="relative w-full">
+            <div className="flex flex-wrap items-center justify-between gap-3">
+              <h2 className="text-xs font-bold text-muted uppercase tracking-wider">Package Management</h2>
+              <div className="flex items-center gap-2">
+                <div className="relative w-56">
                   <Search className="absolute left-2.5 top-2.5 h-3.5 w-3.5 text-muted pointer-events-none" />
                   <input
                     type="text"
                     value={packageSearch}
                     onChange={(e) => setPackageSearch(e.target.value)}
-                    placeholder="Search packages by name or alias..."
-                    className="w-full bg-paper border border-rule rounded-control pl-8 pr-3 py-1.5 text-xs text-ink outline-none focus:border-focus"
+                    placeholder="Search by name or alias"
+                    className="w-full bg-paper-2 border border-rule rounded-control pl-8 pr-3 py-1.5 text-xs text-ink outline-none focus:border-focus"
                   />
                 </div>
+                <button
+                  onClick={() => {
+                    setEditingPackage(null);
+                    setIsPackageFormOpen(true);
+                  }}
+                  className="px-3 py-1.5 bg-accent hover:bg-accent-deep text-accent-ink text-xs font-semibold rounded-control transition duration-short flex items-center gap-1 shrink-0"
+                >
+                  <Plus className="w-4 h-4" /> Create Package
+                </button>
               </div>
-
-              <button
-                onClick={() => {
-                  setEditingPackage(null);
-                  setIsPackageFormOpen(true);
-                }}
-                className="px-3 py-1.5 bg-accent hover:bg-accent-deep text-accent-ink text-xs font-semibold rounded-control transition duration-short flex items-center gap-1 shrink-0 self-start sm:self-auto"
-              >
-                <Plus className="w-4 h-4" /> Create Package
-              </button>
             </div>
 
             {/* Package Form Modal */}
@@ -521,7 +555,7 @@ export default function AdminPackagesPage() {
                           onChange={(e) => setPackageAlias(e.target.value)}
                           placeholder="e.g. free"
                           disabled={!!editingPackage}
-                          className="w-full bg-paper-2 border border-rule rounded-control px-3 py-2 text-sm text-ink outline-none focus:border-focus font-mono"
+                          className="w-full bg-paper-2 border border-rule rounded-control px-3 py-2 text-sm text-ink outline-none focus:border-focus"
                         />
                       </div>
                       <div>
@@ -645,11 +679,20 @@ export default function AdminPackagesPage() {
             {isLinkModalOpen && linkingPackage && (
               <div className="fixed inset-0 z-50 bg-scrim flex items-center justify-center p-4">
                 <div className="bg-paper border border-rule rounded-surface p-6 w-full max-w-xl shadow-sm space-y-4 max-h-[90vh] overflow-y-auto">
-                  <div className="flex justify-between items-center border-b border-rule pb-2">
+                  <div className="flex justify-between items-center">
                     <h3 className="font-title text-base font-bold text-ink">
                       Link Services: {linkingPackage.name}
                     </h3>
-                    <button onClick={() => setIsLinkModalOpen(false)} className="text-muted hover:text-ink">Close</button>
+                    {/* Links apply the moment they are made, so there is nothing to cancel —
+                        unlike the form modals, this one only needs a way out */}
+                    <button
+                      onClick={() => setIsLinkModalOpen(false)}
+                      className="p-1.5 rounded-control text-muted transition hover:bg-paper-3 hover:text-ink"
+                      aria-label="Close"
+                      title="Close"
+                    >
+                      <X className="h-4 w-4" />
+                    </button>
                   </div>
 
                   {/* Add Service Link form */}
@@ -658,12 +701,16 @@ export default function AdminPackagesPage() {
                       e.preventDefault();
                       linkServiceMutation.mutate();
                     }}
-                    className="space-y-4 text-xs bg-paper-2 p-4 border border-rule rounded-surface"
+                    className="space-y-4 text-xs"
                   >
                     <div className="grid grid-cols-1 md:grid-cols-2 gap-4">
                       <div>
+                        {/* SearchableSelect's own label is sentence case — spell it out here
+                            instead so it reads the same as the labels beside it */}
+                        <label className="text-xs font-semibold text-muted uppercase tracking-wider block mb-1">
+                          Select Service<span className="ui-field__req" aria-hidden="true">*</span>
+                        </label>
                         <SearchableSelect
-                          label="Select Service"
                           value={selectedServiceId}
                           onChange={setSelectedServiceId}
                           options={
@@ -680,13 +727,14 @@ export default function AdminPackagesPage() {
 
                       <div>
                         <label className="text-xs font-semibold text-muted uppercase tracking-wider block mb-1">
-                          Path Rule
+                          Path Rule<span className="ui-field__req" aria-hidden="true">*</span>
                         </label>
                         <input
                           type="text"
+                          required
                           value={linkPath}
                           onChange={(e) => setLinkPath(e.target.value)}
-                          className="w-full bg-paper border border-rule rounded-control px-3 py-2 text-xs text-ink outline-none font-mono focus:border-focus"
+                          className="w-full bg-paper border border-rule rounded-control px-3 py-2 text-xs text-ink outline-none font-mono focus:border-rule-2"
                         />
                       </div>
                     </div>
@@ -709,30 +757,30 @@ export default function AdminPackagesPage() {
                         {linkTiers.map((tier, index) => (
                           <div key={index} className="flex gap-3 items-center">
                             <div className="flex-1">
-                              <label className="text-[9px] font-semibold text-muted block mb-0.5">Requests</label>
+                              <label className="text-[10px] font-semibold text-muted uppercase tracking-wider block mb-1">Requests</label>
                               <input
                                 type="number"
                                 required
                                 value={tier.limit}
                                 onChange={(e) => updateTier(index, 'limit', parseInt(e.target.value) || 1, true)}
-                                className="w-full bg-paper border border-rule rounded-control px-2 py-0.5 text-xs font-mono"
+                                className="w-full bg-paper border border-rule rounded-control px-2 py-0.5 text-xs font-mono outline-none focus:border-rule-2"
                               />
                             </div>
                             <div className="flex-1">
-                              <label className="text-[9px] font-semibold text-muted block mb-0.5">Window (Sec)</label>
+                              <label className="text-[10px] font-semibold text-muted uppercase tracking-wider block mb-1">Window (Sec)</label>
                               <input
                                 type="number"
                                 required
                                 value={tier.windowSec}
                                 onChange={(e) => updateTier(index, 'windowSec', parseInt(e.target.value) || 1, true)}
-                                className="w-full bg-paper border border-rule rounded-control px-2 py-0.5 text-xs font-mono"
+                                className="w-full bg-paper border border-rule rounded-control px-2 py-0.5 text-xs font-mono outline-none focus:border-rule-2"
                               />
                             </div>
                             <button
                               type="button"
                               onClick={() => removeTier(index, true)}
                               disabled={linkTiers.length <= 1}
-                              className="p-1 text-muted hover:text-danger mt-4"
+                              className="p-1 text-muted hover:text-danger self-end"
                             >
                               <Trash2 className="w-4 h-4" />
                             </button>
@@ -765,6 +813,9 @@ export default function AdminPackagesPage() {
                           const svcName = svc?.name || link.service?.name || 'API Service';
                           const svcBasePath = svc?.basePath || link.service?.basePath || '';
                           const svcType = svc?.type || link.service?.type;
+                          // Rule already reads off the first path, so the limit beside it has to as well
+                          const rateLimit = link.paths?.[0]?.policies?.rateLimit;
+                          const tiers = rateLimit?.enabled ? rateLimit.tiers ?? [] : [];
 
                           return (
                             <div key={link.id} className="p-3 flex items-center justify-between gap-4 text-xs hover:bg-paper-2 transition">
@@ -781,9 +832,10 @@ export default function AdminPackagesPage() {
                                       </span>
                                     )}
                                   </div>
-                                  <div className="flex gap-2 text-[10px] text-muted font-mono mt-0.5">
+                                  <div className="flex flex-wrap gap-x-2 gap-y-0.5 text-[10px] text-muted font-mono mt-0.5">
                                     {svcBasePath && <span>Base: {svcBasePath}</span>}
                                     <span>Rule: {link.paths?.[0]?.path || '/*'}</span>
+                                    <span>Limit: {formatLimit(tiers)}</span>
                                   </div>
                                 </div>
                               </div>
@@ -896,12 +948,15 @@ export default function AdminPackagesPage() {
             <div className="flex flex-wrap items-center justify-between gap-3">
               <h2 className="text-xs font-bold text-muted uppercase tracking-wider">User Account Management</h2>
               <div className="flex items-center gap-2">
-                <input
-                  value={userSearch}
-                  onChange={(e) => setUserSearch(e.target.value)}
-                  placeholder="Search by email or name"
-                  className="bg-paper-2 border border-rule rounded-control px-3 py-1.5 text-xs text-ink outline-none focus:border-focus w-56"
-                />
+                <div className="relative w-56">
+                  <Search className="absolute left-2.5 top-2.5 h-3.5 w-3.5 text-muted pointer-events-none" />
+                  <input
+                    value={userSearch}
+                    onChange={(e) => setUserSearch(e.target.value)}
+                    placeholder="Search by email or name"
+                    className="w-full bg-paper-2 border border-rule rounded-control pl-8 pr-3 py-1.5 text-xs text-ink outline-none focus:border-focus"
+                  />
+                </div>
                 <button
                   type="button"
                   onClick={() => {
@@ -910,9 +965,9 @@ export default function AdminPackagesPage() {
                     setNewPackageId(fallback?.id || '');
                     setIsNewUserOpen(true);
                   }}
-                  className="px-3 py-1.5 rounded-control bg-accent text-accent-ink text-xs font-semibold"
+                  className="px-3 py-1.5 bg-accent hover:bg-accent-deep text-accent-ink text-xs font-semibold rounded-control transition duration-short flex items-center gap-1 shrink-0"
                 >
-                  New user
+                  <Plus className="w-4 h-4" /> Create User
                 </button>
               </div>
             </div>
@@ -973,26 +1028,32 @@ export default function AdminPackagesPage() {
                       className="w-full bg-paper-2 border border-rule rounded-control px-3 py-2 text-sm text-ink outline-none focus:border-focus font-mono"
                     />
                     <div className="flex gap-2">
-                      <select
-                        value={newRole}
-                        onChange={(e) => setNewRole(e.target.value as 'user' | 'admin')}
-                        className="flex-1 bg-paper-2 border border-rule rounded-control px-3 py-2 text-sm text-ink outline-none focus:border-focus"
-                      >
-                        <option value="user">User</option>
-                        <option value="admin">Administrator</option>
-                      </select>
-                      <select
-                        value={newPackageId}
-                        onChange={(e) => setNewPackageId(e.target.value)}
-                        className="flex-1 bg-paper-2 border border-rule rounded-control px-3 py-2 text-sm text-ink outline-none focus:border-focus font-mono"
-                      >
-                        <option value="">No package (cannot call anything)</option>
-                        {packages?.map((pkg) => (
-                          <option key={pkg.id} value={pkg.id}>
-                            {pkg.name} ({pkg.alias})
-                          </option>
-                        ))}
-                      </select>
+                      <div className="relative flex-1">
+                        <select
+                          value={newRole}
+                          onChange={(e) => setNewRole(e.target.value as 'user' | 'admin')}
+                          className="w-full appearance-none bg-paper-2 border border-rule rounded-control pl-3 pr-9 py-2 text-sm text-ink outline-none focus:border-focus"
+                        >
+                          <option value="user">User</option>
+                          <option value="admin">Administrator</option>
+                        </select>
+                        <ChevronDown className="pointer-events-none absolute right-3 top-1/2 h-4 w-4 -translate-y-1/2 text-muted" />
+                      </div>
+                      <div className="relative flex-1">
+                        <select
+                          value={newPackageId}
+                          onChange={(e) => setNewPackageId(e.target.value)}
+                          className="w-full appearance-none bg-paper-2 border border-rule rounded-control pl-3 pr-9 py-2 text-sm text-ink outline-none focus:border-focus font-mono"
+                        >
+                          <option value="">No package (cannot call anything)</option>
+                          {packages?.map((pkg) => (
+                            <option key={pkg.id} value={pkg.id}>
+                              {pkg.name} ({pkg.alias})
+                            </option>
+                          ))}
+                        </select>
+                        <ChevronDown className="pointer-events-none absolute right-3 top-1/2 h-4 w-4 -translate-y-1/2 text-muted" />
+                      </div>
                     </div>
 
                     <div className="flex justify-end gap-3 pt-1">
@@ -1008,7 +1069,7 @@ export default function AdminPackagesPage() {
                         disabled={createUserMutation.isPending}
                         className="px-4 py-2 rounded-control bg-accent text-accent-ink text-xs font-semibold disabled:opacity-50"
                       >
-                        {createUserMutation.isPending ? 'Creating...' : 'Create account'}
+                        {createUserMutation.isPending ? 'Creating...' : 'Create User'}
                       </button>
                     </div>
                   </form>
@@ -1042,34 +1103,42 @@ export default function AdminPackagesPage() {
                       <label className="text-xs font-semibold text-muted uppercase tracking-wider block mb-1">
                         System Role
                       </label>
-                      <select
-                        value={userRole}
-                        onChange={(e) => setUserRole(e.target.value as 'user' | 'admin' | 'root')}
-                        disabled={editingUser.role === 'root'} // Disable root editing for safety
-                        className="w-full bg-paper-2 border border-rule rounded-control px-3 py-2 text-sm text-ink outline-none focus:border-focus"
-                      >
-                        <option value="user">User</option>
-                        <option value="admin">Administrator</option>
-                        {editingUser.role === 'root' && <option value="root">Root</option>}
-                      </select>
+                      <div className="relative">
+                        <select
+                          value={userRole}
+                          onChange={(e) => setUserRole(e.target.value as 'user' | 'admin' | 'root')}
+                          disabled={editingUser.role === 'root'} // Disable root editing for safety
+                          className="peer w-full appearance-none bg-paper-2 border border-rule rounded-control pl-3 pr-9 py-2 text-sm text-ink outline-none focus:border-focus disabled:opacity-55"
+                        >
+                          <option value="user">User</option>
+                          <option value="admin">Administrator</option>
+                          {editingUser.role === 'root' && <option value="root">Root</option>}
+                        </select>
+                        {/* the custom arrow sits outside the select, so it needs its own
+                            dimming — peer-disabled keeps it in step when the field is locked */}
+                        <ChevronDown className="pointer-events-none absolute right-3 top-1/2 h-4 w-4 -translate-y-1/2 text-muted peer-disabled:opacity-55" />
+                      </div>
                     </div>
 
                     <div>
                       <label className="text-xs font-semibold text-muted uppercase tracking-wider block mb-1">
                         Assigned Package Tier
                       </label>
-                      <select
-                        value={userPackageId}
-                        onChange={(e) => setUserPackageId(e.target.value)}
-                        className="w-full bg-paper-2 border border-rule rounded-control px-3 py-2 text-sm text-ink outline-none focus:border-focus font-mono"
-                      >
-                        <option value="">No Package Assigned</option>
-                        {packages?.map((pkg) => (
-                          <option key={pkg.id} value={pkg.id}>
-                            {pkg.name} ({pkg.alias})
-                          </option>
-                        ))}
-                      </select>
+                      <div className="relative">
+                        <select
+                          value={userPackageId}
+                          onChange={(e) => setUserPackageId(e.target.value)}
+                          className="w-full appearance-none bg-paper-2 border border-rule rounded-control pl-3 pr-9 py-2 text-sm text-ink outline-none focus:border-focus font-mono"
+                        >
+                          <option value="">No Package Assigned</option>
+                          {packages?.map((pkg) => (
+                            <option key={pkg.id} value={pkg.id}>
+                              {pkg.name} ({pkg.alias})
+                            </option>
+                          ))}
+                        </select>
+                        <ChevronDown className="pointer-events-none absolute right-3 top-1/2 h-4 w-4 -translate-y-1/2 text-muted" />
+                      </div>
                     </div>
 
                     <div className="flex flex-col gap-2 pt-2 border-t border-rule">
@@ -1192,16 +1261,31 @@ export default function AdminPackagesPage() {
                             <td className="py-2.5 px-3 text-right space-x-1">
                               <button
                                 onClick={() => openUserForm(u)}
-                                className="p-1.5 rounded-control text-muted hover:text-ink hover:bg-paper-3 transition inline-flex items-center align-middle"
-                                title="Edit User"
+                                className="p-1.5 rounded-control text-muted hover:text-ink hover:bg-paper-3 transition inline-flex items-center align-middle disabled:opacity-30 disabled:hover:bg-transparent disabled:hover:text-muted"
+                                title={
+                                  canEditUser(currentUser, u)
+                                    ? 'Edit User'
+                                    : u.id === currentUser?.id
+                                      ? 'Edit your own account from your profile page'
+                                      : `A ${u.role} account is out of your reach`
+                                }
+                                disabled={!canEditUser(currentUser, u)}
                               >
                                 <Edit className="w-4 h-4" />
                               </button>
                               <button
                                 onClick={() => askDeleteUser(u)}
-                                disabled={deleteUserMutation.isPending || u.role === 'root'}
-                                className="p-1.5 rounded-control text-muted hover:text-danger hover:bg-danger-wash border border-transparent hover:border-danger-edge transition inline-flex items-center align-middle disabled:opacity-30"
-                                title="Delete User"
+                                disabled={
+                                  deleteUserMutation.isPending || !canDeleteUser(currentUser, u)
+                                }
+                                className="p-1.5 rounded-control text-muted hover:text-danger hover:bg-danger-wash border border-transparent hover:border-danger-edge transition inline-flex items-center align-middle disabled:opacity-30 disabled:hover:border-transparent disabled:hover:bg-transparent disabled:hover:text-muted"
+                                title={
+                                  canDeleteUser(currentUser, u)
+                                    ? 'Delete User'
+                                    : u.id === currentUser?.id
+                                      ? 'You cannot delete your own account'
+                                      : `A ${u.role} account is out of your reach`
+                                }
                               >
                                 <Trash2 className="w-4 h-4" />
                               </button>
