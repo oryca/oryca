@@ -106,7 +106,7 @@ export function TrafficChart({
           className="w-full"
           viewBox={`0 0 ${width} ${VIEW_H}`}
           role="img"
-          aria-label={`Request volume across ${buckets.length} buckets — ${total.toLocaleString()} requests in total, peaking at ${peak.toLocaleString()} per ${interval}`}
+          aria-label={`Request volume across ${buckets.length} buckets - ${total.toLocaleString()} requests in total, peaking at ${peak.toLocaleString()} per ${interval}`}
         >
           {ticks.map((t, i) => (
             <g key={t}>

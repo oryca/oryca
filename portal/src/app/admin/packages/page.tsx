@@ -13,6 +13,7 @@ import {
   useToast,
   useConfirm,
   SearchableSelect,
+  Select,
 } from '@/components/ui';
 import {
   Users,
@@ -25,7 +26,6 @@ import {
   Server,
   Search,
   X,
-  ChevronDown,
 } from 'lucide-react';
 
 interface RateLimitTier {
@@ -546,7 +546,7 @@ export default function AdminPackagesPage() {
                     <div className="grid grid-cols-2 gap-4">
                       <div>
                         <label className="text-xs font-semibold text-muted uppercase tracking-wider block mb-1">
-                          Alias Key
+                          Alias Key<span className="ui-field__req" aria-hidden="true">*</span>
                         </label>
                         <input
                           type="text"
@@ -560,7 +560,7 @@ export default function AdminPackagesPage() {
                       </div>
                       <div>
                         <label className="text-xs font-semibold text-muted uppercase tracking-wider block mb-1">
-                          Display Name
+                          Display Name<span className="ui-field__req" aria-hidden="true">*</span>
                         </label>
                         <input
                           type="text"
@@ -995,64 +995,85 @@ export default function AdminPackagesPage() {
                     }}
                     className="space-y-3 text-xs"
                   >
-                    <input
-                      required
-                      type="email"
-                      value={newEmail}
-                      onChange={(e) => setNewEmail(e.target.value)}
-                      placeholder="Email address"
-                      className="w-full bg-paper-2 border border-rule rounded-control px-3 py-2 text-sm text-ink outline-none focus:border-focus"
-                    />
-                    <div className="flex gap-2">
+                    <div>
+                      <label className="text-xs font-semibold text-muted uppercase tracking-wider block mb-1">
+                        Email Address<span className="ui-field__req" aria-hidden="true">*</span>
+                      </label>
                       <input
                         required
-                        value={newFirstName}
-                        onChange={(e) => setNewFirstName(e.target.value)}
-                        placeholder="First name"
-                        className="flex-1 min-w-0 bg-paper-2 border border-rule rounded-control px-3 py-2 text-sm text-ink outline-none focus:border-focus"
-                      />
-                      <input
-                        required
-                        value={newLastName}
-                        onChange={(e) => setNewLastName(e.target.value)}
-                        placeholder="Last name"
-                        className="flex-1 min-w-0 bg-paper-2 border border-rule rounded-control px-3 py-2 text-sm text-ink outline-none focus:border-focus"
+                        type="email"
+                        value={newEmail}
+                        onChange={(e) => setNewEmail(e.target.value)}
+                        className="ui-input"
                       />
                     </div>
-                    <input
-                      required
-                      type="text"
-                      value={newPassword}
-                      onChange={(e) => setNewPassword(e.target.value)}
-                      placeholder="Password to hand over"
-                      className="w-full bg-paper-2 border border-rule rounded-control px-3 py-2 text-sm text-ink outline-none focus:border-focus font-mono"
-                    />
                     <div className="flex gap-2">
-                      <div className="relative flex-1">
-                        <select
-                          value={newRole}
-                          onChange={(e) => setNewRole(e.target.value as 'user' | 'admin')}
-                          className="w-full appearance-none bg-paper-2 border border-rule rounded-control pl-3 pr-9 py-2 text-sm text-ink outline-none focus:border-focus"
-                        >
-                          <option value="user">User</option>
-                          <option value="admin">Administrator</option>
-                        </select>
-                        <ChevronDown className="pointer-events-none absolute right-3 top-1/2 h-4 w-4 -translate-y-1/2 text-muted" />
+                      <div className="flex-1 min-w-0">
+                        <label className="text-xs font-semibold text-muted uppercase tracking-wider block mb-1">
+                          First Name<span className="ui-field__req" aria-hidden="true">*</span>
+                        </label>
+                        <input
+                          required
+                          value={newFirstName}
+                          onChange={(e) => setNewFirstName(e.target.value)}
+                          className="ui-input"
+                        />
                       </div>
-                      <div className="relative flex-1">
-                        <select
+                      <div className="flex-1 min-w-0">
+                        <label className="text-xs font-semibold text-muted uppercase tracking-wider block mb-1">
+                          Last Name<span className="ui-field__req" aria-hidden="true">*</span>
+                        </label>
+                        <input
+                          required
+                          value={newLastName}
+                          onChange={(e) => setNewLastName(e.target.value)}
+                          className="ui-input"
+                        />
+                      </div>
+                    </div>
+                    <div>
+                      <label className="text-xs font-semibold text-muted uppercase tracking-wider block mb-1">
+                        Password<span className="ui-field__req" aria-hidden="true">*</span>
+                      </label>
+                      <input
+                        required
+                        type="text"
+                        value={newPassword}
+                        onChange={(e) => setNewPassword(e.target.value)}
+                        placeholder="Password to hand over"
+                        className="ui-input font-mono"
+                      />
+                    </div>
+                    <div className="flex gap-2">
+                      <div className="flex-1 min-w-0">
+                        <label className="text-xs font-semibold text-muted uppercase tracking-wider block mb-1">
+                          System Role
+                        </label>
+                        <Select
+                          value={newRole}
+                          onChange={(val) => setNewRole(val as 'user' | 'admin')}
+                          options={[
+                            { value: 'user', label: 'User' },
+                            { value: 'admin', label: 'Administrator' },
+                          ]}
+                        />
+                      </div>
+                      <div className="flex-1 min-w-0">
+                        <label className="text-xs font-semibold text-muted uppercase tracking-wider block mb-1">
+                          Assigned Package Tier
+                        </label>
+                        <Select
                           value={newPackageId}
-                          onChange={(e) => setNewPackageId(e.target.value)}
-                          className="w-full appearance-none bg-paper-2 border border-rule rounded-control pl-3 pr-9 py-2 text-sm text-ink outline-none focus:border-focus font-mono"
-                        >
-                          <option value="">No package (cannot call anything)</option>
-                          {packages?.map((pkg) => (
-                            <option key={pkg.id} value={pkg.id}>
-                              {pkg.name} ({pkg.alias})
-                            </option>
-                          ))}
-                        </select>
-                        <ChevronDown className="pointer-events-none absolute right-3 top-1/2 h-4 w-4 -translate-y-1/2 text-muted" />
+                          onChange={setNewPackageId}
+                          options={[
+                            { value: '', label: 'No package (cannot call anything)' },
+                            ...(packages || []).map((pkg) => ({
+                              value: pkg.id,
+                              label: pkg.name,
+                              subtext: pkg.alias,
+                            })),
+                          ]}
+                        />
                       </div>
                     </div>
 
@@ -1060,7 +1081,7 @@ export default function AdminPackagesPage() {
                       <button
                         type="button"
                         onClick={() => setIsNewUserOpen(false)}
-                        className="px-4 py-2 text-xs font-semibold text-muted"
+                        className="px-4 py-2 border border-rule hover:border-faint rounded-control text-ink-2 hover:bg-paper-2 transition"
                       >
                         Cancel
                       </button>
@@ -1103,42 +1124,36 @@ export default function AdminPackagesPage() {
                       <label className="text-xs font-semibold text-muted uppercase tracking-wider block mb-1">
                         System Role
                       </label>
-                      <div className="relative">
-                        <select
-                          value={userRole}
-                          onChange={(e) => setUserRole(e.target.value as 'user' | 'admin' | 'root')}
-                          disabled={editingUser.role === 'root'} // Disable root editing for safety
-                          className="peer w-full appearance-none bg-paper-2 border border-rule rounded-control pl-3 pr-9 py-2 text-sm text-ink outline-none focus:border-focus disabled:opacity-55"
-                        >
-                          <option value="user">User</option>
-                          <option value="admin">Administrator</option>
-                          {editingUser.role === 'root' && <option value="root">Root</option>}
-                        </select>
-                        {/* the custom arrow sits outside the select, so it needs its own
-                            dimming — peer-disabled keeps it in step when the field is locked */}
-                        <ChevronDown className="pointer-events-none absolute right-3 top-1/2 h-4 w-4 -translate-y-1/2 text-muted peer-disabled:opacity-55" />
-                      </div>
+                      <Select
+                        value={userRole}
+                        onChange={(val) => setUserRole(val as 'user' | 'admin' | 'root')}
+                        disabled={editingUser.role === 'root'} // Disable root editing for safety
+                        options={[
+                          { value: 'user', label: 'User' },
+                          { value: 'admin', label: 'Administrator' },
+                          ...(editingUser.role === 'root'
+                            ? [{ value: 'root', label: 'Root' }]
+                            : []),
+                        ]}
+                      />
                     </div>
 
                     <div>
                       <label className="text-xs font-semibold text-muted uppercase tracking-wider block mb-1">
                         Assigned Package Tier
                       </label>
-                      <div className="relative">
-                        <select
-                          value={userPackageId}
-                          onChange={(e) => setUserPackageId(e.target.value)}
-                          className="w-full appearance-none bg-paper-2 border border-rule rounded-control pl-3 pr-9 py-2 text-sm text-ink outline-none focus:border-focus font-mono"
-                        >
-                          <option value="">No Package Assigned</option>
-                          {packages?.map((pkg) => (
-                            <option key={pkg.id} value={pkg.id}>
-                              {pkg.name} ({pkg.alias})
-                            </option>
-                          ))}
-                        </select>
-                        <ChevronDown className="pointer-events-none absolute right-3 top-1/2 h-4 w-4 -translate-y-1/2 text-muted" />
-                      </div>
+                      <Select
+                        value={userPackageId}
+                        onChange={setUserPackageId}
+                        options={[
+                          { value: '', label: 'No Package Assigned' },
+                          ...(packages || []).map((pkg) => ({
+                            value: pkg.id,
+                            label: pkg.name,
+                            subtext: pkg.alias,
+                          })),
+                        ]}
+                      />
                     </div>
 
                     <div className="flex flex-col gap-2 pt-2 border-t border-rule">

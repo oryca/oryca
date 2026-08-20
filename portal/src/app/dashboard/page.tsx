@@ -24,9 +24,10 @@ import {
   EmptyState,
   SkeletonLine,
   Loading,
+  Select,
   useToast,
 } from '@/components/ui';
-import { ArrowRight, ChevronDown, RefreshCw, Server, Activity } from 'lucide-react';
+import { ArrowRight, RefreshCw, Server, Activity } from 'lucide-react';
 
 interface DashboardBucket {
   time: string;
@@ -412,44 +413,40 @@ export default function DashboardPage() {
 
       <SectionCard className="mb-6" title="Filters">
         <div className="flex flex-wrap gap-4">
-          <label className="min-w-0 flex-1 basis-56">
-            <span className="ui-field__label">Service</span>
-            <div className="relative">
-              <select
-                className="ui-input appearance-none"
-                value={selectedServiceId}
-                onChange={(e) => setSelectedServiceId(e.target.value)}
-              >
-                <option value="">All services</option>
-                {services?.map((svc) => (
-                  <option key={svc.id} value={svc.id}>
-                    {svc.name} ({svc.basePath})
-                  </option>
-                ))}
-              </select>
-              <ChevronDown className="pointer-events-none absolute right-3 top-1/2 h-4 w-4 -translate-y-1/2 text-muted" />
-            </div>
-          </label>
+          <Select
+            label="Service"
+            className="min-w-0 flex-1 basis-56"
+            value={selectedServiceId}
+            onChange={setSelectedServiceId}
+            searchable
+            searchPlaceholder="Search services by name or path..."
+            options={[
+              { value: '', label: 'All services' },
+              ...(services || []).map((svc) => ({
+                value: svc.id,
+                label: svc.name,
+                subtext: svc.basePath,
+              })),
+            ]}
+          />
 
           {isAdmin && (
-            <label className="min-w-0 flex-1 basis-56">
-              <span className="ui-field__label">Consumer</span>
-              <div className="relative">
-                <select
-                  className="ui-input appearance-none"
-                  value={selectedUserId}
-                  onChange={(e) => setSelectedUserId(e.target.value)}
-                >
-                  <option value="">Everyone</option>
-                  {users?.map((u) => (
-                    <option key={u.id} value={u.id}>
-                      {u.email} ({u.role})
-                    </option>
-                  ))}
-                </select>
-                <ChevronDown className="pointer-events-none absolute right-3 top-1/2 h-4 w-4 -translate-y-1/2 text-muted" />
-              </div>
-            </label>
+            <Select
+              label="Consumer"
+              className="min-w-0 flex-1 basis-56"
+              value={selectedUserId}
+              onChange={setSelectedUserId}
+              searchable
+              searchPlaceholder="Search consumers by email..."
+              options={[
+                { value: '', label: 'Everyone' },
+                ...(users || []).map((u) => ({
+                  value: u.id,
+                  label: u.email,
+                  subtext: u.role,
+                })),
+              ]}
+            />
           )}
         </div>
       </SectionCard>

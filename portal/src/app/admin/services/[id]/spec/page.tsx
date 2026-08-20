@@ -179,7 +179,7 @@ export default function AdminSpecEditorPage() {
 
       <PageHeader
         title="Service spec"
-        description={`The OpenAPI manual for ${service?.name || 'this service'} — it builds the catalog users browse`}
+        description={`The OpenAPI manual for ${service?.name || 'this service'} - it builds the catalog users browse`}
         actions={
           hasSavedSpec && (
             <Button

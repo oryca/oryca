@@ -22,6 +22,7 @@ import {
   EmptyState,
   SkeletonLine,
   Loading,
+  Select,
   useToast,
   useConfirm,
   GeoMapPreview,
@@ -677,7 +678,7 @@ export default function ServicesAndKeysPage() {
                                       <span className="font-mono text-sm text-ink">{path}</span>
                                       {details.summary && (
                                         <span className="text-xs text-muted">
-                                          — {details.summary}
+                                          - {details.summary}
                                         </span>
                                       )}
                                     </div>
@@ -698,45 +699,35 @@ export default function ServicesAndKeysPage() {
                   {detailTab === 'try' && (
                     <div className="space-y-4">
                       <div className="grid grid-cols-1 gap-4 md:grid-cols-2">
-                        <label className="block">
-                          <span className="ui-field__label">Route to call</span>
-                          <select
-                            className="ui-input font-mono"
-                            value={selectedPath}
-                            onChange={(e) => {
-                              setSelectedPath(e.target.value);
-                              const match = selectedService.resourcePaths?.find(
-                                (r) => r.path === e.target.value,
-                              );
-                              if (match?.methods[0]) setSelectedMethod(match.methods[0]);
-                            }}
-                          >
-                            {selectedService.resourcePaths?.map((rp) => (
-                              <option key={rp.path} value={rp.path}>
-                                {rp.path}
-                              </option>
-                            ))}
-                          </select>
-                        </label>
+                        <Select
+                          label="Route to call"
+                          controlClassName="font-mono"
+                          value={selectedPath}
+                          onChange={(val) => {
+                            setSelectedPath(val);
+                            const match = selectedService.resourcePaths?.find(
+                              (r) => r.path === val,
+                            );
+                            if (match?.methods[0]) setSelectedMethod(match.methods[0]);
+                          }}
+                          searchable
+                          searchPlaceholder="Search routes..."
+                          options={(selectedService.resourcePaths || []).map((rp) => ({
+                            value: rp.path,
+                            label: rp.path,
+                          }))}
+                        />
 
-                        <label className="block">
-                          <span className="ui-field__label">API key</span>
-                          <select
-                            className="ui-input"
-                            value={selectedApiKey}
-                            onChange={(e) => setSelectedApiKey(e.target.value)}
-                          >
-                            {apiKeys && apiKeys.length > 0 ? (
-                              apiKeys.map((k) => (
-                                <option key={k.id} value={k.apiKey}>
-                                  {k.name}
-                                </option>
-                              ))
-                            ) : (
-                              <option value="">No keys yet — issue one on the next tab</option>
-                            )}
-                          </select>
-                        </label>
+                        <Select
+                          label="API key"
+                          value={selectedApiKey}
+                          onChange={setSelectedApiKey}
+                          placeholder="No keys yet - issue one on the next tab"
+                          options={(apiKeys || []).map((k) => ({
+                            value: k.apiKey ?? '',
+                            label: k.name,
+                          }))}
+                        />
                       </div>
 
                       {/* Path Parameters Helper */}
@@ -1061,7 +1052,7 @@ export default function ServicesAndKeysPage() {
                             )}
                           </td>
                           <td className="tabular px-3 py-3 whitespace-nowrap text-muted">
-                            {key.createdAt ? new Date(key.createdAt).toLocaleDateString() : '—'}
+                            {key.createdAt ? new Date(key.createdAt).toLocaleDateString() : '-'}
                           </td>
                           <td className="px-3 py-3">
                             <span className="flex justify-end gap-1">

@@ -157,7 +157,7 @@ export default function AdminTransformsPage() {
       if (created) {
         openEditor(created);
       }
-      toast({ tone: 'ok', message: 'Preset applied (disabled) — review rules and enable when ready' });
+      toast({ tone: 'ok', message: 'Preset applied (disabled) - review rules and enable when ready' });
     },
     onError: (err, name) =>
       toastError(messageOf(err, 'Could not apply the preset'), () => applyPreset.mutate(name)),

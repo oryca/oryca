@@ -15,6 +15,7 @@ import {
   SectionCard,
   EmptyState,
   SearchableSelect,
+  Select,
   GeoMapPreview,
 } from '@/components/ui';
 import {
@@ -29,7 +30,6 @@ import {
   Link2,
   Compass,
   ArrowRight,
-  ChevronDown,
   Eye,
   FileText,
 } from 'lucide-react';
@@ -440,7 +440,7 @@ export default function SandboxPage() {
       <NavigationShell>
         <PageHeader
           title="Sandbox"
-          description="Call a published service the way your users will — through the gateway, with a key"
+          description="Call a published service the way your users will - through the gateway, with a key"
         />
         <div className="ui-card">
           <EmptyState
@@ -457,7 +457,7 @@ export default function SandboxPage() {
     <NavigationShell>
       <PageHeader
         title="Sandbox"
-        description="Call a published service the way your users will — through the gateway, with a key"
+        description="Call a published service the way your users will - through the gateway, with a key"
       />
 
       <div className="grid grid-cols-1 gap-6 lg:grid-cols-2">
@@ -468,7 +468,7 @@ export default function SandboxPage() {
               <span className="ui-field__label block mb-1">Preview URL</span>
               <div className="flex items-center gap-2 rounded-control border border-rule bg-paper-2 px-3 py-1.5">
                 <p className="ui-scroll-x min-w-0 flex-1 overflow-x-auto whitespace-nowrap font-mono text-xs text-muted">
-                  {url || '—'}
+                  {url || '-'}
                 </p>
                 <button
                   type="button"
@@ -506,42 +506,31 @@ export default function SandboxPage() {
                 searchPlaceholder="Search services by name or path..."
               />
 
-              <label className="block">
-                <span className="ui-field__label">API key</span>
-                <div className="relative">
-                  <select
-                    className="ui-input appearance-none pr-8"
-                    value={apiKey}
-                    onChange={(e) => setApiKey(e.target.value)}
-                  >
-                    <option value="">No key (expect 401)</option>
-                    {(apiKeys || []).map((k) => (
-                      <option key={k.id} value={k.apiKey || k.key || ''}>
-                        {k.name}
-                      </option>
-                    ))}
-                  </select>
-                  <ChevronDown className="pointer-events-none absolute right-3 top-1/2 h-4 w-4 -translate-y-1/2 text-muted" />
-                </div>
-              </label>
+              <Select
+                label="API key"
+                value={apiKey}
+                onChange={setApiKey}
+                options={[
+                  { value: '', label: 'No key (expect 401)' },
+                  ...(apiKeys || []).map((k) => ({
+                    value: k.apiKey || k.key || '',
+                    label: k.name,
+                  })),
+                ]}
+              />
             </div>
 
             <div>
               <label className="ui-field__label block mb-1">Method and path</label>
               <div className="flex gap-2">
-                <div className="relative shrink-0">
-                  <select
-                    className="ui-input w-auto appearance-none pr-8 font-mono"
-                    aria-label="HTTP method"
-                    value={method}
-                    onChange={(e) => setMethod(e.target.value)}
-                  >
-                    {METHODS.map((m) => (
-                      <option key={m}>{m}</option>
-                    ))}
-                  </select>
-                  <ChevronDown className="pointer-events-none absolute right-3 top-1/2 h-4 w-4 -translate-y-1/2 text-muted" />
-                </div>
+                <Select
+                  className="w-28 shrink-0"
+                  controlClassName="font-mono"
+                  aria-label="HTTP method"
+                  value={method}
+                  onChange={setMethod}
+                  options={METHODS.map((m) => ({ value: m, label: m }))}
+                />
                 <input
                   className="ui-input min-w-0 flex-1 font-mono"
                   aria-label="Path"

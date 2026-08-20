@@ -72,6 +72,20 @@ table, .tabular {
     font-variant-numeric: tabular-nums;
 }
 
+/* Tailwind v4 resets button to cursor:default — restore pointer on anything clickable.
+ * In @layer base so .ui-btn states (not-allowed, progress) and utilities still win. */
+@layer base {
+    :where(button, summary, [role="button"], [role="tab"],
+           label:has(> input[type="checkbox"]), label:has(> input[type="radio"]),
+           input[type="checkbox"], input[type="radio"], select) {
+        cursor: pointer;
+    }
+    :where(button, [role="button"], input, select):disabled,
+    :where(button, [role="button"])[aria-disabled="true"] {
+        cursor: not-allowed;
+    }
+}
+
 /* Custom scrollbars */
 ::-webkit-scrollbar {
   width: 8px;
@@ -233,6 +247,62 @@ textarea.ui-input { height: auto; min-height: 6rem; padding-block: var(--space-2
 .ui-input:disabled { opacity: 0.55; cursor: not-allowed; }
 .ui-input[aria-invalid="true"] { border-color: var(--color-danger); }
 .ui-input[data-state="success"] { border-color: var(--color-ok-edge); }
+
+/* ---- Select ---- */
+/* Same .ui-input box as a text field, with the chevron laid over its
+ * reserved 2rem right gutter — so no pr-* is needed at the call site. */
+.ui-select { position: relative; display: block; }
+.ui-select__control { appearance: none; }
+.ui-select__chevron {
+    position: absolute;
+    top: 50%;
+    right: var(--space-xs);
+    width: 1rem;
+    height: 1rem;
+    transform: translateY(-50%);
+    pointer-events: none;
+    color: var(--color-muted);
+}
+.ui-select__control:disabled ~ .ui-select__chevron { opacity: 0.55; }
+
+/* sm — for the compact rows in the service path editor, which pack a select
+ * between a text input and an icon button; full height breaks that density */
+.ui-select--sm .ui-select__control {
+    height: 1.75rem;
+    padding-inline: 0.625rem;
+    padding-right: 1.75rem;
+    font-size: var(--text-xs);
+}
+.ui-select--sm .ui-select__chevron {
+    right: var(--space-2xs);
+    width: 0.875rem;
+    height: 0.875rem;
+}
+
+/* Panel is fixed and portalled to <body>; JS supplies left/width/top/bottom */
+.ui-select__panel {
+    position: fixed;
+    z-index: 60;
+    background: var(--color-paper);
+    border: 1px solid var(--color-rule);
+    border-radius: var(--radius-surface);
+    box-shadow: 0 8px 24px rgb(0 0 0 / 0.12);
+    animation: ui-fade-in var(--dur-short) var(--ease-out) both;
+}
+
+/* Invisible but still laid out, so the browser can anchor its validation
+ * bubble to it — display:none or hidden would make it unreportable */
+.ui-select__validity {
+    position: absolute;
+    left: var(--space-xs);
+    bottom: 0;
+    width: 1px;
+    height: 1px;
+    padding: 0;
+    border: 0;
+    opacity: 0;
+    pointer-events: none;
+}
 
 /* helper จองความสูงไว้ 1 บรรทัด error มาแทนที่ ไม่ดันหน้า */
 .ui-field__note {

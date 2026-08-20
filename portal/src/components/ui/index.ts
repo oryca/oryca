@@ -7,6 +7,9 @@ export type { ButtonProps } from './Button';
 export { Field, TextAreaField } from './Field';
 export type { FieldProps, TextAreaFieldProps } from './Field';
 
+export { Select, SearchableSelect } from './Select';
+export type { SelectProps, SearchableSelectProps, SelectOption } from './Select';
+
 export { PageHeader } from './PageHeader';
 export { SectionCard } from './SectionCard';
 export { EmptyState } from './EmptyState';
@@ -19,9 +22,6 @@ export { SkeletonLine, SkeletonCard, SkeletonRows, Loading } from './Skeleton';
 export { ToastProvider, useToast } from './Toast';
 export { ConfirmProvider, useConfirm } from './ConfirmDialog';
 export type { ConfirmRequest } from './ConfirmDialog';
-
-export { SearchableSelect } from './SearchableSelect';
-export type { SearchableSelectProps, SelectOption } from './SearchableSelect';
 
 export { GeoMapPreview } from './GeoMapPreview';
 export type { GeoMapPreviewProps } from './GeoMapPreview';

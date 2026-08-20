@@ -8,6 +8,7 @@ import Link from 'next/link';
 import {
   PageHeader,
   SkeletonLine,
+  Select,
   useToast,
   useConfirm,
 } from '@/components/ui';
@@ -22,8 +23,23 @@ import {
   Search,
   X,
   Filter,
-  ChevronDown,
 } from 'lucide-react';
+
+const SERVICE_TYPE_OPTIONS = [
+  { value: 'General', label: 'General API' },
+  { value: 'OGC_API_Features', label: 'OGC API Features' },
+  { value: 'OGC_API_STAC', label: 'OGC API STAC' },
+  { value: 'OGC_API_Styles', label: 'OGC API Styles' },
+  { value: 'OGC_API_SensorThings', label: 'OGC API SensorThings' },
+  { value: 'OGC_API_Tiles', label: 'OGC API Tiles' },
+];
+
+const METHOD_OPTIONS = ['GET', 'POST', 'PUT', 'DELETE'].map((m) => ({ value: m, label: m }));
+
+const TARGET_OPTIONS = [
+  { value: '__api__', label: 'Forward to a URL' },
+  { value: '__static__', label: 'Answer with a fixed body' },
+];
 
 interface GatewaySource {
   id: string;
@@ -563,7 +579,7 @@ function ServicesManager({
                     value={name}
                     onChange={(e) => setName(e.target.value)}
                     placeholder="e.g. STAC Features API"
-                    className="w-full bg-paper-2 border border-rule rounded-control px-3 py-2 text-sm text-ink outline-none focus:border-focus"
+                    className="ui-input"
                   />
                 </div>
                 <div>
@@ -576,7 +592,7 @@ function ServicesManager({
                     value={basePath}
                     onChange={(e) => setBasePath(e.target.value)}
                     placeholder="/my-service"
-                    className="w-full bg-paper-2 border border-rule rounded-control px-3 py-2 text-sm text-ink outline-none focus:border-focus font-mono"
+                    className="ui-input font-mono"
                   />
                 </div>
               </div>
@@ -590,7 +606,7 @@ function ServicesManager({
                   value={description}
                   onChange={(e) => setDescription(e.target.value)}
                   placeholder="Geospatial STAC server description"
-                  className="w-full bg-paper-2 border border-rule rounded-control px-3 py-2 text-sm text-ink outline-none focus:border-focus"
+                  className="ui-input"
                 />
               </div>
 
@@ -599,28 +615,14 @@ function ServicesManager({
                   <label className="text-xs font-semibold text-muted uppercase tracking-wider block mb-1">
                     Service Type<span className="ui-field__req" aria-hidden="true">*</span>
                   </label>
-                  <div className="relative">
-                    <select
-                      required
-                      value={type}
-                      onChange={(e) => {
-                        // hold the select on the current type until confirmed —
-                        // setType moves it if applyServiceType gets that far
-                        const picked = e.target.value;
-                        e.target.value = type;
-                        applyServiceType(picked);
-                      }}
-                      className="w-full appearance-none bg-paper-2 border border-rule rounded-control pl-3 pr-9 py-2 text-sm text-ink outline-none focus:border-focus"
-                    >
-                      <option value="General">General API</option>
-                      <option value="OGC_API_Features">OGC API Features</option>
-                      <option value="OGC_API_STAC">OGC API STAC</option>
-                      <option value="OGC_API_Styles">OGC API Styles</option>
-                      <option value="OGC_API_SensorThings">OGC API SensorThings</option>
-                      <option value="OGC_API_Tiles">OGC API Tiles</option>
-                    </select>
-                    <ChevronDown className="pointer-events-none absolute right-3 top-1/2 h-4 w-4 -translate-y-1/2 text-muted" />
-                  </div>
+                  {/* value stays on the current type until applyServiceType
+                      confirms and calls setType */}
+                  <Select
+                    required
+                    value={type}
+                    onChange={applyServiceType}
+                    options={SERVICE_TYPE_OPTIONS}
+                  />
                 </div>
 
                 <div className="flex items-center gap-2 pt-5">
@@ -688,35 +690,25 @@ function ServicesManager({
                           />
                         </div>
 
-                        <div className="relative flex-1">
-                          <select
-                            value={rp.methods[0] || 'GET'}
-                            onChange={(e) => updatePathRow(index, 'methods', [e.target.value])}
-                            className="w-full appearance-none bg-paper border border-rule rounded-control pl-2.5 pr-7 py-1 text-xs text-ink outline-none"
-                          >
-                            <option value="GET">GET</option>
-                            <option value="POST">POST</option>
-                            <option value="PUT">PUT</option>
-                            <option value="DELETE">DELETE</option>
-                          </select>
-                          <ChevronDown className="pointer-events-none absolute right-2 top-1/2 h-3.5 w-3.5 -translate-y-1/2 text-muted" />
-                        </div>
+                        <Select
+                          size="sm"
+                          className="flex-1"
+                          aria-label="Method"
+                          value={rp.methods[0] || 'GET'}
+                          onChange={(val) => updatePathRow(index, 'methods', [val])}
+                          options={METHOD_OPTIONS}
+                        />
 
-                        <div className="relative flex-[2]">
-                          <select
-                            required
-                            value={targetSelectValue(rp)}
-                            onChange={(e) => setRowTarget(index, e.target.value)}
-                            className="w-full appearance-none bg-paper border border-rule rounded-control pl-2.5 pr-7 py-1 text-xs text-ink outline-none"
-                          >
-                            <option value="" disabled>
-                              Map upstream...
-                            </option>
-                            <option value="__api__">Forward to a URL</option>
-                            <option value="__static__">Answer with a fixed body</option>
-                          </select>
-                          <ChevronDown className="pointer-events-none absolute right-2 top-1/2 h-3.5 w-3.5 -translate-y-1/2 text-muted" />
-                        </div>
+                        <Select
+                          size="sm"
+                          className="flex-[2]"
+                          required
+                          aria-label="Upstream mapping"
+                          placeholder="Map upstream..."
+                          value={targetSelectValue(rp)}
+                          onChange={(val) => setRowTarget(index, val)}
+                          options={TARGET_OPTIONS}
+                        />
 
                         <button
                           type="button"
