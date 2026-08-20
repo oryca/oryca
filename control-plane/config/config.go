@@ -47,9 +47,27 @@ type Config struct {
 	RootEmail    string
 	RootPassword string
 
+	// SMTP อ่านจาก env อย่างเดียว ครั้งเดียวตอน startup (Host ว่าง = ปิดการส่งเมล)
+	SMTP *SMTPConfig
+
+	// TTL ของลิงก์ในอีเมล (นาที): ยืนยันอีเมล และตั้งรหัสผ่านใหม่
+	MailVerifyTTLMin int
+	MailResetTTLMin  int
+
 	// LogRetentionDays คือ TTL ของ collection access_logs. เปลี่ยนค่าแล้ว bootstrap collMod ให้เอง
 	LogRetentionDays  int
 	LogConsumerEnable bool
+}
+
+type SMTPConfig struct {
+	Host          string
+	Port          string
+	User          string
+	Password      string
+	Auth          bool
+	TlsSkipVerify bool
+	SenderName    string
+	SenderEmail   string
 }
 
 func Load() *Config {
@@ -94,6 +112,20 @@ func Load() *Config {
 		SeedDir:      getEnv("ORYCA_API_SEED_DIR", ""),
 		RootEmail:    getEnv("ORYCA_API_ROOT_EMAIL", ""),
 		RootPassword: getEnv("ORYCA_API_ROOT_PASSWORD", ""),
+
+		SMTP: &SMTPConfig{
+			Host:          getEnv("ORYCA_API_SMTP_HOST", ""),
+			Port:          getEnv("ORYCA_API_SMTP_PORT", "587"),
+			User:          getEnv("ORYCA_API_SMTP_USER", ""),
+			Password:      getEnv("ORYCA_API_SMTP_PASSWORD", ""),
+			Auth:          getEnvBool("ORYCA_API_SMTP_AUTH", true),
+			TlsSkipVerify: getEnvBool("ORYCA_API_SMTP_TLS_SKIP_VERIFY", false),
+			SenderName:    getEnv("ORYCA_API_SMTP_SENDER_NAME", "Oryca"),
+			SenderEmail:   getEnv("ORYCA_API_SMTP_SENDER_EMAIL", ""),
+		},
+
+		MailVerifyTTLMin: getEnvInt("ORYCA_API_MAIL_VERIFY_TTL_MIN", 1440),
+		MailResetTTLMin:  getEnvInt("ORYCA_API_MAIL_RESET_TTL_MIN", 1440),
 	}
 }
 
@@ -116,6 +148,19 @@ func getEnvInt(key string, defaultVal int) int {
 		return defaultVal
 	}
 	return n
+}
+
+// getEnvBool อ่าน env เป็น bool. ว่างหรือแปลงไม่ได้ใช้ค่า default
+func getEnvBool(key string, defaultVal bool) bool {
+	val := os.Getenv(key)
+	if val == "" {
+		return defaultVal
+	}
+	b, err := strconv.ParseBool(val)
+	if err != nil {
+		return defaultVal
+	}
+	return b
 }
 
 // mustGetEnv หยุด process ถ้าไม่มี env ที่จำเป็น
