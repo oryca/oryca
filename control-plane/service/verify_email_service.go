@@ -28,52 +28,43 @@ type verifyEmailUserRepo interface {
 	Update(ctx context.Context, id bson.ObjectID, fields bson.M) error
 }
 
-type verifyEmailMailServerSvc interface {
-	GetDefault(ctx context.Context) (*model.MailServer, error)
-}
-
 // verifyEmailGatewayPublisher is the narrow slice of GatewayEventPublisher this service needs.
 type verifyEmailGatewayPublisher interface {
 	Publish(eventType string, payload any)
 }
 
 type VerifyEmailService struct {
-	cache         verifyEmailCacher
-	userRepo      verifyEmailUserRepo
-	mailSvc       *MailService
-	mailServerSvc verifyEmailMailServerSvc
-	publisher     verifyEmailGatewayPublisher
+	cache     verifyEmailCacher
+	userRepo  verifyEmailUserRepo
+	mailSvc   *MailService
+	ttl       time.Duration
+	publisher verifyEmailGatewayPublisher
 }
 
 func NewVerifyEmailService(
 	cache verifyEmailCacher,
 	userRepo verifyEmailUserRepo,
 	mailSvc *MailService,
-	mailServerSvc verifyEmailMailServerSvc,
 	publisher verifyEmailGatewayPublisher,
+	ttl time.Duration,
 ) *VerifyEmailService {
 	return &VerifyEmailService{
-		cache:         cache,
-		userRepo:      userRepo,
-		mailSvc:       mailSvc,
-		mailServerSvc: mailServerSvc,
-		publisher:     publisher,
+		cache:     cache,
+		userRepo:  userRepo,
+		mailSvc:   mailSvc,
+		ttl:       ttl,
+		publisher: publisher,
 	}
 }
 
 // Send generates a one-time token, stores it in Redis, then sends the verify-email to the user.
 func (s *VerifyEmailService) Send(ctx context.Context, user *model.User, callbackUrl string) (*model.SendEmailResult, error) {
-	ms, err := s.mailServerSvc.GetDefault(ctx)
-	if err != nil {
-		return nil, fmt.Errorf("verify-email: get mail server: %w", err)
-	}
-
 	token, err := tool.GenerateToken(32)
 	if err != nil {
 		return nil, fmt.Errorf("verify-email: generate token: %w", err)
 	}
 
-	ttl := time.Duration(ms.ResetPasswordExpired) * time.Second
+	ttl := s.ttl
 	if err := s.cache.Set(ctx, token, user.ID.Hex(), ttl); err != nil {
 		return nil, fmt.Errorf("verify-email: store token: %w", err)
 	}

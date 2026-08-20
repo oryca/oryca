@@ -56,7 +56,7 @@ func Run() {
 	repos := buildRepos(db)
 	caches := buildCaches(redisClient, cacheTTL)
 
-	svcs := buildServices(repos, caches, redisClient, routingTTL, gwPublisher)
+	svcs := buildServices(cfg, repos, caches, redisClient, routingTTL, gwPublisher)
 
 	// Seed before any traffic arrives. First boot only, nothing existing is overwritten (see package seed)
 	runSeed(cfg, repos)
@@ -332,14 +332,11 @@ func buildCaches(rc *redis.Client, ttl time.Duration) appCaches {
 	}
 }
 
-func buildServices(r appRepos, c appCaches, rc *redis.Client, routingTTL time.Duration, gwPublisher *service.GatewayEventPublisher) appServices {
-	mailSvc := service.NewMailService(
-		service.NewMailServerService(r.mailServer, c.mailServer),
-		service.NewEmailTemplateService(r.emailTemplate),
-	)
+func buildServices(cfg *config.Config, r appRepos, c appCaches, rc *redis.Client, routingTTL time.Duration, gwPublisher *service.GatewayEventPublisher) appServices {
+	mailSvc := service.NewMailService(cfg.SMTP)
 	configSvc := service.NewConfigurationService(r.config, c.config)
-	setPasswordSvc := service.NewSetPasswordService(c.setPassword, r.user, mailSvc, service.NewMailServerService(r.mailServer, c.mailServer))
-	verifyEmailSvc := service.NewVerifyEmailService(c.verifyEmail, r.user, mailSvc, service.NewMailServerService(r.mailServer, c.mailServer), gwPublisher)
+	setPasswordSvc := service.NewSetPasswordService(c.setPassword, r.user, mailSvc, time.Duration(cfg.MailResetTTLMin)*time.Minute)
+	verifyEmailSvc := service.NewVerifyEmailService(c.verifyEmail, r.user, mailSvc, gwPublisher, time.Duration(cfg.MailVerifyTTLMin)*time.Minute)
 	gatewaySync := service.NewGatewayRedisSync(rc, routingTTL, gwPublisher)
 
 	notificationSvc := service.NewNotificationService(r.notification, rc)

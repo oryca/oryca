@@ -33,48 +33,39 @@ type setPasswordUserRepo interface {
 	Update(ctx context.Context, id bson.ObjectID, fields bson.M) error
 }
 
-type setPasswordMailServerSvc interface {
-	GetDefault(ctx context.Context) (*model.MailServer, error)
-}
-
 type setPasswordMailSender interface {
 	SendTemplate(ctx context.Context, toEmail, alias string, vars map[string]string) error
 }
 
 type SetPasswordService struct {
-	cache         setPasswordCacher
-	userRepo      setPasswordUserRepo
-	mailSvc       setPasswordMailSender
-	mailServerSvc setPasswordMailServerSvc
+	cache    setPasswordCacher
+	userRepo setPasswordUserRepo
+	mailSvc  setPasswordMailSender
+	ttl      time.Duration
 }
 
 func NewSetPasswordService(
 	cache setPasswordCacher,
 	userRepo setPasswordUserRepo,
-	mailSvc *MailService,
-	mailServerSvc setPasswordMailServerSvc,
+	mailSvc setPasswordMailSender,
+	ttl time.Duration,
 ) *SetPasswordService {
 	return &SetPasswordService{
-		cache:         cache,
-		userRepo:      userRepo,
-		mailSvc:       mailSvc,
-		mailServerSvc: mailServerSvc,
+		cache:    cache,
+		userRepo: userRepo,
+		mailSvc:  mailSvc,
+		ttl:      ttl,
 	}
 }
 
-// Send generates a one-time token, stores it in Redis with TTL from mail server config, and sends an email to the user with the token link.
+// Send generates a one-time token, stores it in Redis with the configured TTL, and sends an email to the user with the token link.
 func (s *SetPasswordService) Send(ctx context.Context, user *model.User, callbackUrl string) (*model.SendEmailResult, error) {
-	ms, err := s.mailServerSvc.GetDefault(ctx)
-	if err != nil {
-		return nil, fmt.Errorf("set-password: get mail server: %w", err)
-	}
-
 	token, err := tool.GenerateToken(32)
 	if err != nil {
 		return nil, fmt.Errorf("set-password: generate token: %w", err)
 	}
 
-	ttl := time.Duration(ms.ResetPasswordExpired) * time.Second
+	ttl := s.ttl
 	if err := s.cache.Set(ctx, token, user.ID.Hex(), ttl); err != nil {
 		return nil, fmt.Errorf("set-password: store token: %w", err)
 	}

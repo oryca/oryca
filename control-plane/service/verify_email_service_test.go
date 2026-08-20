@@ -11,6 +11,7 @@ import (
 	"github.com/stretchr/testify/require"
 	"go.mongodb.org/mongo-driver/v2/bson"
 
+	"github.com/oryca/oryca/control-plane/config"
 	"github.com/oryca/oryca/control-plane/model"
 )
 
@@ -201,5 +202,25 @@ func TestVerifyEmailServiceSendByEmail(t *testing.T) {
 		_, err := svc.SendByEmail(ctx, "user@test.com", callbackUrl)
 
 		assert.ErrorIs(t, err, ErrUserNotEnabledAuth)
+	})
+}
+
+func TestVerifyEmailServiceSend(t *testing.T) {
+	ctx := context.Background()
+	veTTL := 30 * time.Minute
+	callbackUrl := "https://app.example.com/verify"
+
+	t.Run("TTL ต้องมาจากค่าที่ inject เข้ามา ไม่ใช่ของ reset-password", func(t *testing.T) {
+		cache := new(mockVerifyEmailCache)
+		userID := bson.NewObjectID()
+		user := &model.User{ID: userID, Email: "user@test.com", FirstName: "John"}
+
+		cache.On("Set", ctx, mock.Anything, userID.Hex(), veTTL).Return(nil)
+
+		svc := &VerifyEmailService{cache: cache, mailSvc: NewMailService(&config.SMTPConfig{}), ttl: veTTL}
+		_, err := svc.Send(ctx, user, callbackUrl)
+
+		require.ErrorIs(t, err, ErrMailDisabled)
+		cache.AssertCalled(t, "Set", ctx, mock.Anything, userID.Hex(), veTTL)
 	})
 }
