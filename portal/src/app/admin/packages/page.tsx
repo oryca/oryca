@@ -1,8 +1,10 @@
 'use client';
 
-import React, { useState } from 'react';
+import React, { useRef, useState } from 'react';
 import { useQuery, useMutation, useQueryClient } from '@tanstack/react-query';
-import { api, type UserSession } from '@/lib/api';
+import { api, fetchAll, type UserSession } from '@/lib/api';
+import { useInfiniteList } from '@/lib/useInfiniteList';
+import { useDebounced } from '@/lib/useDebounced';
 import { useAuth } from '@/app/providers';
 import NavigationShell from '@/components/NavigationShell';
 import {
@@ -14,6 +16,7 @@ import {
   useConfirm,
   SearchableSelect,
   Select,
+  InfiniteScrollSentinel,
 } from '@/components/ui';
 import {
   Users,
@@ -59,6 +62,15 @@ interface PackagePath {
       tiers?: RateLimitTier[];
     };
   };
+}
+
+/** `_id` is the raw Mongo key, kept because some link rows still carry that shape. */
+interface ServiceOption {
+  id: string;
+  _id?: string;
+  name: string;
+  basePath: string;
+  type?: string;
 }
 
 interface PackageSvcLink {
@@ -131,6 +143,11 @@ export default function AdminPackagesPage() {
   // Search & filter states
   const [packageSearch, setPackageSearch] = useState('');
   const [userSearch, setUserSearch] = useState('');
+  // Both searches run server-side now — a client filter would only see the loaded page.
+  const debouncedPackageSearch = useDebounced(packageSearch.trim());
+  const debouncedUserSearch = useDebounced(userSearch.trim());
+  const packagesScrollRef = useRef<HTMLDivElement>(null);
+  const usersScrollRef = useRef<HTMLDivElement>(null);
   const [isNewUserOpen, setIsNewUserOpen] = useState(false);
   const [newEmail, setNewEmail] = useState('');
   const [newFirstName, setNewFirstName] = useState('');
@@ -169,20 +186,31 @@ export default function AdminPackagesPage() {
   const [formError, setFormError] = useState<string | null>(null);
 
   // Queries
-  const { data: packages, isLoading: isLoadingPackages } = useQuery<Package[]>({
-    queryKey: ['admin-packages'],
-    queryFn: async () => {
-      const res = await api.get('/packages');
-      return res.data.items || [];
-    },
+  const {
+    items: packages,
+    isLoading: isLoadingPackages,
+    hasNextPage: hasMorePackages,
+    isFetchingNextPage: isFetchingMorePackages,
+    fetchNextPage: fetchMorePackages,
+  } = useInfiniteList<Package>(
+    ['admin-packages'],
+    '/packages',
+    debouncedPackageSearch ? { search: debouncedPackageSearch } : undefined
+  );
+
+  // The Users tab resolves a user's packageId against this and offers it in a dropdown,
+  // so it needs every package — the paged list above is scrolled and search-filtered.
+  const { data: packageOptions } = useQuery<Package[]>({
+    // Nested under 'admin-packages' so the existing invalidations refresh it too.
+    queryKey: ['admin-packages', 'options'],
+    queryFn: () => fetchAll<Package>('/packages'),
+    enabled: activeTab === 'users',
   });
 
-  const { data: services } = useQuery<{ id: string; name: string; basePath: string; type?: string }[]>({
+  // Every service has to be offered in the link picker, so this one reads all pages.
+  const { data: services } = useQuery<ServiceOption[]>({
     queryKey: ['admin-services-list'],
-    queryFn: async () => {
-      const res = await api.get('/services');
-      return res.data.items || [];
-    },
+    queryFn: () => fetchAll<ServiceOption>('/services'),
   });
 
   // Which package a self-registered user gets. An account created here is given
@@ -196,24 +224,25 @@ export default function AdminPackagesPage() {
     enabled: activeTab === 'users',
   });
 
-  const { data: users, isLoading: isLoadingUsers } = useQuery<User[]>({
-    queryKey: ['admin-users', userSearch],
-    queryFn: async () => {
-      const res = await api.get('/users', {
-        params: userSearch ? { search: userSearch } : undefined,
-      });
-      return res.data.items || [];
-    },
-    enabled: activeTab === 'users',
-  });
+  const {
+    items: users,
+    isLoading: isLoadingUsers,
+    hasNextPage: hasMoreUsers,
+    isFetchingNextPage: isFetchingMoreUsers,
+    fetchNextPage: fetchMoreUsers,
+  } = useInfiniteList<User>(
+    ['admin-users'],
+    '/users',
+    debouncedUserSearch ? { search: debouncedUserSearch } : undefined,
+    { enabled: activeTab === 'users' }
+  );
 
-  // Query Package Service links
+  // Query Package Service links — drives the checkbox state, so it needs every link.
   const { data: activeLinks, refetch: refetchLinks } = useQuery<PackageSvcLink[]>({
     queryKey: ['package-links', linkingPackage?.id],
     queryFn: async () => {
       if (!linkingPackage) return [];
-      const res = await api.get(`/packages/${linkingPackage.id}/services`);
-      return res.data.items || [];
+      return fetchAll<PackageSvcLink>(`/packages/${linkingPackage.id}/services`);
     },
     enabled: !!linkingPackage && isLinkModalOpen,
   });
@@ -809,7 +838,7 @@ export default function AdminPackagesPage() {
                       <div className="divide-y divide-rule border border-rule rounded-surface overflow-hidden bg-paper">
                         {activeLinks?.map((link) => {
                           const serviceId = link.service?.id || link.serviceId || '';
-                          const svc = link.service || services?.find((s) => s.id === serviceId || (s as any)._id === serviceId);
+                          const svc = link.service || services?.find((s) => s.id === serviceId || s._id === serviceId);
                           const svcName = svc?.name || link.service?.name || 'API Service';
                           const svcBasePath = svc?.basePath || link.service?.basePath || '';
                           const svcType = svc?.type || link.service?.type;
@@ -866,27 +895,25 @@ export default function AdminPackagesPage() {
                   ))}
                 </div>
               </Loading>
-            ) : !packages || packages.length === 0 ? (
+            ) : packages.length === 0 ? (
               <div className="ui-card">
                 <EmptyState
                   icon={<Layers className="h-5 w-5" />}
-                  title="No packages yet"
-                  description="Create one to set how many calls a user gets per window."
+                  title={debouncedPackageSearch ? 'No packages match that search' : 'No packages yet'}
+                  description={
+                    debouncedPackageSearch
+                      ? `Nothing matches "${debouncedPackageSearch}". Try part of a name or alias.`
+                      : 'Create one to set how many calls a user gets per window.'
+                  }
                 />
               </div>
             ) : (
+              <div
+                ref={packagesScrollRef}
+                className="max-h-[min(944px,70vh)] overflow-y-auto"
+              >
               <div className="grid grid-cols-1 md:grid-cols-2 gap-4">
-                {(packages || [])
-                  .filter((pkg) => {
-                    if (!packageSearch.trim()) return true;
-                    const q = packageSearch.toLowerCase();
-                    return (
-                      pkg.name.toLowerCase().includes(q) ||
-                      pkg.alias.toLowerCase().includes(q) ||
-                      pkg.description?.toLowerCase().includes(q)
-                    );
-                  })
-                  .map((pkg) => (
+                {packages.map((pkg) => (
                   <div key={pkg.id} className="bg-paper border border-rule rounded-surface p-4 shadow-sm hover:border-faint transition flex flex-col justify-between h-44">
                     <div>
                       <div className="flex items-center justify-between gap-2">
@@ -938,6 +965,13 @@ export default function AdminPackagesPage() {
                   </div>
                 ))}
               </div>
+              <InfiniteScrollSentinel
+                rootRef={packagesScrollRef}
+                hasNextPage={hasMorePackages}
+                isFetchingNextPage={isFetchingMorePackages}
+                fetchNextPage={fetchMorePackages}
+              />
+              </div>
             )}
           </div>
         )}
@@ -961,7 +995,7 @@ export default function AdminPackagesPage() {
                   type="button"
                   onClick={() => {
                     setNewUserError(null);
-                    const fallback = packages?.find((p) => p.alias === defaultPackageAlias);
+                    const fallback = packageOptions?.find((p) => p.alias === defaultPackageAlias);
                     setNewPackageId(fallback?.id || '');
                     setIsNewUserOpen(true);
                   }}
@@ -1067,7 +1101,7 @@ export default function AdminPackagesPage() {
                           onChange={setNewPackageId}
                           options={[
                             { value: '', label: 'No package (cannot call anything)' },
-                            ...(packages || []).map((pkg) => ({
+                            ...(packageOptions || []).map((pkg) => ({
                               value: pkg.id,
                               label: pkg.name,
                               subtext: pkg.alias,
@@ -1147,7 +1181,7 @@ export default function AdminPackagesPage() {
                         onChange={setUserPackageId}
                         options={[
                           { value: '', label: 'No Package Assigned' },
-                          ...(packages || []).map((pkg) => ({
+                          ...(packageOptions || []).map((pkg) => ({
                             value: pkg.id,
                             label: pkg.name,
                             subtext: pkg.alias,
@@ -1219,23 +1253,26 @@ export default function AdminPackagesPage() {
                   ))}
                 </div>
               </Loading>
-            ) : !users || users.length === 0 ? (
+            ) : users.length === 0 ? (
               <div className="ui-card">
                 <EmptyState
                   icon={<Users className="h-5 w-5" />}
-                  title={userSearch ? 'Nobody matches that search' : 'No users yet'}
+                  title={debouncedUserSearch ? 'Nobody matches that search' : 'No users yet'}
                   description={
-                    userSearch
-                      ? `No account matches "${userSearch}". Try part of an email address.`
+                    debouncedUserSearch
+                      ? `No account matches "${debouncedUserSearch}". Try part of an email address.`
                       : 'Accounts show up here once people sign up, or once you create one.'
                   }
                 />
               </div>
             ) : (
               <div className="bg-paper border border-rule rounded-surface overflow-hidden shadow-sm">
-                <div className="overflow-x-auto">
+                <div
+                  ref={usersScrollRef}
+                  className="max-h-[min(430px,70vh)] overflow-x-auto overflow-y-auto"
+                >
                   <table className="w-full text-left border-collapse text-xs">
-                    <thead>
+                    <thead className="sticky top-0 z-10">
                       <tr className="border-b border-rule text-muted text-[10px] uppercase font-bold tracking-wider bg-paper-2">
                         <th className="py-2 px-3">Email Address</th>
                         <th className="py-2 px-3">Role</th>
@@ -1247,7 +1284,7 @@ export default function AdminPackagesPage() {
                     </thead>
                     <tbody className="divide-y divide-rule font-sans">
                       {users.map((u) => {
-                        const pkg = packages?.find((p) => p.id === u.packageId);
+                        const pkg = packageOptions?.find((p) => p.id === u.packageId);
                         return (
                           <tr key={u.id} className="hover:bg-paper-2 transition-colors">
                             <td className="py-2.5 px-3 font-semibold text-ink">{u.email}</td>
@@ -1310,6 +1347,12 @@ export default function AdminPackagesPage() {
                       })}
                     </tbody>
                   </table>
+                  <InfiniteScrollSentinel
+                    rootRef={usersScrollRef}
+                    hasNextPage={hasMoreUsers}
+                    isFetchingNextPage={isFetchingMoreUsers}
+                    fetchNextPage={fetchMoreUsers}
+                  />
                 </div>
               </div>
             )}

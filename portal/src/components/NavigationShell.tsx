@@ -209,7 +209,7 @@ export default function NavigationShell({ children }: { children: React.ReactNod
     async function getUnread() {
       try {
         const res = await api.get('/notifications/unread-count');
-        if (!cancelled) setUnreadCount(res.data.unreadCount || 0);
+        if (!cancelled) setUnreadCount(res.data.count || 0);
       } catch {
         // เงียบไว้ — ตัวเลขแจ้งเตือนพลาดได้ ไม่ควรรบกวนผู้ใช้
       }

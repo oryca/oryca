@@ -28,6 +28,17 @@ export interface UserSession {
   packageId?: string;
 }
 
+/** Rows per request for every list call. The backend's own default is 10. */
+export const LIST_PAGE_SIZE = 10;
+
+// Envelope every control-plane list endpoint returns.
+// numberMatched is the total behind the filter, ignoring limit/offset.
+export interface ListResponse<T> {
+  numberMatched: number;
+  numberReturned: number;
+  items: T[];
+}
+
 export interface AuthResponse {
   user: UserSession;
   accessToken: string;
@@ -82,9 +93,15 @@ api.interceptors.request.use((config) => {
 
 // Flag to prevent infinite retry loops during refresh
 let isRefreshing = false;
-let failedQueue: any[] = [];
 
-const processQueue = (error: any, token: string | null = null) => {
+/** A request parked while the token refreshes, replayed once it lands. */
+interface PendingRequest {
+  resolve: (token: string | null) => void;
+  reject: (reason: unknown) => void;
+}
+let failedQueue: PendingRequest[] = [];
+
+const processQueue = (error: unknown, token: string | null = null) => {
   failedQueue.forEach((prom) => {
     if (error) {
       prom.reject(error);
@@ -166,3 +183,27 @@ api.interceptors.response.use(
     return Promise.reject(error);
   }
 );
+
+// Same page size as the scrolled lists. The loop below keeps going until it has
+// everything, so this only trades response size against number of round trips.
+const FETCH_ALL_PAGE = LIST_PAGE_SIZE;
+
+/**
+ * Reads every page of a list endpoint. For lists that feed a <Select> or a lookup,
+ * where a partial list silently gives the wrong answer instead of a shorter one.
+ */
+export async function fetchAll<T>(
+  path: string,
+  params?: Record<string, string | number | boolean | undefined>
+): Promise<T[]> {
+  const items: T[] = [];
+  for (;;) {
+    const res = await api.get<ListResponse<T>>(path, {
+      params: { ...params, limit: FETCH_ALL_PAGE, offset: items.length },
+    });
+    const page = res.data.items ?? [];
+    items.push(...page);
+    // Guard on an empty page too — without it a shrinking collection loops forever.
+    if (page.length === 0 || items.length >= res.data.numberMatched) return items;
+  }
+}

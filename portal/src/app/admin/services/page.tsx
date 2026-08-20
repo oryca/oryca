@@ -1,8 +1,10 @@
 'use client';
 
 import { useState, useMemo, useRef } from 'react';
-import { useQuery, useMutation, useQueryClient, type QueryClient } from '@tanstack/react-query';
+import { useMutation, useQueryClient, type QueryClient } from '@tanstack/react-query';
 import { api } from '@/lib/api';
+import { useInfiniteList } from '@/lib/useInfiniteList';
+import { useDebounced } from '@/lib/useDebounced';
 import NavigationShell from '@/components/NavigationShell';
 import Link from 'next/link';
 import {
@@ -11,6 +13,7 @@ import {
   Select,
   useToast,
   useConfirm,
+  InfiniteScrollSentinel,
 } from '@/components/ui';
 import {
   Server,
@@ -148,15 +151,6 @@ export default function AdminServicesPage() {
   const [editingService, setEditingService] = useState<GatewayService | null>(null);
   const [isServiceFormOpen, setIsServiceFormOpen] = useState(false);
 
-  // Services query
-  const { data: services, isLoading: isLoadingServices } = useQuery<GatewayService[]>({
-    queryKey: ['admin-services'],
-    queryFn: async () => {
-      const res = await api.get('/services');
-      return res.data.items || [];
-    },
-  });
-
   return (
     <NavigationShell>
       <PageHeader
@@ -166,8 +160,6 @@ export default function AdminServicesPage() {
 
       <div className="space-y-6">
         <ServicesManager
-          services={services || []}
-          isLoading={isLoadingServices}
           isOpen={isServiceFormOpen}
           setIsOpen={setIsServiceFormOpen}
           editingService={editingService}
@@ -181,16 +173,12 @@ export default function AdminServicesPage() {
 
 // ================================= SERVICES SUB-COMPONENT =================================
 function ServicesManager({
-  services,
-  isLoading,
   isOpen,
   setIsOpen,
   editingService,
   setEditingService,
   queryClient
 }: {
-  services: GatewayService[];
-  isLoading: boolean;
   isOpen: boolean;
   setIsOpen: (val: boolean) => void;
   editingService: GatewayService | null;
@@ -209,26 +197,25 @@ function ServicesManager({
 
   const [searchQuery, setSearchQuery] = useState('');
   const [typeFilter, setTypeFilter] = useState('ALL');
+  const debouncedSearch = useDebounced(searchQuery.trim());
+  const listScrollRef = useRef<HTMLDivElement>(null);
 
-  const serviceTypes = useMemo(() => {
-    const types = Array.from(new Set(services.map((s) => s.type)));
-    return types;
-  }, [services]);
+  // Search and type filter go to the server — the list is paged, so filtering here
+  // would only ever look at the rows already scrolled into view.
+  const {
+    items: filteredServices,
+    isLoading,
+    total,
+    hasNextPage,
+    isFetchingNextPage,
+    fetchNextPage,
+  } = useInfiniteList<GatewayService>(['admin-services'], '/services', {
+    ...(debouncedSearch ? { search: debouncedSearch } : {}),
+    ...(typeFilter !== 'ALL' ? { type: typeFilter } : {}),
+  });
 
-  const filteredServices = useMemo(() => {
-    return services.filter((svc) => {
-      const q = searchQuery.toLowerCase().trim();
-      const matchesSearch =
-        !q ||
-        svc.name.toLowerCase().includes(q) ||
-        svc.basePath.toLowerCase().includes(q) ||
-        (svc.description && svc.description.toLowerCase().includes(q)) ||
-        svc.type.toLowerCase().includes(q);
-
-      const matchesType = typeFilter === 'ALL' || svc.type === typeFilter;
-      return matchesSearch && matchesType;
-    });
-  }, [services, searchQuery, typeFilter]);
+  // The closed set of types, not what the loaded page happens to contain.
+  const serviceTypes = useMemo(() => SERVICE_TYPE_OPTIONS.map((o) => o.value), []);
 
   const [formError, setFormError] = useState<string | null>(null);
   const { toast } = useToast();
@@ -463,12 +450,11 @@ function ServicesManager({
         <div>
           <h2 className="text-xs font-bold text-muted uppercase tracking-wider">Publish Routing Gateways</h2>
           <p className="text-xs text-muted mt-0.5">
-            {services.length} published gateway service{services.length === 1 ? '' : 's'}
+            {total} published gateway service{total === 1 ? '' : 's'}
           </p>
         </div>
         <div className="flex items-center gap-2">
-          {services.length > 0 && (
-            <div className="relative min-w-[220px]">
+          <div className="relative min-w-[220px]">
               <Search className="w-3.5 h-3.5 text-muted absolute left-2.5 top-1/2 -translate-y-1/2" />
               <input
                 type="text"
@@ -486,8 +472,7 @@ function ServicesManager({
                   <X className="w-3 h-3" />
                 </button>
               )}
-            </div>
-          )}
+          </div>
           <button
             onClick={() => {
               setEditingService(null);
@@ -515,25 +500,22 @@ function ServicesManager({
                 : 'bg-paper-2 border border-rule text-muted hover:text-ink'
             }`}
           >
-            All ({services.length})
+            All
           </button>
-          {serviceTypes.map((t) => {
-            const count = services.filter((s) => s.type === t).length;
-            return (
-              <button
-                key={t}
-                type="button"
-                onClick={() => setTypeFilter(t)}
-                className={`px-2.5 py-1 text-[11px] rounded-control transition-colors ${
-                  typeFilter === t
-                    ? 'bg-accent text-accent-ink font-semibold'
-                    : 'bg-paper-2 border border-rule text-muted hover:text-ink'
-                }`}
-              >
-                {t} ({count})
-              </button>
-            );
-          })}
+          {serviceTypes.map((t) => (
+            <button
+              key={t}
+              type="button"
+              onClick={() => setTypeFilter(t)}
+              className={`px-2.5 py-1 text-[11px] rounded-control transition-colors ${
+                typeFilter === t
+                  ? 'bg-accent text-accent-ink font-semibold'
+                  : 'bg-paper-2 border border-rule text-muted hover:text-ink'
+              }`}
+            >
+              {t}
+            </button>
+          ))}
         </div>
       )}
 
@@ -803,17 +785,22 @@ function ServicesManager({
             <SkeletonLine key={i} className="h-16" />
           ))}
         </div>
-      ) : services.length === 0 ? (
-        <div className="p-8 bg-paper border border-rule border-dashed rounded-surface text-center text-xs text-muted">
-          No services published yet. Publish one to start routing traffic.
-        </div>
       ) : filteredServices.length === 0 ? (
         <div className="p-8 bg-paper border border-rule border-dashed rounded-surface text-center text-xs text-muted">
-          No services match your search &quot;{searchQuery}&quot;
-          {typeFilter !== 'ALL' ? ` in type ${typeFilter}` : ''}.
+          {debouncedSearch || typeFilter !== 'ALL' ? (
+            <>
+              No services match your search &quot;{searchQuery}&quot;
+              {typeFilter !== 'ALL' ? ` in type ${typeFilter}` : ''}.
+            </>
+          ) : (
+            'No services published yet. Publish one to start routing traffic.'
+          )}
         </div>
       ) : (
-        <div className="space-y-3">
+        <div
+          ref={listScrollRef}
+          className="max-h-[min(980px,70vh)] space-y-3 overflow-y-auto"
+        >
           {filteredServices.map((svc) => (
             <div key={svc.id} className="bg-paper border border-rule p-4 rounded-surface shadow-sm hover:border-faint transition flex flex-col sm:flex-row sm:items-center justify-between gap-4">
               <div className="flex items-start gap-3">
@@ -892,6 +879,12 @@ function ServicesManager({
               </div>
             </div>
           ))}
+          <InfiniteScrollSentinel
+            rootRef={listScrollRef}
+            hasNextPage={hasNextPage}
+            isFetchingNextPage={isFetchingNextPage}
+            fetchNextPage={fetchNextPage}
+          />
         </div>
       )}
     </div>

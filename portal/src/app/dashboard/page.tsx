@@ -5,7 +5,7 @@
 
 import React, { useMemo, useState } from 'react';
 import { useQuery } from '@tanstack/react-query';
-import { api } from '@/lib/api';
+import { api, fetchAll } from '@/lib/api';
 import { useAuth } from '@/app/providers';
 import NavigationShell from '@/components/NavigationShell';
 import { LatencyChart, LatencyLegend, type LatencyLabelFormat } from '@/components/LatencyChart';
@@ -243,18 +243,12 @@ export default function DashboardPage() {
 
   const { data: services } = useQuery<ServiceOption[]>({
     queryKey: ['services-list'],
-    queryFn: async () => {
-      const res = await api.get('/services');
-      return res.data.items || [];
-    },
+    queryFn: () => fetchAll<ServiceOption>('/services'),
   });
 
   const { data: users } = useQuery<UserOption[]>({
     queryKey: ['users-list'],
-    queryFn: async () => {
-      const res = await api.get('/users');
-      return res.data.items || [];
-    },
+    queryFn: () => fetchAll<UserOption>('/users'),
     enabled: isAdmin,
   });
 
@@ -345,12 +339,14 @@ export default function DashboardPage() {
     }
   }
 
-  const buckets = stats?.buckets ?? [];
+  // Hold the raw value and default inside the memo — `?? []` out here would be a new
+  // array every render, invalidating the memo each time.
+  const buckets = stats?.buckets;
   // 7d is the one range where what the endpoint returns is finer than the axis reads
   const rollUp = range === '7d' && (stats?.interval ?? 'hour') === 'hour';
   const trafficInterval = rollUp ? 'day' : (stats?.interval ?? 'hour');
   const trafficBuckets = useMemo<TrafficBucket[]>(
-    () => (rollUp ? rollUpToDays(buckets) : buckets),
+    () => (rollUp ? rollUpToDays(buckets ?? []) : (buckets ?? [])),
     [buckets, rollUp],
   );
 
@@ -525,7 +521,7 @@ export default function DashboardPage() {
               <div className="ui-skeleton h-56 w-full" />
             </Loading>
           )}
-          {!isLoadingStats && buckets.length === 0 && (
+          {!isLoadingStats && !buckets?.length && (
             <EmptyState
               title="Nothing in this range"
               description="Widen the time range, or clear the service filter."

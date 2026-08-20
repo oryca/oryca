@@ -3,7 +3,7 @@
  */
 'use client';
 
-import React, { useState, useEffect } from 'react';
+import React, { useRef, useState } from 'react';
 import { useSearchParams } from 'next/navigation';
 import {
   useQuery,
@@ -11,7 +11,8 @@ import {
   useQueryClient,
   type UseMutationResult,
 } from '@tanstack/react-query';
-import { api } from '@/lib/api';
+import { api, fetchAll } from '@/lib/api';
+import { useInfiniteList } from '@/lib/useInfiniteList';
 import NavigationShell from '@/components/NavigationShell';
 import {
   Button,
@@ -25,6 +26,7 @@ import {
   useToast,
   useConfirm,
   SearchableSelect,
+  InfiniteScrollSentinel,
 } from '@/components/ui';
 import { Plus, Trash2, Pencil, Sliders } from 'lucide-react';
 
@@ -80,13 +82,11 @@ export default function AdminTransformsPage() {
   const [enabled, setEnabled] = useState(true);
   const [rulesJson, setRulesJson] = useState('[]');
   const [showPresetsCard, setShowPresetsCard] = useState(false);
+  const listScrollRef = useRef<HTMLDivElement>(null);
 
   const { data: services } = useQuery<ServiceOption[]>({
     queryKey: ['admin-transform-services'],
-    queryFn: async () => {
-      const res = await api.get('/services');
-      return res.data.items || [];
-    },
+    queryFn: () => fetchAll<ServiceOption>('/services'),
   });
 
   // ปรับ state ระหว่าง render ตามแนวทางของ React ไม่ใช่ใน effect
@@ -99,14 +99,18 @@ export default function AdminTransformsPage() {
 
   const selectedService = services?.find((s) => s.id === selectedServiceId);
 
-  const { data: transforms, isLoading: isLoadingTransforms } = useQuery<TransformConfig[]>({
-    queryKey: ['transforms-for-service', selectedServiceId],
-    queryFn: async () => {
-      const res = await api.get(`/response-transforms?serviceId=${selectedServiceId}`);
-      return res.data.items || [];
-    },
-    enabled: !!selectedServiceId,
-  });
+  const {
+    items: transforms,
+    isLoading: isLoadingTransforms,
+    hasNextPage: hasMoreTransforms,
+    isFetchingNextPage: isFetchingMoreTransforms,
+    fetchNextPage: fetchMoreTransforms,
+  } = useInfiniteList<TransformConfig>(
+    ['transforms-for-service', selectedServiceId],
+    '/response-transforms',
+    { serviceId: selectedServiceId },
+    { enabled: !!selectedServiceId }
+  );
 
   const { data: presets } = useQuery<Preset[]>({
     queryKey: ['presets-for-type', selectedService?.type],
@@ -212,7 +216,7 @@ export default function AdminTransformsPage() {
   }
 
   const hasPresets = presets && presets.length > 0;
-  const showPresetOffer = hasPresets && (transforms?.length === 0 || showPresetsCard);
+  const showPresetOffer = hasPresets && (transforms.length === 0 || showPresetsCard);
 
   return (
     <NavigationShell>
@@ -246,40 +250,6 @@ export default function AdminTransformsPage() {
       {selectedServiceId && (
         <div className="grid grid-cols-1 gap-6 lg:grid-cols-3">
           <div className="space-y-6 lg:col-span-1">
-            {showPresetOffer && (
-              <SectionCard
-                title="Available Templates"
-                description="Ready-made link rewriting rulesets for this service type"
-                actions={
-                  transforms && transforms.length > 0 ? (
-                    <Button size="sm" variant="ghost" onClick={() => setShowPresetsCard(false)}>
-                      Hide
-                    </Button>
-                  ) : undefined
-                }
-              >
-                <div className="space-y-2">
-                  {presets.map((preset) => (
-                    <button
-                      key={preset.name}
-                      type="button"
-                      onClick={() => applyPreset.mutate(preset.name)}
-                      disabled={applyPreset.isPending}
-                      className="flex w-full items-center justify-between gap-2 rounded-control border border-rule bg-paper-2 p-3 text-left transition-colors duration-200 hover:border-accent-edge hover:bg-accent-wash disabled:opacity-55"
-                    >
-                      <span className="min-w-0">
-                        <span className="block text-sm font-medium text-ink">{preset.title}</span>
-                        <span className="mt-0.5 block text-xs text-muted">
-                          {preset.description}
-                        </span>
-                      </span>
-                      <Plus className="h-4 w-4 shrink-0 text-accent" aria-hidden="true" />
-                    </button>
-                  ))}
-                </div>
-              </SectionCard>
-            )}
-
             <SectionCard
               title="Rulesets"
               actions={
@@ -305,6 +275,43 @@ export default function AdminTransformsPage() {
               }
               flush
             >
+              {showPresetOffer && (
+                <div className="border-b border-rule p-4">
+                  <div className="mb-3 flex items-start justify-between gap-2">
+                    <div className="min-w-0">
+                      <h3 className="text-sm font-medium text-ink">Available templates</h3>
+                      <p className="mt-0.5 text-xs text-muted">
+                        Ready-made link rewriting rulesets for this service type
+                      </p>
+                    </div>
+                    {transforms.length > 0 && (
+                      <Button size="sm" variant="ghost" onClick={() => setShowPresetsCard(false)}>
+                        Hide
+                      </Button>
+                    )}
+                  </div>
+                  <div className="space-y-2">
+                    {presets.map((preset) => (
+                      <button
+                        key={preset.name}
+                        type="button"
+                        onClick={() => applyPreset.mutate(preset.name)}
+                        disabled={applyPreset.isPending}
+                        className="flex w-full items-center justify-between gap-2 rounded-control border border-rule bg-paper-2 p-3 text-left transition-colors duration-200 hover:border-accent-edge hover:bg-accent-wash disabled:opacity-55"
+                      >
+                        <span className="min-w-0">
+                          <span className="block text-sm font-medium text-ink">{preset.title}</span>
+                          <span className="mt-0.5 block text-xs text-muted">
+                            {preset.description}
+                          </span>
+                        </span>
+                        <Plus className="h-4 w-4 shrink-0 text-accent" aria-hidden="true" />
+                      </button>
+                    ))}
+                  </div>
+                </div>
+              )}
+
               {isLoadingTransforms && (
                 <Loading label="Loading rulesets">
                   <div className="space-y-2 p-4">
@@ -315,7 +322,7 @@ export default function AdminTransformsPage() {
                 </Loading>
               )}
 
-              {!isLoadingTransforms && transforms?.length === 0 && (
+              {!isLoadingTransforms && !!selectedServiceId && transforms.length === 0 && (
                 <EmptyState
                   icon={<Sliders className="h-5 w-5" />}
                   title="No rulesets yet"
@@ -323,7 +330,8 @@ export default function AdminTransformsPage() {
                 />
               )}
 
-              {!isLoadingTransforms && transforms && transforms.length > 0 && (
+              {!isLoadingTransforms && transforms.length > 0 && (
+                <div ref={listScrollRef} className="max-h-[min(600px,70vh)] overflow-y-auto">
                 <ul className="divide-y divide-rule" role="list">
                   {transforms.map((t) => {
                     const isSelected = editingId === t.id && isEditorOpen;
@@ -372,6 +380,13 @@ export default function AdminTransformsPage() {
                     );
                   })}
                 </ul>
+                <InfiniteScrollSentinel
+                  rootRef={listScrollRef}
+                  hasNextPage={hasMoreTransforms}
+                  isFetchingNextPage={isFetchingMoreTransforms}
+                  fetchNextPage={fetchMoreTransforms}
+                />
+                </div>
               )}
             </SectionCard>
           </div>

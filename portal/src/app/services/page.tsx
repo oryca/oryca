@@ -3,7 +3,7 @@
  */
 'use client';
 
-import React, { useMemo, useState } from 'react';
+import React, { useMemo, useRef, useState } from 'react';
 import {
   useQuery,
   useMutation,
@@ -11,8 +11,9 @@ import {
   type UseMutationResult,
 } from '@tanstack/react-query';
 import axios from 'axios';
-import { api, GATEWAY_URL } from '@/lib/api';
-import { useAuth } from '@/app/providers';
+import { api, fetchAll, GATEWAY_URL } from '@/lib/api';
+import { useInfiniteList } from '@/lib/useInfiniteList';
+import { useDebounced } from '@/lib/useDebounced';
 import NavigationShell from '@/components/NavigationShell';
 import {
   Button,
@@ -26,6 +27,7 @@ import {
   useToast,
   useConfirm,
   GeoMapPreview,
+  InfiniteScrollSentinel,
 } from '@/components/ui';
 import {
   Key,
@@ -33,7 +35,6 @@ import {
   Play,
   Copy,
   Check,
-  Plus,
   Trash2,
   Calendar,
   ChevronRight,
@@ -164,7 +165,6 @@ export default function ServicesAndKeysPage() {
   const [selectedPath, setSelectedPath] = useState('');
   const [selectedMethod, setSelectedMethod] = useState('GET');
   const [customParams, setCustomParams] = useState('');
-  const { user } = useAuth();
   const [responseStatus, setResponseStatus] = useState<number | null>(null);
   const [responseHeaders, setResponseHeaders] = useState<Record<string, string>>({});
   const [responseBody, setResponseBody] = useState('');
@@ -172,20 +172,29 @@ export default function ServicesAndKeysPage() {
   const [tryItResponseView, setTryItResponseView] = useState<'preview' | 'raw'>('preview');
   const [isSending, setIsSending] = useState(false);
 
-  const { data: services, isLoading: isLoadingServices } = useQuery<GatewayService[]>({
-    queryKey: ['catalog-services'],
-    queryFn: async () => {
-      const res = await api.get('/services');
-      return res.data.items || [];
-    },
-  });
+  const [serviceSearchTerm, setServiceSearchTerm] = useState('');
+  const debouncedServiceSearch = useDebounced(serviceSearchTerm.trim());
+  const catalogScrollRef = useRef<HTMLUListElement>(null);
+  const docsScrollRef = useRef<HTMLUListElement>(null);
 
+  // Search runs server-side — the catalog is paged, so filtering here would only
+  // ever look at the rows already scrolled into view.
+  const {
+    items: services,
+    isLoading: isLoadingServices,
+    hasNextPage: hasMoreServices,
+    isFetchingNextPage: isFetchingMoreServices,
+    fetchNextPage: fetchMoreServices,
+  } = useInfiniteList<GatewayService>(
+    ['catalog-services'],
+    '/services',
+    debouncedServiceSearch ? { search: debouncedServiceSearch } : undefined
+  );
+
+  // Feeds the Try-It key dropdown and seeds the first selection, so it needs every key.
   const { data: apiKeys, isLoading: isLoadingKeys } = useQuery<ApiKey[]>({
     queryKey: ['api-keys'],
-    queryFn: async () => {
-      const res = await api.get('/api-keys');
-      return res.data.items || [];
-    },
+    queryFn: () => fetchAll<ApiKey>('/api-keys'),
   });
 
   const {
@@ -203,12 +212,13 @@ export default function ServicesAndKeysPage() {
     retry: false,
   });
 
-  const { data: apiDocs, isLoading: isLoadingDocs } = useQuery<ApiDoc[]>({
-    queryKey: ['api-docs'],
-    queryFn: async () => {
-      const res = await api.get('/api-docs');
-      return res.data.items || [];
-    },
+  const {
+    items: apiDocs,
+    isPending: isLoadingDocs,
+    hasNextPage: hasMoreDocs,
+    isFetchingNextPage: isFetchingMoreDocs,
+    fetchNextPage: fetchMoreDocs,
+  } = useInfiniteList<ApiDoc>(['api-docs'], '/api-docs', undefined, {
     enabled: !!selectedService && detailTab === 'docs',
   });
 
@@ -272,21 +282,6 @@ export default function ServicesAndKeysPage() {
     onError: (err, id) =>
       toastError(messageOf(err, 'Could not delete the key'), () => deleteKey.mutate(id)),
   });
-
-  const [serviceSearchTerm, setServiceSearchTerm] = useState('');
-
-  const filteredCatalogServices = useMemo(() => {
-    if (!services) return [];
-    const q = serviceSearchTerm.toLowerCase().trim();
-    if (!q) return services;
-    return services.filter(
-      (s) =>
-        s.name.toLowerCase().includes(q) ||
-        s.basePath.toLowerCase().includes(q) ||
-        (s.description && s.description.toLowerCase().includes(q)) ||
-        s.type.toLowerCase().includes(q),
-    );
-  }, [services, serviceSearchTerm]);
 
   const [tryItPathParamValues, setTryItPathParamValues] = useState<Record<string, string>>({});
 
@@ -441,8 +436,7 @@ export default function ServicesAndKeysPage() {
         <div className="grid grid-cols-1 gap-6 lg:grid-cols-3">
           <div className="lg:col-span-1">
             <SectionCard title="Services" flush>
-              {services && services.length > 0 && (
-                <div className="border-b border-rule p-2.5">
+              <div className="border-b border-rule p-2.5">
                   <div className="relative">
                     <Search className="absolute left-2.5 top-1/2 -translate-y-1/2 h-3.5 w-3.5 text-muted" />
                     <input
@@ -462,8 +456,7 @@ export default function ServicesAndKeysPage() {
                       </button>
                     )}
                   </div>
-                </div>
-              )}
+              </div>
 
               {isLoadingServices && (
                 <Loading label="Loading services">
@@ -478,7 +471,7 @@ export default function ServicesAndKeysPage() {
                 </Loading>
               )}
 
-              {!isLoadingServices && (!services || services.length === 0) && (
+              {!isLoadingServices && services.length === 0 && !debouncedServiceSearch && (
                 <EmptyState
                   icon={<Server className="h-5 w-5" />}
                   title="No services published yet"
@@ -486,15 +479,18 @@ export default function ServicesAndKeysPage() {
                 />
               )}
 
-              {!isLoadingServices && services && services.length > 0 && filteredCatalogServices.length === 0 && (
+              {!isLoadingServices && services.length === 0 && !!debouncedServiceSearch && (
                 <div className="p-6 text-center text-xs text-muted">
                   No services match &quot;{serviceSearchTerm}&quot;
                 </div>
               )}
 
-              {!isLoadingServices && filteredCatalogServices.length > 0 && (
-                <ul className="divide-y divide-rule max-h-[600px] overflow-y-auto">
-                  {filteredCatalogServices.map((svc) => {
+              {!isLoadingServices && services.length > 0 && (
+                <ul
+                  ref={catalogScrollRef}
+                  className="divide-y divide-rule max-h-[min(640px,70vh)] overflow-y-auto"
+                >
+                  {services.map((svc) => {
                     const active = selectedService?.id === svc.id;
                     return (
                       <li key={svc.id}>
@@ -534,6 +530,14 @@ export default function ServicesAndKeysPage() {
                       </li>
                     );
                   })}
+                  <li>
+                    <InfiniteScrollSentinel
+                      rootRef={catalogScrollRef}
+                      hasNextPage={hasMoreServices}
+                      isFetchingNextPage={isFetchingMoreServices}
+                      fetchNextPage={fetchMoreServices}
+                    />
+                  </li>
                 </ul>
               )}
             </SectionCard>
@@ -890,7 +894,7 @@ export default function ServicesAndKeysPage() {
                         </Loading>
                       )}
 
-                      {!isLoadingDocs && (!apiDocs || apiDocs.length === 0) && (
+                      {!isLoadingDocs && apiDocs.length === 0 && (
                         <EmptyState
                           icon={<BookOpen className="h-5 w-5" />}
                           title="No guides published"
@@ -898,8 +902,11 @@ export default function ServicesAndKeysPage() {
                         />
                       )}
 
-                      {!isLoadingDocs && apiDocs && apiDocs.length > 0 && (
-                        <ul className="space-y-2">
+                      {!isLoadingDocs && apiDocs.length > 0 && (
+                        <ul
+                          ref={docsScrollRef}
+                          className="max-h-[min(740px,70vh)] space-y-2 overflow-y-auto"
+                        >
                           {apiDocs.map((doc) => (
                             <li
                               key={doc.id}
@@ -916,6 +923,14 @@ export default function ServicesAndKeysPage() {
                               )}
                             </li>
                           ))}
+                          <li>
+                            <InfiniteScrollSentinel
+                              rootRef={docsScrollRef}
+                              hasNextPage={hasMoreDocs}
+                              isFetchingNextPage={isFetchingMoreDocs}
+                              fetchNextPage={fetchMoreDocs}
+                            />
+                          </li>
                         </ul>
                       )}
                     </>
@@ -1016,11 +1031,6 @@ export default function ServicesAndKeysPage() {
                   icon={<Key className="h-5 w-5" />}
                   title="No keys yet"
                   description="Issue one on the left, then you can call the APIs through the gateway."
-                  action={
-                    <Button variant="secondary" icon={<Plus className="h-4 w-4" />} disabled>
-                      Use the form on the left
-                    </Button>
-                  }
                 />
               )}
 
