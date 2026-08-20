@@ -134,7 +134,7 @@ Each service you register records the version its own upstream implements, which
 
 Running the binaries yourself, without compose? Then `ORYCA_API_REDIS_DB` and `ORYCA_GW_REDIS_DB` have to match, and their built-in defaults do not (0 and 7). Pub/sub ignores the database number, so a mismatch looks like it works until routes stop arriving. The compose files pin both to 0 for you.
 
-Starting data (settings, email templates, the first package) is YAML in `control-plane/seed/`. It loads once, against an empty database. After that the database wins, so changes made in the portal survive a restart. Administrator credentials are deliberately not in those files, they come from `ORYCA_API_ROOT_EMAIL` and `ORYCA_API_ROOT_PASSWORD`.
+Starting data (settings, the first package) is YAML in `control-plane/seed/`. It loads once, against an empty database. After that the database wins, so changes made in the portal survive a restart. Administrator credentials are deliberately not in those files, they come from `ORYCA_API_ROOT_EMAIL` and `ORYCA_API_ROOT_PASSWORD`.
 
 One pair is easy to get wrong. `ORYCA_PORTAL_API_URL` and `ORYCA_PORTAL_GATEWAY_URL` are the addresses the portal calls **from the visitor's browser**, so they have to be reachable by your users. A container name like `http://control-plane:9001` will not work. Serving the stack from your own domain means setting both, then restarting the portal.
 ```sh
