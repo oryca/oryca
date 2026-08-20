@@ -5,9 +5,7 @@
 
 import React, { useMemo, useState } from 'react';
 import { useQuery } from '@tanstack/react-query';
-import axios from 'axios';
-import { api, GATEWAY_URL } from '@/lib/api';
-import { useAuth } from '@/app/providers';
+import { fetchAll, GATEWAY_URL } from '@/lib/api';
 import NavigationShell from '@/components/NavigationShell';
 import {
   Button,
@@ -28,7 +26,6 @@ import {
   MapPin,
   Code,
   Link2,
-  Compass,
   ArrowRight,
   Eye,
   FileText,
@@ -38,6 +35,12 @@ interface HateoasLink {
   rel: string;
   href: string;
   type?: string;
+  title?: string;
+}
+
+/** The part of an OGC collection entry the link list reads. */
+interface OgcCollection {
+  id?: string;
   title?: string;
 }
 
@@ -86,18 +89,6 @@ function pretty(raw: unknown): string {
   }
 }
 
-function toHeaderRecord(raw: unknown): Record<string, string> {
-  if (!raw || typeof raw !== 'object') return {};
-  return Object.fromEntries(
-    Object.entries(raw as Record<string, unknown>).map(([k, v]) => {
-      if (Array.isArray(v)) return [k, v.join(', ')];
-      if (v === null || v === undefined) return [k, ''];
-      if (typeof v === 'object') return [k, JSON.stringify(v)];
-      return [k, String(v)];
-    }),
-  );
-}
-
 /** สถานะตอบกลับสื่อด้วยสี + ตัวเลข ไม่ใช่สีอย่างเดียว */
 function statusTone(status: number) {
   if (status < 300) return 'border-ok-edge bg-ok-wash text-ok';
@@ -106,7 +97,6 @@ function statusTone(status: number) {
 }
 
 export default function SandboxPage() {
-  const { user } = useAuth();
   const [serviceId, setServiceId] = useState('');
   const [method, setMethod] = useState('GET');
   const [path, setPath] = useState('/');
@@ -127,18 +117,12 @@ export default function SandboxPage() {
 
   const { data: services } = useQuery<GatewayService[]>({
     queryKey: ['catalog-services'],
-    queryFn: async () => {
-      const res = await api.get('/services');
-      return res.data.items || [];
-    },
+    queryFn: () => fetchAll<GatewayService>('/services'),
   });
 
   const { data: apiKeys } = useQuery<ApiKey[]>({
     queryKey: ['api-keys'],
-    queryFn: async () => {
-      const res = await api.get('/api-keys');
-      return res.data.items || [];
-    },
+    queryFn: () => fetchAll<ApiKey>('/api-keys'),
   });
 
   const service = useMemo(
@@ -152,7 +136,7 @@ export default function SandboxPage() {
   }
 
   // Auto-select first API key if available
-  const [hasClearedKey, setHasClearedKey] = useState(false);
+  const [hasClearedKey] = useState(false);
   if (!apiKey && !hasClearedKey && apiKeys && apiKeys.length > 0) {
     const firstKey = apiKeys[0].apiKey || apiKeys[0].key || '';
     if (firstKey) {
@@ -280,7 +264,7 @@ export default function SandboxPage() {
         links.push(...parsed.links);
       }
       if (Array.isArray(parsed?.collections)) {
-        parsed.collections.forEach((c: any) => {
+        (parsed.collections as OgcCollection[]).forEach((c) => {
           if (c.id) {
             links.push({
               rel: 'collection',

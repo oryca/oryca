@@ -164,6 +164,24 @@ table, .tabular {
 
 .ui-btn:active:not(:disabled) { transform: translateY(1px); }
 
+/* ---- Status pill ---- */
+.ui-status {
+    display: inline-flex;
+    align-items: center;
+    justify-content: center;
+    gap: var(--space-2xs);
+    height: 2.5rem;
+    padding-inline: var(--space-sm);
+    border: 1px solid transparent;
+    border-radius: var(--radius-control);
+    font-family: var(--font-body);
+    font-size: var(--text-sm);
+    font-weight: 500;
+    line-height: 1;
+    white-space: nowrap;
+}
+.ui-status--sm { height: 2rem; padding-inline: var(--space-xs); font-size: var(--text-xs); }
+
 .ui-btn--primary {
     background: var(--color-accent);
     color: var(--color-accent-ink);
