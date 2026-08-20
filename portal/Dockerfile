@@ -8,6 +8,7 @@ WORKDIR /app
 
 # Install dependencies based on the preferred package manager
 COPY package.json package-lock.json* ./
+COPY scripts/copy-maplibre-assets.mjs scripts/
 RUN npm ci
 
 # Rebuild the source code only when needed
@@ -21,7 +22,7 @@ COPY . .
 # Uncomment the following line in case you want to disable telemetry during the build.
 ENV NEXT_TELEMETRY_DISABLED=1
 
-RUN npm run build
+RUN node scripts/copy-maplibre-assets.mjs && npm run build
 
 # Production image, copy all the files and run next
 FROM base AS runner

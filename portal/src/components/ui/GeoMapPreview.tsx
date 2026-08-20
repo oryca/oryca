@@ -13,16 +13,34 @@ import * as maplibregl from 'maplibre-gl';
 import 'maplibre-gl/dist/maplibre-gl.css';
 import type { FeatureCollection, Geometry } from 'geojson';
 
-// MapLibre works out its own worker script's URL from import.meta.url inside
-// its bundled internals, which Turbopack rewrites and no longer points at a
-// servable file. Left alone, that resolves to an empty string, and the
-// browser tries to run the current page's HTML as a JS module in its place.
-// new URL(..., import.meta.url) written here, in application code Next.js's
-// bundler actually tracks, gets the real file and a URL it will serve.
+// MapLibre's worker script imports its sibling `maplibre-gl-shared.mjs` by
+// bare relative path, so both files must sit side by side at servable URLs.
+// Turbopack emits them as content-hashed assets, breaking that relative
+// import (the worker 404s and the map stays white, silently). So the
+// postinstall script (scripts/copy-maplibre-assets.mjs) copies the worker
+// pair into public/maplibre/<version>/ with names intact, and we point the
+// library's documented setWorkerUrl() at it. The version segment comes from
+// the loaded library itself, so the worker can never be version-mismatched
+// with the main bundle, and a new dependency version is a new URL — safe to
+// cache hard behind a CDN.
+const MAPLIBRE_VERSION = maplibregl.getVersion();
+const MAPLIBRE_WORKER_URL = `/maplibre/${MAPLIBRE_VERSION}/maplibre-gl-worker.mjs`;
+
 if (typeof window !== 'undefined') {
-  maplibregl.setWorkerUrl(
-    new URL('maplibre-gl/dist/maplibre-gl-worker.mjs', import.meta.url).toString(),
-  );
+  maplibregl.setWorkerUrl(MAPLIBRE_WORKER_URL);
+
+  // A worker that fails to load kills the map with no on-screen trace, so
+  // in dev check up front that the asset actually exists and say how to fix
+  // it (usually an install run with --ignore-scripts skipping postinstall).
+  if (process.env.NODE_ENV !== 'production') {
+    fetch(MAPLIBRE_WORKER_URL, { method: 'HEAD' }).then((res) => {
+      if (!res.ok) {
+        console.error(
+          `[GeoMapPreview] MapLibre worker ${MAPLIBRE_WORKER_URL} returned ${res.status}; the map will stay blank. Run \`npm install\` or \`node scripts/copy-maplibre-assets.mjs\` in portal/ to (re)generate public/maplibre/.`,
+        );
+      }
+    });
+  }
 }
 
 const STYLE = 'https://tiles.openfreemap.org/styles/liberty';
@@ -299,6 +317,11 @@ export function GeoMapPreview({
       style: STYLE,
       center: [100.5018, 13.7563],
       zoom: 5,
+      // Switches MapLibre onto a different WebGL presentation path.
+      // The default (preserveDrawingBuffer: false) is the one affected by the
+      // blank-canvas compositor regression; this mode composites reliably —
+      // and doubles as the prerequisite for map screenshots.
+      canvasContextAttributes: { preserveDrawingBuffer: true },
     });
 
     mapRef.current = map;
@@ -392,7 +415,9 @@ export function GeoMapPreview({
         </span>
       </div>
       <div className="relative h-[460px] w-full">
-        <div ref={containerRef} className="absolute inset-0 z-0" />
+        <div className="absolute inset-0 z-0">
+          <div ref={containerRef} className="h-full w-full" />
+        </div>
         {basemapError && (
           <div className="absolute inset-0 z-10 flex items-center justify-center bg-paper/95 p-6 text-center">
             <div className="max-w-sm space-y-1.5">

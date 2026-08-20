@@ -10,6 +10,9 @@ export interface SelectOption {
   badge?: string;
 }
 
+/** จำนวน option ที่ render ต่อรอบ สำหรับ infinite scroll ในลิสต์ยาว */
+const OPTION_PAGE_SIZE = 20;
+
 export interface SearchableSelectProps {
   label?: string;
   value: string;
@@ -34,6 +37,7 @@ export function SearchableSelect({
 }: SearchableSelectProps) {
   const [isOpen, setIsOpen] = useState(false);
   const [searchQuery, setSearchQuery] = useState('');
+  const [visibleCount, setVisibleCount] = useState(OPTION_PAGE_SIZE);
   const containerRef = useRef<HTMLDivElement>(null);
   const searchInputRef = useRef<HTMLInputElement>(null);
 
@@ -47,6 +51,16 @@ export function SearchableSelect({
     const matchBadge = opt.badge?.toLowerCase().includes(query);
     return matchLabel || matchSubtext || matchBadge;
   });
+
+  // โหลด option เพิ่มเมื่อเลื่อนถึงใกล้ๆ ล่างของลิสต์
+  function handleOptionsScroll(e: React.UIEvent<HTMLDivElement>) {
+    const el = e.currentTarget;
+    if (el.scrollTop + el.clientHeight >= el.scrollHeight - 32) {
+      setVisibleCount((count) =>
+        count >= filteredOptions.length ? count : count + OPTION_PAGE_SIZE,
+      );
+    }
+  }
 
   // Close on outside click
   useEffect(() => {
@@ -81,7 +95,10 @@ export function SearchableSelect({
       <button
         type="button"
         disabled={disabled}
-        onClick={() => setIsOpen(!isOpen)}
+        onClick={() => {
+          setIsOpen(!isOpen);
+          setVisibleCount(OPTION_PAGE_SIZE);
+        }}
         className="ui-input flex w-full items-center justify-between gap-2 text-left text-xs text-ink cursor-pointer focus:border-focus"
       >
         <span className="truncate">
@@ -108,14 +125,20 @@ export function SearchableSelect({
               ref={searchInputRef}
               type="text"
               value={searchQuery}
-              onChange={(e) => setSearchQuery(e.target.value)}
+              onChange={(e) => {
+                setSearchQuery(e.target.value);
+                setVisibleCount(OPTION_PAGE_SIZE);
+              }}
               placeholder={searchPlaceholder}
               className="w-full bg-transparent text-xs text-ink placeholder:text-muted outline-none"
             />
             {searchQuery && (
               <button
                 type="button"
-                onClick={() => setSearchQuery('')}
+                onClick={() => {
+                  setSearchQuery('');
+                  setVisibleCount(OPTION_PAGE_SIZE);
+                }}
                 className="text-muted hover:text-ink"
               >
                 <X className="h-3.5 w-3.5" />
@@ -123,41 +146,48 @@ export function SearchableSelect({
             )}
           </div>
 
-          {/* Options List */}
-          <div className="max-h-56 overflow-y-auto p-1 text-xs">
+          {/* Options List — render ทีละส่วนแล้วโหลดเพิ่มเมื่อเลื่อนลง */}
+          <div className="max-h-56 overflow-y-auto p-1 text-xs" onScroll={handleOptionsScroll}>
             {filteredOptions.length === 0 ? (
               <div className="py-3 text-center text-xs text-muted">
                 No matching options found
               </div>
             ) : (
-              filteredOptions.map((opt) => {
-                const isSelected = opt.value === value;
-                return (
-                  <button
-                    key={opt.value}
-                    type="button"
-                    onClick={() => {
-                      onChange(opt.value);
-                      setIsOpen(false);
-                    }}
-                    className={`flex w-full items-center justify-between rounded-control px-2.5 py-1.5 text-left transition-colors ${
-                      isSelected
-                        ? 'bg-accent-wash font-semibold text-accent'
-                        : 'text-ink hover:bg-paper-2'
-                    }`}
-                  >
-                    <div className="min-w-0 flex-1 truncate">
-                      <div className="truncate font-medium">{opt.label}</div>
-                      {opt.subtext && (
-                        <div className="truncate font-mono text-[10px] text-muted">
-                          {opt.subtext}
-                        </div>
-                      )}
-                    </div>
-                    {isSelected && <Check className="h-4 w-4 shrink-0 text-accent ml-2" />}
-                  </button>
-                );
-              })
+              <>
+                {filteredOptions.slice(0, visibleCount).map((opt) => {
+                  const isSelected = opt.value === value;
+                  return (
+                    <button
+                      key={opt.value}
+                      type="button"
+                      onClick={() => {
+                        onChange(opt.value);
+                        setIsOpen(false);
+                      }}
+                      className={`flex w-full items-center justify-between rounded-control px-2.5 py-1.5 text-left transition-colors ${
+                        isSelected
+                          ? 'bg-accent-wash font-semibold text-accent'
+                          : 'text-ink hover:bg-paper-2'
+                      }`}
+                    >
+                      <div className="min-w-0 flex-1 truncate">
+                        <div className="truncate font-medium">{opt.label}</div>
+                        {opt.subtext && (
+                          <div className="truncate font-mono text-[10px] text-muted">
+                            {opt.subtext}
+                          </div>
+                        )}
+                      </div>
+                      {isSelected && <Check className="h-4 w-4 shrink-0 text-accent ml-2" />}
+                    </button>
+                  );
+                })}
+                {visibleCount < filteredOptions.length && (
+                  <div className="py-1.5 text-center text-[10px] text-muted">
+                    Scroll for more…
+                  </div>
+                )}
+              </>
             )}
           </div>
         </div>
