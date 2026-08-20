@@ -229,10 +229,9 @@ func runSeed(cfg *config.Config, r appRepos) {
 	defer cancel()
 
 	seed.Run(ctx, seed.Stores{
-		Config:        r.config,
-		EmailTemplate: r.emailTemplate,
-		Package:       r.pkg,
-		User:          r.user,
+		Config:  r.config,
+		Package: r.pkg,
+		User:    r.user,
 	}, seed.Options{
 		Dir:          cfg.SeedDir,
 		RootEmail:    cfg.RootEmail,
@@ -251,8 +250,6 @@ func loadJWTKeys(cfg *config.Config) {
 
 type appRepos struct {
 	config          *repository.ConfigurationRepository
-	mailServer      *repository.MailServerRepository
-	emailTemplate   *repository.EmailTemplateRepository
 	user            *repository.UserRepository
 	userSession     *repository.UserSessionRepository
 	apiKey          *repository.ApiKeyRepository
@@ -269,7 +266,6 @@ type appRepos struct {
 
 type appCaches struct {
 	config      *cache.ConfigurationCache
-	mailServer  *cache.MailServerCache
 	apiKey      *cache.ApiKeyCache
 	setPassword *cache.SetPasswordCache
 	session     *cache.SessionCache
@@ -278,8 +274,6 @@ type appCaches struct {
 
 type appServices struct {
 	config          *service.ConfigurationService
-	mailServer      *service.MailServerService
-	emailTemplate   *service.EmailTemplateService
 	user            *service.UserService
 	auth            *service.AuthService
 	setPassword     *service.SetPasswordService
@@ -304,8 +298,6 @@ func buildRepos(db interface { /* *mongo.Database */
 	d := db.(*mongo.Database)
 	return appRepos{
 		config:          repository.NewConfigurationRepository(d),
-		mailServer:      repository.NewMailServerRepository(d),
-		emailTemplate:   repository.NewEmailTemplateRepository(d),
 		user:            repository.NewUserRepository(d),
 		userSession:     repository.NewUserSessionRepository(d),
 		apiKey:          repository.NewApiKeyRepository(d),
@@ -324,7 +316,6 @@ func buildRepos(db interface { /* *mongo.Database */
 func buildCaches(rc *redis.Client, ttl time.Duration) appCaches {
 	return appCaches{
 		config:      cache.NewConfigurationCache(rc, ttl),
-		mailServer:  cache.NewMailServerCache(rc, ttl),
 		apiKey:      cache.NewApiKeyCache(rc, ttl),
 		setPassword: cache.NewSetPasswordCache(rc),
 		session:     cache.NewSessionCache(rc),
@@ -343,8 +334,6 @@ func buildServices(cfg *config.Config, r appRepos, c appCaches, rc *redis.Client
 
 	return appServices{
 		config:          configSvc,
-		mailServer:      service.NewMailServerService(r.mailServer, c.mailServer),
-		emailTemplate:   service.NewEmailTemplateService(r.emailTemplate),
 		user:            service.NewUserService(r.user, setPasswordSvc, gwPublisher),
 		auth:            service.NewAuthService(configSvc, r.user, r.pkg, c.session, r.userSession, c.session, verifyEmailSvc),
 		setPassword:     setPasswordSvc,
@@ -368,8 +357,6 @@ func buildServices(cfg *config.Config, r appRepos, c appCaches, rc *redis.Client
 func buildRouterServices(s appServices) router.Services {
 	return router.Services{
 		Config:                  s.config,
-		MailServer:              s.mailServer,
-		EmailTemplate:           s.emailTemplate,
 		User:                    s.user,
 		Auth:                    s.auth,
 		SetPassword:             s.setPassword,

@@ -13,7 +13,10 @@ import (
 	"go.mongodb.org/mongo-driver/v2/mongo/options"
 )
 
-const collectionUser = "users"
+const (
+	collectionUser = "users"
+	opExists       = "$exists"
+)
 
 type UserRepository struct {
 	db *mongo.Database

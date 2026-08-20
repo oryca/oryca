@@ -62,17 +62,6 @@ const (
 	CodeConfigNotFound    = "CONFIG_NOT_FOUND"
 	CodeConfigUpdateError = "CONFIG_UPDATE_ERROR"
 
-	// === Mail Server ===
-	CodeMailServerNotFound     = "MAIL_SERVER_NOT_FOUND"
-	CodeMailServerDuplicate    = "MAIL_SERVER_DUPLICATE"
-	CodeMailServerSendError    = "MAIL_SERVER_SEND_ERROR"
-	CodeMailServerCannotDelete = "MAIL_SERVER_CANNOT_DELETE"
-
-	// === Email Template ===
-	CodeEmailTemplateNotFound     = "EMAIL_TEMPLATE_NOT_FOUND"
-	CodeEmailTemplateDuplicate    = "EMAIL_TEMPLATE_DUPLICATE"
-	CodeEmailTemplateCannotDelete = "EMAIL_TEMPLATE_CANNOT_DELETE"
-
 	// === API Key ===
 	CodeApiKeyNotFound    = "API_KEY_NOT_FOUND"
 	CodeApiKeyDisabled    = "API_KEY_DISABLED"

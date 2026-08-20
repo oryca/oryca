@@ -20,6 +20,9 @@ import (
 const (
 	msgTokenInvalidOrExpired = "Token is invalid or expired"
 	msgCallbackUrlInvalid    = "callbackUrl is invalid or contains reserved query param 'token'"
+	msgNoPermission          = "No permission"
+	msgNotFound              = "Not found"
+	msgAuthRequired          = "Authentication required"
 )
 
 type authSetPasswordSvc interface {
