@@ -107,7 +107,7 @@ routing data survives without the control plane).
 **Sync.** `ORYCA_CP_SYNC_CHANNEL` (`oryca:sync-events`), which must match the
 gateway's.
 
-**Mail.** SMTP is configured here, read once at startup — restart the control
+**Mail.** SMTP is configured here,in the control plane env, read once at startup — restart the control
 plane after changing any of it. An empty `ORYCA_API_SMTP_HOST` disables mail
 entirely: signup still works, but verify-email and forgot-password links cannot
 be sent, and an administrator has to verify accounts and reset passwords by hand.
