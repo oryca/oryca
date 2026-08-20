@@ -31,7 +31,13 @@ export default function RegisterPage() {
     setIsLoading(true);
 
     try {
-      await api.post('/auth/register', { email, password, firstName, lastName });
+      await api.post('/auth/register', {
+        email,
+        password,
+        firstName,
+        lastName,
+        callbackUrl: `${window.location.origin}/auth/verify-email`,
+      });
       router.push('/auth/login?registered=true');
     } catch (err) {
       setError(
