@@ -417,30 +417,36 @@ export default function DashboardPage() {
             label="Service"
             className="min-w-0 flex-1 basis-56"
             value={selectedServiceId}
-            onChange={(e) => setSelectedServiceId(e.target.value)}
-          >
-            <option value="">All services</option>
-            {services?.map((svc) => (
-              <option key={svc.id} value={svc.id}>
-                {svc.name} ({svc.basePath})
-              </option>
-            ))}
-          </Select>
+            onChange={setSelectedServiceId}
+            searchable
+            searchPlaceholder="Search services by name or path..."
+            options={[
+              { value: '', label: 'All services' },
+              ...(services || []).map((svc) => ({
+                value: svc.id,
+                label: svc.name,
+                subtext: svc.basePath,
+              })),
+            ]}
+          />
 
           {isAdmin && (
             <Select
               label="Consumer"
               className="min-w-0 flex-1 basis-56"
               value={selectedUserId}
-              onChange={(e) => setSelectedUserId(e.target.value)}
-            >
-              <option value="">Everyone</option>
-              {users?.map((u) => (
-                <option key={u.id} value={u.id}>
-                  {u.email} ({u.role})
-                </option>
-              ))}
-            </Select>
+              onChange={setSelectedUserId}
+              searchable
+              searchPlaceholder="Search consumers by email..."
+              options={[
+                { value: '', label: 'Everyone' },
+                ...(users || []).map((u) => ({
+                  value: u.id,
+                  label: u.email,
+                  subtext: u.role,
+                })),
+              ]}
+            />
           )}
         </div>
       </SectionCard>

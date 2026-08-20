@@ -1051,28 +1051,29 @@ export default function AdminPackagesPage() {
                         </label>
                         <Select
                           value={newRole}
-                          onChange={(e) => setNewRole(e.target.value as 'user' | 'admin')}
-                        >
-                          <option value="user">User</option>
-                          <option value="admin">Administrator</option>
-                        </Select>
+                          onChange={(val) => setNewRole(val as 'user' | 'admin')}
+                          options={[
+                            { value: 'user', label: 'User' },
+                            { value: 'admin', label: 'Administrator' },
+                          ]}
+                        />
                       </div>
                       <div className="flex-1 min-w-0">
                         <label className="text-xs font-semibold text-muted uppercase tracking-wider block mb-1">
                           Assigned Package Tier
                         </label>
                         <Select
-                          controlClassName="font-mono"
                           value={newPackageId}
-                          onChange={(e) => setNewPackageId(e.target.value)}
-                        >
-                          <option value="">No package (cannot call anything)</option>
-                          {packages?.map((pkg) => (
-                            <option key={pkg.id} value={pkg.id}>
-                              {pkg.name} ({pkg.alias})
-                            </option>
-                          ))}
-                        </Select>
+                          onChange={setNewPackageId}
+                          options={[
+                            { value: '', label: 'No package (cannot call anything)' },
+                            ...(packages || []).map((pkg) => ({
+                              value: pkg.id,
+                              label: pkg.name,
+                              subtext: pkg.alias,
+                            })),
+                          ]}
+                        />
                       </div>
                     </div>
 
@@ -1125,13 +1126,16 @@ export default function AdminPackagesPage() {
                       </label>
                       <Select
                         value={userRole}
-                        onChange={(e) => setUserRole(e.target.value as 'user' | 'admin' | 'root')}
+                        onChange={(val) => setUserRole(val as 'user' | 'admin' | 'root')}
                         disabled={editingUser.role === 'root'} // Disable root editing for safety
-                      >
-                        <option value="user">User</option>
-                        <option value="admin">Administrator</option>
-                        {editingUser.role === 'root' && <option value="root">Root</option>}
-                      </Select>
+                        options={[
+                          { value: 'user', label: 'User' },
+                          { value: 'admin', label: 'Administrator' },
+                          ...(editingUser.role === 'root'
+                            ? [{ value: 'root', label: 'Root' }]
+                            : []),
+                        ]}
+                      />
                     </div>
 
                     <div>
@@ -1139,17 +1143,17 @@ export default function AdminPackagesPage() {
                         Assigned Package Tier
                       </label>
                       <Select
-                        controlClassName="font-mono"
                         value={userPackageId}
-                        onChange={(e) => setUserPackageId(e.target.value)}
-                      >
-                        <option value="">No Package Assigned</option>
-                        {packages?.map((pkg) => (
-                          <option key={pkg.id} value={pkg.id}>
-                            {pkg.name} ({pkg.alias})
-                          </option>
-                        ))}
-                      </Select>
+                        onChange={setUserPackageId}
+                        options={[
+                          { value: '', label: 'No Package Assigned' },
+                          ...(packages || []).map((pkg) => ({
+                            value: pkg.id,
+                            label: pkg.name,
+                            subtext: pkg.alias,
+                          })),
+                        ]}
+                      />
                     </div>
 
                     <div className="flex flex-col gap-2 pt-2 border-t border-rule">

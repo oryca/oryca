@@ -509,31 +509,28 @@ export default function SandboxPage() {
               <Select
                 label="API key"
                 value={apiKey}
-                onChange={(e) => setApiKey(e.target.value)}
-              >
-                <option value="">No key (expect 401)</option>
-                {(apiKeys || []).map((k) => (
-                  <option key={k.id} value={k.apiKey || k.key || ''}>
-                    {k.name}
-                  </option>
-                ))}
-              </Select>
+                onChange={setApiKey}
+                options={[
+                  { value: '', label: 'No key (expect 401)' },
+                  ...(apiKeys || []).map((k) => ({
+                    value: k.apiKey || k.key || '',
+                    label: k.name,
+                  })),
+                ]}
+              />
             </div>
 
             <div>
               <label className="ui-field__label block mb-1">Method and path</label>
               <div className="flex gap-2">
                 <Select
-                  className="shrink-0"
-                  controlClassName="w-auto font-mono"
+                  className="w-28 shrink-0"
+                  controlClassName="font-mono"
                   aria-label="HTTP method"
                   value={method}
-                  onChange={(e) => setMethod(e.target.value)}
-                >
-                  {METHODS.map((m) => (
-                    <option key={m}>{m}</option>
-                  ))}
-                </Select>
+                  onChange={setMethod}
+                  options={METHODS.map((m) => ({ value: m, label: m }))}
+                />
                 <input
                   className="ui-input min-w-0 flex-1 font-mono"
                   aria-label="Path"

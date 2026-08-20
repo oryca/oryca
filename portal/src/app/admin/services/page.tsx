@@ -25,6 +25,22 @@ import {
   Filter,
 } from 'lucide-react';
 
+const SERVICE_TYPE_OPTIONS = [
+  { value: 'General', label: 'General API' },
+  { value: 'OGC_API_Features', label: 'OGC API Features' },
+  { value: 'OGC_API_STAC', label: 'OGC API STAC' },
+  { value: 'OGC_API_Styles', label: 'OGC API Styles' },
+  { value: 'OGC_API_SensorThings', label: 'OGC API SensorThings' },
+  { value: 'OGC_API_Tiles', label: 'OGC API Tiles' },
+];
+
+const METHOD_OPTIONS = ['GET', 'POST', 'PUT', 'DELETE'].map((m) => ({ value: m, label: m }));
+
+const TARGET_OPTIONS = [
+  { value: '__api__', label: 'Forward to a URL' },
+  { value: '__static__', label: 'Answer with a fixed body' },
+];
+
 interface GatewaySource {
   id: string;
   alias: string;
@@ -599,24 +615,14 @@ function ServicesManager({
                   <label className="text-xs font-semibold text-muted uppercase tracking-wider block mb-1">
                     Service Type<span className="ui-field__req" aria-hidden="true">*</span>
                   </label>
+                  {/* value stays on the current type until applyServiceType
+                      confirms and calls setType */}
                   <Select
                     required
                     value={type}
-                    onChange={(e) => {
-                      // hold the select on the current type until confirmed —
-                      // setType moves it if applyServiceType gets that far
-                      const picked = e.target.value;
-                      e.target.value = type;
-                      applyServiceType(picked);
-                    }}
-                  >
-                    <option value="General">General API</option>
-                    <option value="OGC_API_Features">OGC API Features</option>
-                    <option value="OGC_API_STAC">OGC API STAC</option>
-                    <option value="OGC_API_Styles">OGC API Styles</option>
-                    <option value="OGC_API_SensorThings">OGC API SensorThings</option>
-                    <option value="OGC_API_Tiles">OGC API Tiles</option>
-                  </Select>
+                    onChange={applyServiceType}
+                    options={SERVICE_TYPE_OPTIONS}
+                  />
                 </div>
 
                 <div className="flex items-center gap-2 pt-5">
@@ -687,28 +693,22 @@ function ServicesManager({
                         <Select
                           size="sm"
                           className="flex-1"
+                          aria-label="Method"
                           value={rp.methods[0] || 'GET'}
-                          onChange={(e) => updatePathRow(index, 'methods', [e.target.value])}
-                        >
-                          <option value="GET">GET</option>
-                          <option value="POST">POST</option>
-                          <option value="PUT">PUT</option>
-                          <option value="DELETE">DELETE</option>
-                        </Select>
+                          onChange={(val) => updatePathRow(index, 'methods', [val])}
+                          options={METHOD_OPTIONS}
+                        />
 
                         <Select
                           size="sm"
                           className="flex-[2]"
                           required
+                          aria-label="Upstream mapping"
+                          placeholder="Map upstream..."
                           value={targetSelectValue(rp)}
-                          onChange={(e) => setRowTarget(index, e.target.value)}
-                        >
-                          <option value="" disabled>
-                            Map upstream...
-                          </option>
-                          <option value="__api__">Forward to a URL</option>
-                          <option value="__static__">Answer with a fixed body</option>
-                        </Select>
+                          onChange={(val) => setRowTarget(index, val)}
+                          options={TARGET_OPTIONS}
+                        />
 
                         <button
                           type="button"

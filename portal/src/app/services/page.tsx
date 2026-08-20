@@ -703,36 +703,31 @@ export default function ServicesAndKeysPage() {
                           label="Route to call"
                           controlClassName="font-mono"
                           value={selectedPath}
-                          onChange={(e) => {
-                            setSelectedPath(e.target.value);
+                          onChange={(val) => {
+                            setSelectedPath(val);
                             const match = selectedService.resourcePaths?.find(
-                              (r) => r.path === e.target.value,
+                              (r) => r.path === val,
                             );
                             if (match?.methods[0]) setSelectedMethod(match.methods[0]);
                           }}
-                        >
-                          {selectedService.resourcePaths?.map((rp) => (
-                            <option key={rp.path} value={rp.path}>
-                              {rp.path}
-                            </option>
-                          ))}
-                        </Select>
+                          searchable
+                          searchPlaceholder="Search routes..."
+                          options={(selectedService.resourcePaths || []).map((rp) => ({
+                            value: rp.path,
+                            label: rp.path,
+                          }))}
+                        />
 
                         <Select
                           label="API key"
                           value={selectedApiKey}
-                          onChange={(e) => setSelectedApiKey(e.target.value)}
-                        >
-                          {apiKeys && apiKeys.length > 0 ? (
-                            apiKeys.map((k) => (
-                              <option key={k.id} value={k.apiKey}>
-                                {k.name}
-                              </option>
-                            ))
-                          ) : (
-                            <option value="">No keys yet - issue one on the next tab</option>
-                          )}
-                        </Select>
+                          onChange={setSelectedApiKey}
+                          placeholder="No keys yet - issue one on the next tab"
+                          options={(apiKeys || []).map((k) => ({
+                            value: k.apiKey ?? '',
+                            label: k.name,
+                          }))}
+                        />
                       </div>
 
                       {/* Path Parameters Helper */}

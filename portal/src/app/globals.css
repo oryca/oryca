@@ -279,6 +279,31 @@ textarea.ui-input { height: auto; min-height: 6rem; padding-block: var(--space-2
     height: 0.875rem;
 }
 
+/* Panel is fixed and portalled to <body>; JS supplies left/width/top/bottom */
+.ui-select__panel {
+    position: fixed;
+    z-index: 60;
+    background: var(--color-paper);
+    border: 1px solid var(--color-rule);
+    border-radius: var(--radius-surface);
+    box-shadow: 0 8px 24px rgb(0 0 0 / 0.12);
+    animation: ui-fade-in var(--dur-short) var(--ease-out) both;
+}
+
+/* Invisible but still laid out, so the browser can anchor its validation
+ * bubble to it — display:none or hidden would make it unreportable */
+.ui-select__validity {
+    position: absolute;
+    left: var(--space-xs);
+    bottom: 0;
+    width: 1px;
+    height: 1px;
+    padding: 0;
+    border: 0;
+    opacity: 0;
+    pointer-events: none;
+}
+
 /* helper จองความสูงไว้ 1 บรรทัด error มาแทนที่ ไม่ดันหน้า */
 .ui-field__note {
     display: block;
