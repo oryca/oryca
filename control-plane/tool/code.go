@@ -62,6 +62,9 @@ const (
 	CodeConfigNotFound    = "CONFIG_NOT_FOUND"
 	CodeConfigUpdateError = "CONFIG_UPDATE_ERROR"
 
+	// === Mail ===
+	CodeMailNotConfigured = "MAIL_NOT_CONFIGURED"
+
 	// === API Key ===
 	CodeApiKeyNotFound    = "API_KEY_NOT_FOUND"
 	CodeApiKeyDisabled    = "API_KEY_DISABLED"

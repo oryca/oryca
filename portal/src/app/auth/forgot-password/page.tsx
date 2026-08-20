@@ -12,11 +12,13 @@ export default function ForgotPasswordPage() {
   const [email, setEmail] = useState('');
   const [error, setError] = useState<string | null>(null);
   const [sent, setSent] = useState(false);
+  const [mailNotConfigured, setMailNotConfigured] = useState(false);
   const [isLoading, setIsLoading] = useState(false);
 
   async function handleSubmit(e: React.FormEvent) {
     e.preventDefault();
     setError(null);
+    setMailNotConfigured(false);
     setIsLoading(true);
 
     try {
@@ -26,9 +28,14 @@ export default function ForgotPasswordPage() {
       });
       setSent(true);
     } catch (err) {
-      setError(
-        err instanceof Error && err.message ? err.message : 'Could not send the reset request.',
-      );
+      const code = (err as { response?: { data?: { code?: string } } })?.response?.data?.code;
+      if (code === 'MAIL_NOT_CONFIGURED') {
+        setMailNotConfigured(true);
+      } else {
+        setError(
+          err instanceof Error && err.message ? err.message : 'Could not send the reset request.',
+        );
+      }
     } finally {
       setIsLoading(false);
     }
@@ -46,6 +53,13 @@ export default function ForgotPasswordPage() {
           If that email is registered, a reset link is on its way.
           <br />
           If email is not configured, ask an administrator to reset your password.
+        </Notice>
+      )}
+
+      {mailNotConfigured && (
+        <Notice tone="warn" title="Email is not configured">
+          The administrator has not set up email for this site yet, so the reset link
+          cannot be sent. Ask an administrator to reset your password for you.
         </Notice>
       )}
 

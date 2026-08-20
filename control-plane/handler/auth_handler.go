@@ -23,6 +23,7 @@ const (
 	msgNoPermission          = "No permission"
 	msgNotFound              = "Not found"
 	msgAuthRequired          = "Authentication required"
+	msgMailNotConfigured     = "Mail server is not configured yet"
 )
 
 type authSetPasswordSvc interface {
@@ -325,6 +326,13 @@ func (h *AuthHandler) ForgotPassword(c echo.Context) error {
 				Detail: "User is not enabled",
 			})
 		}
+		if errors.Is(err, service.ErrMailDisabled) {
+			return c.JSON(http.StatusUnprocessableEntity, &model.Exception{
+				Code:   tool.CodeMailNotConfigured,
+				Status: http.StatusUnprocessableEntity,
+				Detail: msgMailNotConfigured,
+			})
+		}
 		logger.Error("forgot password failed: " + err.Error())
 		return c.JSON(http.StatusUnprocessableEntity, &model.Exception{
 			Code:   tool.CodeOperationFailed,
@@ -384,6 +392,13 @@ func (h *AuthHandler) ResendVerifyEmail(c echo.Context) error {
 				Detail: "User is not enabled",
 			})
 		}
+		if errors.Is(err, service.ErrMailDisabled) {
+			return c.JSON(http.StatusUnprocessableEntity, &model.Exception{
+				Code:   tool.CodeMailNotConfigured,
+				Status: http.StatusUnprocessableEntity,
+				Detail: msgMailNotConfigured,
+			})
+		}
 		logger.Error("resend verify email failed: " + err.Error())
 		return c.JSON(http.StatusUnprocessableEntity, &model.Exception{
 			Code:   tool.CodeOperationFailed,
@@ -434,6 +449,13 @@ func (h *AuthHandler) SettingPassword(c echo.Context) error {
 				Code:   tool.CodeUserNotEnabled,
 				Status: http.StatusForbidden,
 				Detail: "User is not enabled",
+			})
+		}
+		if errors.Is(err, service.ErrMailDisabled) {
+			return c.JSON(http.StatusUnprocessableEntity, &model.Exception{
+				Code:   tool.CodeMailNotConfigured,
+				Status: http.StatusUnprocessableEntity,
+				Detail: msgMailNotConfigured,
 			})
 		}
 		logger.Error("setting password failed: " + err.Error())
