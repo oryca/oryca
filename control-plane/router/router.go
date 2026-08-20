@@ -20,8 +20,6 @@ import (
 
 const (
 	routeProfile           = "/profile"
-	routeMailServerID      = "/:mailServerId"
-	routeEmailTemplateID   = "/:emailTemplateId"
 	routeUserID            = "/:userId"
 	routeApiKeyID          = "/:apiKeyId"
 	routeSourceID          = "/:sourceId"
@@ -37,8 +35,6 @@ const (
 
 type Services struct {
 	Config                  *service.ConfigurationService
-	MailServer              *service.MailServerService
-	EmailTemplate           *service.EmailTemplateService
 	User                    *service.UserService
 	Auth                    *service.AuthService
 	SetPassword             *service.SetPasswordService
@@ -184,21 +180,6 @@ func Setup(e *echo.Echo, infra Infra, svcs Services, internalCfg InternalConfig,
 	// Configuration. GET public (optional auth), PATCH root only
 	configurationHandler := handler.NewConfigurationHandler(svcs.Config)
 	v1.GET("/configuration", configurationHandler.GetConfiguration, jwtMW.OptionalAuthenticate)
-
-	// Mail Servers
-	mailServerHandler := handler.NewMailServerHandler(svcs.MailServer)
-	mailServers := v1.Group("/mail-servers", jwtMW.Authenticate)
-	mailServers.GET("", mailServerHandler.GetMailServers)
-	mailServers.GET(routeMailServerID, mailServerHandler.GetMailServer)
-	mailServers.POST("", mailServerHandler.CreateMailServer)
-	mailServers.PUT(routeMailServerID, mailServerHandler.UpdateMailServer)
-	mailServers.DELETE(routeMailServerID, mailServerHandler.DeleteMailServer)
-
-	// Email Templates
-	emailTemplateHandler := handler.NewEmailTemplateHandler(svcs.EmailTemplate)
-	emailTemplates := v1.Group("/email-templates", jwtMW.Authenticate)
-	emailTemplates.GET("", emailTemplateHandler.GetEmailTemplates)
-	emailTemplates.GET(routeEmailTemplateID, emailTemplateHandler.GetEmailTemplate)
 
 	// Users
 	userHandler := handler.NewUserHandler(svcs.User)

@@ -55,16 +55,6 @@ func (m *mockSetPasswordUserRepo) Update(ctx context.Context, id bson.ObjectID, 
 	return m.Called(ctx, id, fields).Error(0)
 }
 
-type mockSetPasswordMailServerSvc struct{ mock.Mock }
-
-func (m *mockSetPasswordMailServerSvc) GetDefault(ctx context.Context) (*model.MailServer, error) {
-	args := m.Called(ctx)
-	if v := args.Get(0); v != nil {
-		return v.(*model.MailServer), args.Error(1)
-	}
-	return nil, args.Error(1)
-}
-
 type mockSetPasswordMailSender struct{ mock.Mock }
 
 func (m *mockSetPasswordMailSender) SendTemplate(ctx context.Context, toEmail, alias string, vars map[string]string) error {
@@ -81,23 +71,22 @@ const (
 	spErrDB       = "db error"
 )
 
+const spTTL = 3600 * time.Second
+
 func newSetPasswordSvc(
 	cache *mockSetPasswordCache,
 	repo *mockSetPasswordUserRepo,
 	mailSvc *mockSetPasswordMailSender,
-	mailServerSvc *mockSetPasswordMailServerSvc,
 ) *SetPasswordService {
-	svc := NewSetPasswordService(nil, repo, nil, mailServerSvc)
-	svc.cache = cache
-	svc.mailSvc = mailSvc
-	return svc
+	return &SetPasswordService{
+		cache:    cache,
+		userRepo: repo,
+		mailSvc:  mailSvc,
+		ttl:      spTTL,
+	}
 }
 
 func boolPtr(b bool) *bool { return &b }
-
-func defaultMailServer() *model.MailServer {
-	return &model.MailServer{ResetPasswordExpired: 3600}
-}
 
 // --- TestSetPasswordService_ForgotPassword ---
 
@@ -105,11 +94,8 @@ func TestSetPasswordService_ForgotPassword(t *testing.T) {
 	ctx := context.Background()
 
 	t.Run("email ไม่มีในระบบ ต้องได้ ErrUserNotFound", func(t *testing.T) {
-		cache := new(mockSetPasswordCache)
 		repo := new(mockSetPasswordUserRepo)
-		mail := new(mockSetPasswordMailSender)
-		ms := new(mockSetPasswordMailServerSvc)
-		svc := newSetPasswordSvc(cache, repo, mail, ms)
+		svc := newSetPasswordSvc(nil, repo, nil)
 
 		repo.On("FindByEmail", ctx, spEmail).Return(nil, errors.New(spErrDB))
 
@@ -118,11 +104,8 @@ func TestSetPasswordService_ForgotPassword(t *testing.T) {
 	})
 
 	t.Run("user ยังไม่ verify ต้องได้ ErrUserNotVerifiedAuth", func(t *testing.T) {
-		cache := new(mockSetPasswordCache)
 		repo := new(mockSetPasswordUserRepo)
-		mail := new(mockSetPasswordMailSender)
-		ms := new(mockSetPasswordMailServerSvc)
-		svc := newSetPasswordSvc(cache, repo, mail, ms)
+		svc := newSetPasswordSvc(nil, repo, nil)
 
 		user := &model.User{ID: bson.NewObjectID(), Email: spEmail, Verified: boolPtr(false)}
 		repo.On("FindByEmail", ctx, spEmail).Return(user, nil)
@@ -132,11 +115,8 @@ func TestSetPasswordService_ForgotPassword(t *testing.T) {
 	})
 
 	t.Run("verified เป็น nil ต้องได้ ErrUserNotVerifiedAuth", func(t *testing.T) {
-		cache := new(mockSetPasswordCache)
 		repo := new(mockSetPasswordUserRepo)
-		mail := new(mockSetPasswordMailSender)
-		ms := new(mockSetPasswordMailServerSvc)
-		svc := newSetPasswordSvc(cache, repo, mail, ms)
+		svc := newSetPasswordSvc(nil, repo, nil)
 
 		user := &model.User{ID: bson.NewObjectID(), Email: spEmail, Verified: nil}
 		repo.On("FindByEmail", ctx, spEmail).Return(user, nil)
@@ -146,11 +126,8 @@ func TestSetPasswordService_ForgotPassword(t *testing.T) {
 	})
 
 	t.Run("user ถูก disable ต้องได้ ErrUserNotEnabledAuth", func(t *testing.T) {
-		cache := new(mockSetPasswordCache)
 		repo := new(mockSetPasswordUserRepo)
-		mail := new(mockSetPasswordMailSender)
-		ms := new(mockSetPasswordMailServerSvc)
-		svc := newSetPasswordSvc(cache, repo, mail, ms)
+		svc := newSetPasswordSvc(nil, repo, nil)
 
 		user := &model.User{ID: bson.NewObjectID(), Email: spEmail, Verified: boolPtr(true), Enabled: boolPtr(false)}
 		repo.On("FindByEmail", ctx, spEmail).Return(user, nil)
@@ -163,20 +140,18 @@ func TestSetPasswordService_ForgotPassword(t *testing.T) {
 		cache := new(mockSetPasswordCache)
 		repo := new(mockSetPasswordUserRepo)
 		mail := new(mockSetPasswordMailSender)
-		ms := new(mockSetPasswordMailServerSvc)
-		svc := newSetPasswordSvc(cache, repo, mail, ms)
+		svc := newSetPasswordSvc(cache, repo, mail)
 
 		userID := bson.NewObjectID()
 		user := &model.User{ID: userID, Email: spEmail, FirstName: "John", Verified: boolPtr(true), Enabled: boolPtr(true)}
 		repo.On("FindByEmail", ctx, spEmail).Return(user, nil)
-		ms.On("GetDefault", ctx).Return(defaultMailServer(), nil)
-		cache.On("Set", ctx, mock.Anything, userID.Hex(), mock.Anything).Return(nil)
+		cache.On("Set", ctx, mock.Anything, userID.Hex(), spTTL).Return(nil)
 		mail.On("SendTemplate", ctx, spEmail, aliasSetPassword, mock.Anything).Return(nil)
 
 		result, err := svc.ForgotPassword(ctx, spEmail, spCallbackUrl)
 		require.NoError(t, err)
 		assert.Equal(t, spEmail, result.Email)
-		assert.WithinDuration(t, time.Now().Add(3600*time.Second), result.ExpiredAt, 5*time.Second)
+		assert.WithinDuration(t, time.Now().Add(spTTL), result.ExpiredAt, 5*time.Second)
 	})
 }
 
@@ -185,31 +160,30 @@ func TestSetPasswordService_ForgotPassword(t *testing.T) {
 func TestSetPasswordService_Send(t *testing.T) {
 	ctx := context.Background()
 
-	t.Run("ดึง mail server ไม่ได้ ต้องได้ error", func(t *testing.T) {
+	t.Run("mail ปิดอยู่ (ErrMailDisabled) ต้องได้ error กลับไป", func(t *testing.T) {
 		cache := new(mockSetPasswordCache)
 		repo := new(mockSetPasswordUserRepo)
 		mail := new(mockSetPasswordMailSender)
-		ms := new(mockSetPasswordMailServerSvc)
-		svc := newSetPasswordSvc(cache, repo, mail, ms)
+		svc := newSetPasswordSvc(cache, repo, mail)
 
-		user := &model.User{ID: bson.NewObjectID(), Email: spEmail}
-		ms.On("GetDefault", ctx).Return(nil, errors.New(spErrDB))
+		userID := bson.NewObjectID()
+		user := &model.User{ID: userID, Email: spEmail}
+		cache.On("Set", ctx, mock.Anything, userID.Hex(), spTTL).Return(nil)
+		mail.On("SendTemplate", ctx, spEmail, aliasSetPassword, mock.Anything).Return(ErrMailDisabled)
 
 		_, err := svc.Send(ctx, user, spCallbackUrl)
-		assert.Error(t, err)
+		assert.ErrorIs(t, err, ErrMailDisabled)
 	})
 
 	t.Run("cache.Set error ต้องได้ error", func(t *testing.T) {
 		cache := new(mockSetPasswordCache)
 		repo := new(mockSetPasswordUserRepo)
 		mail := new(mockSetPasswordMailSender)
-		ms := new(mockSetPasswordMailServerSvc)
-		svc := newSetPasswordSvc(cache, repo, mail, ms)
+		svc := newSetPasswordSvc(cache, repo, mail)
 
 		userID := bson.NewObjectID()
 		user := &model.User{ID: userID, Email: spEmail}
-		ms.On("GetDefault", ctx).Return(defaultMailServer(), nil)
-		cache.On("Set", ctx, mock.Anything, userID.Hex(), mock.Anything).Return(errors.New(spErrDB))
+		cache.On("Set", ctx, mock.Anything, userID.Hex(), spTTL).Return(errors.New(spErrDB))
 
 		_, err := svc.Send(ctx, user, spCallbackUrl)
 		assert.Error(t, err)
@@ -219,13 +193,11 @@ func TestSetPasswordService_Send(t *testing.T) {
 		cache := new(mockSetPasswordCache)
 		repo := new(mockSetPasswordUserRepo)
 		mail := new(mockSetPasswordMailSender)
-		ms := new(mockSetPasswordMailServerSvc)
-		svc := newSetPasswordSvc(cache, repo, mail, ms)
+		svc := newSetPasswordSvc(cache, repo, mail)
 
 		userID := bson.NewObjectID()
 		user := &model.User{ID: userID, Email: spEmail, FirstName: "John", DisplayName: "Johnny"}
-		ms.On("GetDefault", ctx).Return(defaultMailServer(), nil)
-		cache.On("Set", ctx, mock.Anything, userID.Hex(), mock.Anything).Return(nil)
+		cache.On("Set", ctx, mock.Anything, userID.Hex(), spTTL).Return(nil)
 		mail.On("SendTemplate", ctx, spEmail, aliasSetPassword, mock.MatchedBy(func(vars map[string]string) bool {
 			return vars["name"] == "Johnny"
 		})).Return(nil)
@@ -233,7 +205,7 @@ func TestSetPasswordService_Send(t *testing.T) {
 		result, err := svc.Send(ctx, user, spCallbackUrl)
 		require.NoError(t, err)
 		assert.Equal(t, spEmail, result.Email)
-		assert.WithinDuration(t, time.Now().Add(3600*time.Second), result.ExpiredAt, 5*time.Second)
+		assert.WithinDuration(t, time.Now().Add(spTTL), result.ExpiredAt, 5*time.Second)
 		mail.AssertExpectations(t)
 	})
 
@@ -241,13 +213,11 @@ func TestSetPasswordService_Send(t *testing.T) {
 		cache := new(mockSetPasswordCache)
 		repo := new(mockSetPasswordUserRepo)
 		mail := new(mockSetPasswordMailSender)
-		ms := new(mockSetPasswordMailServerSvc)
-		svc := newSetPasswordSvc(cache, repo, mail, ms)
+		svc := newSetPasswordSvc(cache, repo, mail)
 
 		userID := bson.NewObjectID()
 		user := &model.User{ID: userID, Email: spEmail, FirstName: "John", DisplayName: ""}
-		ms.On("GetDefault", ctx).Return(defaultMailServer(), nil)
-		cache.On("Set", ctx, mock.Anything, userID.Hex(), mock.Anything).Return(nil)
+		cache.On("Set", ctx, mock.Anything, userID.Hex(), spTTL).Return(nil)
 		mail.On("SendTemplate", ctx, spEmail, aliasSetPassword, mock.MatchedBy(func(vars map[string]string) bool {
 			return vars["name"] == "John"
 		})).Return(nil)
@@ -261,13 +231,11 @@ func TestSetPasswordService_Send(t *testing.T) {
 		cache := new(mockSetPasswordCache)
 		repo := new(mockSetPasswordUserRepo)
 		mail := new(mockSetPasswordMailSender)
-		ms := new(mockSetPasswordMailServerSvc)
-		svc := newSetPasswordSvc(cache, repo, mail, ms)
+		svc := newSetPasswordSvc(cache, repo, mail)
 
 		userID := bson.NewObjectID()
 		user := &model.User{ID: userID, Email: spEmail, FirstName: "John"}
-		ms.On("GetDefault", ctx).Return(defaultMailServer(), nil)
-		cache.On("Set", ctx, mock.Anything, userID.Hex(), mock.Anything).Return(nil)
+		cache.On("Set", ctx, mock.Anything, userID.Hex(), spTTL).Return(nil)
 		mail.On("SendTemplate", ctx, spEmail, aliasSetPassword, mock.MatchedBy(func(vars map[string]string) bool {
 			link := vars["link"]
 			u, err := url.Parse(link)
@@ -286,14 +254,12 @@ func TestSetPasswordService_Send(t *testing.T) {
 		cache := new(mockSetPasswordCache)
 		repo := new(mockSetPasswordUserRepo)
 		mail := new(mockSetPasswordMailSender)
-		ms := new(mockSetPasswordMailServerSvc)
-		svc := newSetPasswordSvc(cache, repo, mail, ms)
+		svc := newSetPasswordSvc(cache, repo, mail)
 
 		urlWithParam := "https://app.example.com/reset?lang=th&source=email"
 		userID := bson.NewObjectID()
 		user := &model.User{ID: userID, Email: spEmail, FirstName: "John"}
-		ms.On("GetDefault", ctx).Return(defaultMailServer(), nil)
-		cache.On("Set", ctx, mock.Anything, userID.Hex(), mock.Anything).Return(nil)
+		cache.On("Set", ctx, mock.Anything, userID.Hex(), spTTL).Return(nil)
 		mail.On("SendTemplate", ctx, spEmail, aliasSetPassword, mock.MatchedBy(func(vars map[string]string) bool {
 			u, err := url.Parse(vars["link"])
 			if err != nil {
@@ -312,11 +278,9 @@ func TestSetPasswordService_Send(t *testing.T) {
 		cache := new(mockSetPasswordCache)
 		repo := new(mockSetPasswordUserRepo)
 		mail := new(mockSetPasswordMailSender)
-		ms := new(mockSetPasswordMailServerSvc)
-		svc := newSetPasswordSvc(cache, repo, mail, ms)
+		svc := newSetPasswordSvc(cache, repo, mail)
 
 		user := &model.User{ID: bson.NewObjectID(), Email: spEmail, FirstName: "John"}
-		ms.On("GetDefault", ctx).Return(defaultMailServer(), nil)
 		cache.On("Set", ctx, mock.Anything, mock.Anything, mock.Anything).Return(nil)
 
 		_, err := svc.Send(ctx, user, "https://app.example.com/reset?token=garbage")
@@ -328,11 +292,9 @@ func TestSetPasswordService_Send(t *testing.T) {
 		cache := new(mockSetPasswordCache)
 		repo := new(mockSetPasswordUserRepo)
 		mail := new(mockSetPasswordMailSender)
-		ms := new(mockSetPasswordMailServerSvc)
-		svc := newSetPasswordSvc(cache, repo, mail, ms)
+		svc := newSetPasswordSvc(cache, repo, mail)
 
 		user := &model.User{ID: bson.NewObjectID(), Email: spEmail, FirstName: "John"}
-		ms.On("GetDefault", ctx).Return(defaultMailServer(), nil)
 		cache.On("Set", ctx, mock.Anything, mock.Anything, mock.Anything).Return(nil)
 
 		_, err := svc.Send(ctx, user, "not-a-valid-url")
@@ -384,10 +346,7 @@ func TestSetPasswordService_Verify(t *testing.T) {
 
 	t.Run("token ไม่มีใน cache ต้องได้ ErrTokenInvalidOrExpired", func(t *testing.T) {
 		cache := new(mockSetPasswordCache)
-		repo := new(mockSetPasswordUserRepo)
-		mail := new(mockSetPasswordMailSender)
-		ms := new(mockSetPasswordMailServerSvc)
-		svc := newSetPasswordSvc(cache, repo, mail, ms)
+		svc := newSetPasswordSvc(cache, nil, nil)
 
 		cache.On("Get", ctx, spToken).Return("", errors.New("not found"))
 
@@ -397,10 +356,7 @@ func TestSetPasswordService_Verify(t *testing.T) {
 
 	t.Run("userID ใน cache ไม่ใช่ ObjectID ที่ถูกต้อง ต้องได้ ErrTokenInvalidOrExpired", func(t *testing.T) {
 		cache := new(mockSetPasswordCache)
-		repo := new(mockSetPasswordUserRepo)
-		mail := new(mockSetPasswordMailSender)
-		ms := new(mockSetPasswordMailServerSvc)
-		svc := newSetPasswordSvc(cache, repo, mail, ms)
+		svc := newSetPasswordSvc(cache, nil, nil)
 
 		cache.On("Get", ctx, spToken).Return("invalid-hex", nil)
 
@@ -411,9 +367,7 @@ func TestSetPasswordService_Verify(t *testing.T) {
 	t.Run("ไม่พบ user ต้องได้ ErrUserNotFound", func(t *testing.T) {
 		cache := new(mockSetPasswordCache)
 		repo := new(mockSetPasswordUserRepo)
-		mail := new(mockSetPasswordMailSender)
-		ms := new(mockSetPasswordMailServerSvc)
-		svc := newSetPasswordSvc(cache, repo, mail, ms)
+		svc := newSetPasswordSvc(cache, repo, nil)
 
 		userID := bson.NewObjectID()
 		cache.On("Get", ctx, spToken).Return(userID.Hex(), nil)
@@ -426,9 +380,7 @@ func TestSetPasswordService_Verify(t *testing.T) {
 	t.Run("verify สำเร็จ ต้องได้ token info", func(t *testing.T) {
 		cache := new(mockSetPasswordCache)
 		repo := new(mockSetPasswordUserRepo)
-		mail := new(mockSetPasswordMailSender)
-		ms := new(mockSetPasswordMailServerSvc)
-		svc := newSetPasswordSvc(cache, repo, mail, ms)
+		svc := newSetPasswordSvc(cache, repo, nil)
 
 		userID := bson.NewObjectID()
 		user := &model.User{ID: userID, Email: spEmail, FirstName: "John"}
@@ -450,10 +402,7 @@ func TestSetPasswordService_SetPassword(t *testing.T) {
 
 	t.Run("token ไม่มีใน cache ต้องได้ ErrTokenInvalidOrExpired", func(t *testing.T) {
 		cache := new(mockSetPasswordCache)
-		repo := new(mockSetPasswordUserRepo)
-		mail := new(mockSetPasswordMailSender)
-		ms := new(mockSetPasswordMailServerSvc)
-		svc := newSetPasswordSvc(cache, repo, mail, ms)
+		svc := newSetPasswordSvc(cache, nil, nil)
 
 		cache.On("Get", ctx, spToken).Return("", errors.New("not found"))
 
@@ -463,10 +412,7 @@ func TestSetPasswordService_SetPassword(t *testing.T) {
 
 	t.Run("userID ใน cache ไม่ถูกต้อง ต้องได้ ErrTokenInvalidOrExpired", func(t *testing.T) {
 		cache := new(mockSetPasswordCache)
-		repo := new(mockSetPasswordUserRepo)
-		mail := new(mockSetPasswordMailSender)
-		ms := new(mockSetPasswordMailServerSvc)
-		svc := newSetPasswordSvc(cache, repo, mail, ms)
+		svc := newSetPasswordSvc(cache, nil, nil)
 
 		cache.On("Get", ctx, spToken).Return("invalid-hex", nil)
 
@@ -477,9 +423,7 @@ func TestSetPasswordService_SetPassword(t *testing.T) {
 	t.Run("repo.Update error ต้องได้ error", func(t *testing.T) {
 		cache := new(mockSetPasswordCache)
 		repo := new(mockSetPasswordUserRepo)
-		mail := new(mockSetPasswordMailSender)
-		ms := new(mockSetPasswordMailServerSvc)
-		svc := newSetPasswordSvc(cache, repo, mail, ms)
+		svc := newSetPasswordSvc(cache, repo, nil)
 
 		userID := bson.NewObjectID()
 		cache.On("Get", ctx, spToken).Return(userID.Hex(), nil)
@@ -492,9 +436,7 @@ func TestSetPasswordService_SetPassword(t *testing.T) {
 	t.Run("ตั้งรหัสผ่านสำเร็จ ต้องลบ token ออกจาก cache", func(t *testing.T) {
 		cache := new(mockSetPasswordCache)
 		repo := new(mockSetPasswordUserRepo)
-		mail := new(mockSetPasswordMailSender)
-		ms := new(mockSetPasswordMailServerSvc)
-		svc := newSetPasswordSvc(cache, repo, mail, ms)
+		svc := newSetPasswordSvc(cache, repo, nil)
 
 		userID := bson.NewObjectID()
 		cache.On("Get", ctx, spToken).Return(userID.Hex(), nil)
@@ -509,9 +451,7 @@ func TestSetPasswordService_SetPassword(t *testing.T) {
 	t.Run("password ต้องถูก hash ก่อน save", func(t *testing.T) {
 		cache := new(mockSetPasswordCache)
 		repo := new(mockSetPasswordUserRepo)
-		mail := new(mockSetPasswordMailSender)
-		ms := new(mockSetPasswordMailServerSvc)
-		svc := newSetPasswordSvc(cache, repo, mail, ms)
+		svc := newSetPasswordSvc(cache, repo, nil)
 
 		userID := bson.NewObjectID()
 		cache.On("Get", ctx, spToken).Return(userID.Hex(), nil)

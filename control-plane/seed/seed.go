@@ -24,9 +24,8 @@ import (
 var embedded embed.FS
 
 const (
-	fileConfiguration  = "configuration.yaml"
-	fileEmailTemplates = "email-templates.yaml"
-	filePackages       = "packages.yaml"
+	fileConfiguration = "configuration.yaml"
+	filePackages      = "packages.yaml"
 )
 
 // Logger คือ logging hook แคบๆ เพื่อไม่ให้ package นี้ผูกกับ logger ตัวใดตัวหนึ่ง
@@ -39,12 +38,6 @@ type Logger interface {
 type ConfigStore interface {
 	Get(ctx context.Context) (*model.Configuration, error)
 	Upsert(ctx context.Context, doc *model.Configuration) error
-}
-
-// EmailTemplateStore looks templates up by alias and inserts new ones.
-type EmailTemplateStore interface {
-	FindByAlias(ctx context.Context, alias string) (*model.EmailTemplate, error)
-	Insert(ctx context.Context, doc *model.EmailTemplate) error
 }
 
 // PackageStore looks packages up by alias and inserts new ones.
@@ -62,10 +55,9 @@ type UserStore interface {
 
 // Stores คือ dependency ทั้งหมดของ seeder. Repository ฝั่ง caller ใส่ให้ตรง interface ได้เลย
 type Stores struct {
-	Config        ConfigStore
-	EmailTemplate EmailTemplateStore
-	Package       PackageStore
-	User          UserStore
+	Config  ConfigStore
+	Package PackageStore
+	User    UserStore
 }
 
 // Options tunes where the YAML comes from and who the first administrator is.
@@ -85,7 +77,6 @@ type Options struct {
 // that boots is more useful than one that refuses to start.
 func Run(ctx context.Context, s Stores, opts Options, log Logger) {
 	seedConfiguration(ctx, s.Config, opts.Dir, log)
-	seedEmailTemplates(ctx, s.EmailTemplate, opts.Dir, log)
 	seedPackages(ctx, s.Package, opts.Dir, log)
 	seedRootUser(ctx, s.User, opts, log)
 }
@@ -161,69 +152,6 @@ func seedConfiguration(ctx context.Context, store ConfigStore, dir string, log L
 		return
 	}
 	log.Info("seed: configuration created")
-}
-
-// --- email templates ---
-
-type emailTemplatesFile struct {
-	Templates []struct {
-		Alias     string   `yaml:"alias"`
-		Name      string   `yaml:"name"`
-		Type      string   `yaml:"type"`
-		Default   bool     `yaml:"default"`
-		System    bool     `yaml:"system"`
-		Subject   string   `yaml:"subject"`
-		Variables []string `yaml:"variables"`
-		HtmlBody  string   `yaml:"htmlBody"`
-	} `yaml:"templates"`
-}
-
-func seedEmailTemplates(ctx context.Context, store EmailTemplateStore, dir string, log Logger) {
-	if store == nil {
-		return
-	}
-	raw, err := readFile(dir, fileEmailTemplates)
-	if err != nil {
-		log.Error("seed: read " + fileEmailTemplates + ": " + err.Error())
-		return
-	}
-	var f emailTemplatesFile
-	if err := yaml.Unmarshal(raw, &f); err != nil {
-		log.Error("seed: parse " + fileEmailTemplates + ": " + err.Error())
-		return
-	}
-
-	created, skipped := 0, 0
-	for _, t := range f.Templates {
-		if t.Alias == "" {
-			log.Error("seed: email template with no alias, skipping")
-			continue
-		}
-		if existing, err := store.FindByAlias(ctx, t.Alias); err == nil && existing != nil {
-			skipped++
-			continue
-		}
-		now := tool.NowUTC()
-		doc := &model.EmailTemplate{
-			ID:        bson.NewObjectID(),
-			Name:      t.Name,
-			Alias:     t.Alias,
-			Type:      t.Type,
-			Default:   t.Default,
-			System:    t.System,
-			Subject:   t.Subject,
-			Variables: t.Variables,
-			HtmlBody:  t.HtmlBody,
-			CreatedAt: &now,
-			UpdatedAt: &now,
-		}
-		if err := store.Insert(ctx, doc); err != nil {
-			log.Error("seed: insert email template " + t.Alias + ": " + err.Error())
-			continue
-		}
-		created++
-	}
-	log.Info(fmt.Sprintf("seed: email templates created=%d skipped=%d", created, skipped))
 }
 
 // --- packages ---

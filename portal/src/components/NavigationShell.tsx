@@ -16,7 +16,6 @@ import {
   Network,
   GitBranch,
   Layers,
-  Mail,
   LogOut,
   Menu,
   X,
@@ -63,7 +62,6 @@ const navGroups: NavGroup[] = [
       { name: 'Manage Services', href: '/admin/services', icon: GitBranch },
       { name: 'Transforms & Presets', href: '/admin/transforms', icon: Layers },
       { name: 'Packages & Users', href: '/admin/packages', icon: Network },
-      { name: 'Mail settings', href: '/admin/mail', icon: Mail },
     ],
   },
 ];

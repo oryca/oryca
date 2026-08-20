@@ -16,7 +16,7 @@ const HANDOFF: Record<string, { tone: 'ok' | 'info'; text: string }> = {
   expired: { tone: 'info', text: 'Your session expired. Sign in again.' },
   registered: {
     tone: 'ok',
-    text: 'Account created. No mail server is configured yet, so an administrator has to verify your account before you can sign in.',
+    text: 'Account created. Check your email for a verification link before you sign in. If email is not configured on this site, ask an administrator to verify your account.',
   },
   reset_success: { tone: 'ok', text: 'Your password is set. You can sign in now.' },
 };
@@ -58,7 +58,7 @@ function LoginForm() {
       if (notVerified) {
         setIsNotVerified(true);
         setError(
-          'This account is not verified yet. No mail server is configured, so an administrator has to verify it by hand.',
+          'This account is not verified yet. Check your inbox for the verification link, or ask an administrator to verify your account.',
         );
       } else {
         setError(

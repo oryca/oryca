@@ -4,6 +4,7 @@ import (
 	"bytes"
 	"context"
 	"crypto/tls"
+	"errors"
 	"fmt"
 	"net"
 	"net/mail"
@@ -11,53 +12,43 @@ import (
 	"strings"
 	"time"
 
-	"github.com/oryca/oryca/control-plane/model"
+	"github.com/oryca/oryca/control-plane/config"
 )
 
 const smtpDialTimeout = 30 * time.Second
 
-type mailServerDefaultGetter interface {
-	GetDefault(ctx context.Context) (*model.MailServer, error)
-}
-
-type emailTemplateAliasGetter interface {
-	GetByAlias(ctx context.Context, alias string) (*model.EmailTemplate, error)
-}
+// ErrMailDisabled คืนเมื่อไม่ได้ตั้ง ORYCA_API_SMTP_HOST (ระบบปิดการส่งเมล)
+var ErrMailDisabled = errors.New("mail is disabled: ORYCA_API_SMTP_HOST is not set")
 
 type MailService struct {
-	mailServerSvc    mailServerDefaultGetter
-	emailTemplateSvc emailTemplateAliasGetter
+	cfg *config.SMTPConfig
 }
 
-func NewMailService(mailServerSvc mailServerDefaultGetter, emailTemplateSvc emailTemplateAliasGetter) *MailService {
-	return &MailService{
-		mailServerSvc:    mailServerSvc,
-		emailTemplateSvc: emailTemplateSvc,
-	}
+func NewMailService(cfg *config.SMTPConfig) *MailService {
+	return &MailService{cfg: cfg}
 }
 
-// SendTemplate renders an email template with variables and sends it via the default SMTP server.
-// vars keys match template placeholders e.g. "name" replaces "{{name}}" in htmlBody.
+// SendTemplate renders an embedded email template with variables and sends it via the configured SMTP server.
+// vars keys match template placeholders e.g. "name" replaces "{{name}}" in html.
 func (s *MailService) SendTemplate(ctx context.Context, toEmail, alias string, vars map[string]string) error {
-	ms, err := s.mailServerSvc.GetDefault(ctx)
-	if err != nil {
-		return fmt.Errorf("mail: get default mail server: %w", err)
+	if s.cfg.Host == "" {
+		return ErrMailDisabled
 	}
 
-	tmpl, err := s.emailTemplateSvc.GetByAlias(ctx, alias)
+	tmpl, err := getMailTemplate(alias)
 	if err != nil {
 		return fmt.Errorf("mail: get template %q: %w", alias, err)
 	}
 
-	body := renderVariables(tmpl.HtmlBody, vars)
+	body := renderVariables(tmpl.Html, vars)
 
-	senderName := ms.Sender
+	senderName := s.cfg.SenderName
 	if senderName == "" {
 		senderName = "Oryca"
 	}
-	senderEmail := ms.SenderEmail
+	senderEmail := s.cfg.SenderEmail
 	if senderEmail == "" {
-		senderEmail = ms.Smtp.User
+		senderEmail = s.cfg.User
 	}
 	from := mail.Address{Name: senderName, Address: senderEmail}
 
@@ -70,7 +61,7 @@ func (s *MailService) SendTemplate(ctx context.Context, toEmail, alias string, v
 	msg.WriteString("\r\n")
 	msg.WriteString(body)
 
-	addr := ms.Smtp.Host + ":" + ms.Smtp.Port
+	addr := s.cfg.Host + ":" + s.cfg.Port
 
 	conn, err := net.DialTimeout("tcp", addr, smtpDialTimeout)
 	if err != nil {
@@ -78,13 +69,11 @@ func (s *MailService) SendTemplate(ctx context.Context, toEmail, alias string, v
 	}
 	conn.Close()
 
-	skipVerify := ms.Smtp.TlsSkipVerify != nil && *ms.Smtp.TlsSkipVerify
-
-	if ms.Auth != nil && !*ms.Auth {
+	if !s.cfg.Auth {
 		return smtpSendNoAuth(addr, from.Address, toEmail, msg.Bytes())
 	}
 
-	return smtpSendWithAuth(addr, ms.Smtp.Host, ms.Smtp.User, ms.Smtp.Password, from.Address, toEmail, msg.Bytes(), skipVerify)
+	return smtpSendWithAuth(addr, s.cfg.Host, s.cfg.User, s.cfg.Password, from.Address, toEmail, msg.Bytes(), s.cfg.TlsSkipVerify)
 }
 
 func renderVariables(htmlBody string, vars map[string]string) string {

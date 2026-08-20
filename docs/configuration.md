@@ -2,7 +2,7 @@
 
 Everything is environment variables. There is no config file to write.
 
-Running with the compose files, the ten settings in `.env` are all you touch, and
+Running with the compose files, the settings in `.env` are all you touch, and
 the compose file translates them into whatever each service expects. Only one has
 no default, and compose refuses to start without it.
 
@@ -10,7 +10,7 @@ The rest of this page is for running the binaries yourself, or for tuning.
 
 ---
 
-## The ten in `.env`
+## The settings in `.env`
 
 | Setting | Default | What it does |
 |---|---|---|
@@ -107,6 +107,28 @@ routing data survives without the control plane).
 **Sync.** `ORYCA_CP_SYNC_CHANNEL` (`oryca:sync-events`), which must match the
 gateway's.
 
+**Mail.** SMTP is configured here,in the control plane env, read once at startup — restart the control
+plane after changing any of it. An empty `ORYCA_API_SMTP_HOST` disables mail
+entirely: signup still works, but verify-email and forgot-password links cannot
+be sent, and an administrator has to verify accounts and reset passwords by hand.
+
+| Setting | Default | |
+|---|---|---|
+| `ORYCA_API_SMTP_HOST` | empty | Empty = mail disabled |
+| `ORYCA_API_SMTP_PORT` | `587` | SMTP port |
+| `ORYCA_API_SMTP_USER` | empty | Username for SMTP AUTH |
+| `ORYCA_API_SMTP_PASSWORD` | empty | Password for SMTP AUTH |
+| `ORYCA_API_SMTP_AUTH` | `true` | `false` sends without logging in (internal relay) |
+| `ORYCA_API_SMTP_TLS_SKIP_VERIFY` | `false` | Skip TLS certificate verification |
+| `ORYCA_API_SMTP_SENDER_NAME` | `Oryca` | Name in the From header |
+| `ORYCA_API_SMTP_SENDER_EMAIL` | falls back to `SMTP_USER` | Address in the From header |
+| `ORYCA_API_MAIL_VERIFY_TTL_MIN` | `1440` | Lifetime of the verify-email link, in minutes |
+| `ORYCA_API_MAIL_RESET_TTL_MIN` | `1440` | Lifetime of the set-password link, in minutes |
+
+The two email templates (verify-email, set-password) are compiled into the
+binary from `control-plane/service/mailtemplates/`. Editing one means editing
+the HTML file and rebuilding.
+
 ---
 
 ## Both
@@ -118,7 +140,7 @@ gateway's.
 ## What is not an environment variable
 
 Settings you change while it runs live in the database, not here. Sign-up on or off,
-the terms and privacy text, token lifetimes, email templates, packages and their
+the terms and privacy text, token lifetimes, packages and their
 rate limits. They start from the YAML in `control-plane/seed/`, which is
 read once against an empty database. After that the database wins, so editing in
 the portal survives a restart.
