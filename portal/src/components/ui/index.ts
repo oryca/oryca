@@ -19,6 +19,9 @@ export { AuthShell, AuthLink } from './AuthShell';
 
 export { SkeletonLine, SkeletonCard, SkeletonRows, Loading } from './Skeleton';
 
+export { InfiniteScrollSentinel } from './InfiniteScrollSentinel';
+export type { InfiniteScrollSentinelProps } from './InfiniteScrollSentinel';
+
 export { ToastProvider, useToast } from './Toast';
 export { ConfirmProvider, useConfirm } from './ConfirmDialog';
 export type { ConfirmRequest } from './ConfirmDialog';

@@ -3,7 +3,7 @@
  */
 'use client';
 
-import React, { useEffect, useState } from 'react';
+import React, { useEffect, useRef, useState } from 'react';
 import {
   useQuery,
   useMutation,
@@ -11,6 +11,7 @@ import {
   type UseMutationResult,
 } from '@tanstack/react-query';
 import { api, API_URL } from '@/lib/api';
+import { useInfiniteList } from '@/lib/useInfiniteList';
 import NavigationShell from '@/components/NavigationShell';
 import {
   Button,
@@ -20,6 +21,7 @@ import {
   Loading,
   useToast,
   useConfirm,
+  InfiniteScrollSentinel,
 } from '@/components/ui';
 import {
   Bell,
@@ -60,17 +62,17 @@ function StreamStatus({ connected }: { connected: boolean }) {
   return (
     <span
       aria-live="polite"
-      className={`inline-flex items-center gap-1.5 rounded-chip border px-2 py-1 text-xs font-medium ${
+      className={`ui-status ${
         connected ? 'border-ok-edge bg-ok-wash text-ok' : 'border-warn-edge bg-warn-wash text-warn'
       }`}
     >
       {connected ? (
         <>
-          <Wifi className="h-3.5 w-3.5" aria-hidden="true" /> Live
+          <Wifi className="h-4 w-4" aria-hidden="true" /> Live
         </>
       ) : (
         <>
-          <WifiOff className="h-3.5 w-3.5" aria-hidden="true" /> Reconnecting
+          <WifiOff className="h-4 w-4" aria-hidden="true" /> Reconnecting
         </>
       )}
     </span>
@@ -98,12 +100,22 @@ export default function NotificationsPage() {
   const { error: toastError } = useToast();
   const confirm = useConfirm();
   const [sseConnected, setSseConnected] = useState(false);
+  const listScrollRef = useRef<HTMLDivElement>(null);
 
-  const { data: notifications, isLoading } = useQuery<Notification[]>({
-    queryKey: ['notifications'],
+  const {
+    items: notifications,
+    isLoading,
+    hasNextPage,
+    isFetchingNextPage,
+    fetchNextPage,
+  } = useInfiniteList<Notification>(['notifications'], '/notifications');
+
+  // The badge counts every unread one, not just the pages loaded so far.
+  const { data: unreadCount = 0 } = useQuery<number>({
+    queryKey: ['notifications', 'unread-count'],
     queryFn: async () => {
-      const res = await api.get('/notifications');
-      return res.data.items || [];
+      const res = await api.get('/notifications/unread-count');
+      return res.data?.count ?? 0;
     },
   });
 
@@ -193,8 +205,6 @@ export default function NotificationsPage() {
     };
   }, [queryClient]);
 
-  const unreadCount = notifications?.filter((n) => !n.read).length ?? 0;
-
   return (
     <NavigationShell>
       <PageHeader
@@ -218,7 +228,7 @@ export default function NotificationsPage() {
 
       {isLoading && <NotificationSkeleton />}
 
-      {!isLoading && (!notifications || notifications.length === 0) && (
+      {!isLoading && notifications.length === 0 && (
         <div className="ui-card">
           <EmptyState
             icon={<Bell className="h-5 w-5" />}
@@ -228,7 +238,8 @@ export default function NotificationsPage() {
         </div>
       )}
 
-      {!isLoading && notifications && notifications.length > 0 && (
+      {!isLoading && notifications.length > 0 && (
+        <div ref={listScrollRef} className="max-h-[min(840px,70vh)] overflow-y-auto">
         <ul className="ui-fade space-y-3">
           {notifications.map((n) => {
             const tone = toneOf(n);
@@ -292,6 +303,13 @@ export default function NotificationsPage() {
             );
           })}
         </ul>
+        <InfiniteScrollSentinel
+          rootRef={listScrollRef}
+          hasNextPage={hasNextPage}
+          isFetchingNextPage={isFetchingNextPage}
+          fetchNextPage={fetchNextPage}
+        />
+        </div>
       )}
     </NavigationShell>
   );
