@@ -405,6 +405,20 @@ textarea.ui-input { height: auto; min-height: 6rem; padding-block: var(--space-2
     to   { opacity: 1; transform: translateX(0); }
 }
 
+.ui-modal-scrim {
+    position: fixed;
+    inset: 0;
+    z-index: var(--z-modal);
+    display: flex;
+    align-items: center;
+    justify-content: center;
+    padding: var(--space-sm);
+    background: var(--color-scrim);
+}
+@media (min-width: 48rem) {
+    .ui-modal-scrim { left: var(--rail-width); }
+}
+
 /* ---- Toast ---- */
 .ui-toast-stack {
     position: fixed;
@@ -463,3 +477,7 @@ textarea.ui-input { height: auto; min-height: 6rem; padding-block: var(--space-2
 }
 
 } /* @layer components */
+
+@layer utilities {
+    .ui-modal-scrim { margin: 0; }
+}
