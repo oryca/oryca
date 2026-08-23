@@ -520,8 +520,8 @@ function ServicesManager({
       )}
 
       {isOpen && (
-        <div className="fixed inset-0 z-50 bg-scrim flex items-center justify-center p-4">
-          <div className="bg-paper border border-rule rounded-surface p-6 w-full max-w-2xl shadow-sm space-y-4 max-h-[95vh] overflow-y-auto">
+        <div className="ui-modal-scrim">
+          <div className="bg-paper border border-rule rounded-surface p-6 w-full max-w-2xl lg:max-w-4xl xl:max-w-5xl shadow-sm space-y-4 max-h-[95vh] overflow-y-auto">
             <div className="flex items-center justify-between">
               <h3 className="font-title text-base font-bold text-ink">
                 {editingService ? 'Edit Gateway Service' : 'Publish New Service'}
@@ -654,7 +654,7 @@ function ServicesManager({
                   </button>
                 </div>
 
-                <div className="space-y-2 max-h-52 overflow-y-auto pr-1">
+                <div className="space-y-2 max-h-[40vh] lg:max-h-[50vh] overflow-y-auto pr-1">
                   {resourcePaths.map((rp, index) => (
                     <div
                       key={index}
@@ -733,11 +733,11 @@ function ServicesManager({
                               />
                               <textarea
                                 required
-                                rows={4}
+                                rows={10}
                                 value={rp.source.body || ''}
                                 onChange={(e) => updateRowSource(index, { body: e.target.value })}
                                 placeholder={'{ "links": [] }'}
-                                className="w-full bg-paper border border-rule rounded-control px-2.5 py-1.5 text-[11px] text-ink outline-none focus:border-focus font-mono"
+                                className="w-full min-h-[9rem] lg:min-h-[14rem] resize-y bg-paper border border-rule rounded-control px-2.5 py-2 text-[11px] leading-relaxed text-ink outline-none focus:border-focus font-mono"
                               />
                               {rp.path.replace(/\/$/, '').endsWith('/conformance') && (
                                 <p className="text-[11px] text-warn">

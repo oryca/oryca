@@ -6,14 +6,18 @@
 import React, { useMemo, useState } from 'react';
 import { useQuery } from '@tanstack/react-query';
 import { fetchAll, GATEWAY_URL } from '@/lib/api';
+import { usePackageServiceScope } from '@/lib/usePackageServiceScope';
 import NavigationShell from '@/components/NavigationShell';
 import {
   Button,
   PageHeader,
   SectionCard,
   EmptyState,
+  Notice,
   SearchableSelect,
   Select,
+  Loading,
+  SkeletonCard,
   GeoMapPreview,
 } from '@/components/ui';
 import {
@@ -54,6 +58,7 @@ interface GatewayService {
   name: string;
   basePath: string;
   type: string;
+  isPublic?: boolean;
   resourcePaths?: ResourcePath[];
 }
 
@@ -115,10 +120,16 @@ export default function SandboxPage() {
   const [urlCopied, setUrlCopied] = useState(false);
   const [responseView, setResponseView] = useState<'preview' | 'raw' | 'links' | 'headers'>('preview');
 
-  const { data: services } = useQuery<GatewayService[]>({
+  const { data: allServices, isLoading: isLoadingServices } = useQuery<GatewayService[]>({
     queryKey: ['catalog-services'],
     queryFn: () => fetchAll<GatewayService>('/services'),
   });
+
+  // Offering a service the package was never granted just buys the user a 403 on send.
+  const { isScoped, isLoadingScope, isScopeError, hasNoPackage, retryScope, filterServices } =
+    usePackageServiceScope();
+  const services = useMemo(() => filterServices(allServices), [filterServices, allServices]);
+  const isCatalogLoading = isLoadingServices || isLoadingScope;
 
   const { data: apiKeys } = useQuery<ApiKey[]>({
     queryKey: ['api-keys'],
@@ -419,20 +430,53 @@ export default function SandboxPage() {
     RATE_LIMIT_HEADERS.includes(k.toLowerCase()),
   );
 
-  if (services?.length === 0) {
+  // Nothing to aim a request at — still loading, the scope fetch broke, or the list really is empty.
+  if (isCatalogLoading || isScopeError || services.length === 0) {
     return (
       <NavigationShell>
         <PageHeader
           title="Sandbox"
           description="Call a published service the way your users will - through the gateway, with a key"
         />
-        <div className="ui-card">
-          <EmptyState
-            icon={<Radio className="h-5 w-5" />}
-            title="No services published yet"
-            description="An administrator adds them under Manage Services. Once one exists, you can call it from here."
-          />
-        </div>
+        {isCatalogLoading ? (
+          <Loading label="Loading services">
+            <SkeletonCard lines={2} />
+          </Loading>
+        ) : isScopeError ? (
+          <Notice tone="danger" title="Could not load your package">
+            <p>
+              The list of services your package may call did not come back, so there is nothing
+              here to send a request to.
+            </p>
+            <button
+              type="button"
+              onClick={() => retryScope()}
+              className="mt-2 font-medium text-ink underline underline-offset-2"
+            >
+              Try again
+            </button>
+          </Notice>
+        ) : (
+          <div className="ui-card">
+            <EmptyState
+              icon={<Radio className="h-5 w-5" />}
+              title={
+                hasNoPackage
+                  ? 'No package assigned'
+                  : isScoped
+                    ? 'No services in your package'
+                    : 'No services published yet'
+              }
+              description={
+                hasNoPackage
+                  ? 'Your account is not on a package yet, so there is nothing here to call. An administrator assigns one.'
+                  : isScoped
+                    ? 'Ask an administrator to grant your package access to a service. Once one is granted, you can call it from here.'
+                    : 'An administrator adds them under Manage Services. Once one exists, you can call it from here.'
+              }
+            />
+          </div>
+        )}
       </NavigationShell>
     );
   }
