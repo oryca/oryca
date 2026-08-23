@@ -114,23 +114,26 @@ function formatLimit(tiers: RateLimitTier[]): string {
 }
 
 /* Mirror canUpdateTarget / canDeleteUser in control-plane/handler/user_handler.go — the API
- * decides, these just hide buttons it would refuse. Keep in sync. */
+ * decides, these just hide buttons it would refuse. Keep in sync. What you may do to your own
+ * account is stricter here than in the API, so the form cannot lock you out of the portal. */
 
-/** nobody edits a root; below that, root edits anyone and admin only users */
+/** a root edits itself but no other root; an admin edits itself and plain users, never another admin */
 function canEditUser(actor: UserSession | null, target: User): boolean {
   if (!actor) return false;
-  if (target.role === 'root') return false;
+  if (target.role === 'root') return actor.role === 'root' && target.id === actor.id;
   if (actor.role === 'root') return true;
-  return actor.role === 'admin' && target.role === 'user';
+  if (actor.role === 'admin') return target.role === 'user' || target.id === actor.id;
+  return false;
 }
 
-/** nobody deletes themselves and nobody deletes a root, not even another root */
+/** nobody deletes themselves and nobody deletes a root, not even another root; an admin only deletes plain users */
 function canDeleteUser(actor: UserSession | null, target: User): boolean {
   if (!actor) return false;
   if (target.id === actor.id) return false;
   if (target.role === 'root') return false;
   if (actor.role === 'root') return true;
-  return actor.role === 'admin' && target.role === 'user';
+  if (actor.role === 'admin') return target.role === 'user';
+  return false;
 }
 
 export default function AdminPackagesPage() {
@@ -490,6 +493,25 @@ export default function AdminPackagesPage() {
     setter((prev) => prev.map((t, i) => (i === index ? { ...t, [field]: value } : t)));
   };
 
+  // On your own row the form gives up the switches that would lock you out of the portal.
+  const editingSelf = !!editingUser && editingUser.id === currentUser?.id;
+
+  // Mirror canSetNewRole: only root hands out a role above user, and the one admin row an admin
+  // may leave on admin is its own.
+  const editRoleOptions = [
+    { value: 'user', label: 'User' },
+    ...(currentUser?.role === 'root' || (editingSelf && editingUser?.role === 'admin')
+      ? [{ value: 'admin', label: 'Administrator' }]
+      : []),
+    ...(editingUser?.role === 'root' ? [{ value: 'root', label: 'Root' }] : []),
+  ];
+
+  // Mirror canSetUserRole: a new account is a plain user unless root says otherwise.
+  const createRoleOptions = [
+    { value: 'user', label: 'User' },
+    ...(currentUser?.role === 'root' ? [{ value: 'admin', label: 'Administrator' }] : []),
+  ];
+
   return (
     <NavigationShell>
       <PageHeader
@@ -552,7 +574,7 @@ export default function AdminPackagesPage() {
 
             {/* Package Form Modal */}
             {isPackageFormOpen && (
-              <div className="fixed inset-0 z-50 bg-scrim flex items-center justify-center p-4">
+              <div className="ui-modal-scrim">
                 <div className="bg-paper border border-rule rounded-surface p-6 w-full max-w-lg shadow-sm space-y-4 max-h-[90vh] overflow-y-auto">
                   <h3 className="font-title text-base font-bold text-ink">
                     {editingPackage ? 'Edit Package Tier' : 'Create Package Tier'}
@@ -706,7 +728,7 @@ export default function AdminPackagesPage() {
 
             {/* Link Services Modal */}
             {isLinkModalOpen && linkingPackage && (
-              <div className="fixed inset-0 z-50 bg-scrim flex items-center justify-center p-4">
+              <div className="ui-modal-scrim">
                 <div className="bg-paper border border-rule rounded-surface p-6 w-full max-w-xl shadow-sm space-y-4 max-h-[90vh] overflow-y-auto">
                   <div className="flex justify-between items-center">
                     <h3 className="font-title text-base font-bold text-ink">
@@ -1007,7 +1029,7 @@ export default function AdminPackagesPage() {
             </div>
 
             {isNewUserOpen && (
-              <div className="fixed inset-0 z-50 bg-scrim flex items-center justify-center p-4">
+              <div className="ui-modal-scrim">
                 <div className="bg-paper border border-rule rounded-surface p-6 w-full max-w-md shadow-sm space-y-4 max-h-[90vh] overflow-y-auto">
                   <h3 className="font-title text-base font-bold text-ink">New user</h3>
                   <p className="text-xs text-muted">
@@ -1086,10 +1108,7 @@ export default function AdminPackagesPage() {
                         <Select
                           value={newRole}
                           onChange={(val) => setNewRole(val as 'user' | 'admin')}
-                          options={[
-                            { value: 'user', label: 'User' },
-                            { value: 'admin', label: 'Administrator' },
-                          ]}
+                          options={createRoleOptions}
                         />
                       </div>
                       <div className="flex-1 min-w-0">
@@ -1134,11 +1153,19 @@ export default function AdminPackagesPage() {
 
             {/* Edit User Modal */}
             {isUserModalOpen && editingUser && (
-              <div className="fixed inset-0 z-50 bg-scrim flex items-center justify-center p-4">
+              <div className="ui-modal-scrim">
                 <div className="bg-paper border border-rule rounded-surface p-6 w-full max-w-md shadow-sm space-y-4 max-h-[90vh] overflow-y-auto">
                   <h3 className="font-title text-base font-bold text-ink">
                     Edit User Profile: {editingUser.email}
                   </h3>
+
+                  {editingSelf && (
+                    <p className="text-xs text-muted">
+                      {editingUser.role === 'root'
+                        ? 'This is your own root account. Only the package tier is yours to change - giving up the role or the sign-in would shut you out of the portal with no way back in.'
+                        : 'This is your own account. You can change the package tier or step down to a lower role, nothing else - the rest would shut you out of the portal.'}
+                    </p>
+                  )}
 
                   {formError && (
                     <div className="flex items-start gap-3 rounded-control border border-danger-edge bg-danger-wash p-4 text-xs text-danger">
@@ -1161,14 +1188,8 @@ export default function AdminPackagesPage() {
                       <Select
                         value={userRole}
                         onChange={(val) => setUserRole(val as 'user' | 'admin' | 'root')}
-                        disabled={editingUser.role === 'root'} // Disable root editing for safety
-                        options={[
-                          { value: 'user', label: 'User' },
-                          { value: 'admin', label: 'Administrator' },
-                          ...(editingUser.role === 'root'
-                            ? [{ value: 'root', label: 'Root' }]
-                            : []),
-                        ]}
+                        disabled={editingUser.role === 'root'} // a root may not demote itself
+                        options={editRoleOptions}
                       />
                     </div>
 
@@ -1197,7 +1218,7 @@ export default function AdminPackagesPage() {
                           id="usr-verified"
                           checked={userVerified}
                           onChange={(e) => setUserVerified(e.target.checked)}
-                          disabled={editingUser.role === 'root'}
+                          disabled={editingSelf}
                           className="w-4 h-4 accent-accent"
                         />
                         <label htmlFor="usr-verified" className="text-xs font-semibold text-ink-2 select-none cursor-pointer">
@@ -1211,7 +1232,7 @@ export default function AdminPackagesPage() {
                           id="usr-enabled"
                           checked={userEnabled}
                           onChange={(e) => setUserEnabled(e.target.checked)}
-                          disabled={editingUser.role === 'root'}
+                          disabled={editingSelf}
                           className="w-4 h-4 accent-accent"
                         />
                         <label htmlFor="usr-enabled" className="text-xs font-semibold text-ink-2 select-none cursor-pointer">

@@ -21,7 +21,7 @@ func TestCanSetUserRole(t *testing.T) {
 		{"root", "root", true},
 		{"root", "admin", true},
 		{"root", "user", true},
-		// admin ได้เฉพาะ user
+		// admin creates users only
 		{"admin", "user", true},
 		{"admin", "admin", false},
 		{"admin", "root", false},
@@ -33,6 +33,90 @@ func TestCanSetUserRole(t *testing.T) {
 	for _, tc := range cases {
 		got := canSetUserRole(tc.actorRole, tc.targetRole)
 		assert.Equal(t, tc.want, got, "actorRole=%q targetRole=%q", tc.actorRole, tc.targetRole)
+	}
+}
+
+// --- canSetNewRole ---
+
+func TestCanSetNewRole(t *testing.T) {
+	cases := []struct {
+		name       string
+		actorRole  string
+		targetRole string
+		newRole    string
+		want       bool
+	}{
+		{"admin cannot promote a user to admin", "admin", "user", "admin", false},
+		{"admin cannot keep another admin on admin", "admin", "admin", "admin", false},
+		{"admin keeps a user on user", "admin", "user", "user", true},
+		{"admin cannot hand out root", "admin", "admin", "root", false},
+		{"root promotes a user to admin", "root", "user", "admin", true},
+		{"a user may set nothing", "user", "user", "user", false},
+	}
+
+	for _, tc := range cases {
+		t.Run(tc.name, func(t *testing.T) {
+			actor := &model.User{ID: bson.NewObjectID(), Role: tc.actorRole}
+			target := &model.User{ID: bson.NewObjectID(), Role: tc.targetRole}
+			assert.Equal(t, tc.want, canSetNewRole(actor, target, tc.newRole))
+		})
+	}
+
+	// its own row is the one exception: an admin keeps the role it already carries, or steps down
+	self := &model.User{ID: bson.NewObjectID(), Role: "admin"}
+	assert.True(t, canSetNewRole(self, self, "admin"))
+	assert.True(t, canSetNewRole(self, self, "user"))
+	assert.False(t, canSetNewRole(self, self, "root"))
+}
+
+// --- canUpdateTarget ---
+
+func TestCanUpdateTarget(t *testing.T) {
+	idA := bson.NewObjectID()
+	idB := bson.NewObjectID()
+
+	cases := []struct {
+		name    string
+		ctxUser *model.User
+		target  *model.User
+		want    bool
+	}{
+		{
+			name:    "admin cannot update a root",
+			ctxUser: &model.User{ID: idA, Role: "admin"},
+			target:  &model.User{ID: idB, Role: "root"},
+			want:    false,
+		},
+		{
+			name:    "admin cannot update another admin",
+			ctxUser: &model.User{ID: idA, Role: "admin"},
+			target:  &model.User{ID: idB, Role: "admin"},
+			want:    false,
+		},
+		{
+			name:    "admin updates itself",
+			ctxUser: &model.User{ID: idA, Role: "admin"},
+			target:  &model.User{ID: idA, Role: "admin"},
+			want:    true,
+		},
+		{
+			name:    "admin updates a user",
+			ctxUser: &model.User{ID: idA, Role: "admin"},
+			target:  &model.User{ID: idB, Role: "user"},
+			want:    true,
+		},
+		{
+			name:    "root updates a root",
+			ctxUser: &model.User{ID: idA, Role: "root"},
+			target:  &model.User{ID: idB, Role: "root"},
+			want:    true,
+		},
+	}
+
+	for _, tc := range cases {
+		t.Run(tc.name, func(t *testing.T) {
+			assert.Equal(t, tc.want, canUpdateTarget(tc.ctxUser, tc.target))
+		})
 	}
 }
 
@@ -79,9 +163,15 @@ func TestCanDeleteUser(t *testing.T) {
 			want:   true,
 		},
 		{
-			name:   "admin ลบ admin อื่นไม่ได้",
+			name:   "admin cannot delete another admin",
 			actor:  &model.User{ID: idA, Role: "admin"},
 			target: &model.User{ID: idB, Role: "admin"},
+			want:   false,
+		},
+		{
+			name:   "admin cannot delete a root",
+			actor:  &model.User{ID: idA, Role: "admin"},
+			target: &model.User{ID: idB, Role: "root"},
 			want:   false,
 		},
 		{
