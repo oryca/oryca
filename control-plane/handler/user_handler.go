@@ -407,7 +407,7 @@ func (h *UserHandler) UpdateUser(c echo.Context) error {
 			Detail: msgNoPermission,
 		})
 	}
-	
+
 	body.Role = newRole
 
 	u, err := h.svc.Update(c.Request().Context(), id, &body)
