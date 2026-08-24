@@ -47,27 +47,12 @@ type Config struct {
 	RootEmail    string
 	RootPassword string
 
-	// SMTP อ่านจาก env อย่างเดียว ครั้งเดียวตอน startup (Host ว่าง = ปิดการส่งเมล)
-	SMTP *SMTPConfig
-
-	// TTL ของลิงก์ในอีเมล (นาที): ยืนยันอีเมล และตั้งรหัสผ่านใหม่
-	MailVerifyTTLMin int
-	MailResetTTLMin  int
+	// false holds new sign-ups unverified until an administrator approves them
+	RegisterAutoVerify bool
 
 	// LogRetentionDays คือ TTL ของ collection access_logs. เปลี่ยนค่าแล้ว bootstrap collMod ให้เอง
 	LogRetentionDays  int
 	LogConsumerEnable bool
-}
-
-type SMTPConfig struct {
-	Host          string
-	Port          string
-	User          string
-	Password      string
-	Auth          bool
-	TlsSkipVerify bool
-	SenderName    string
-	SenderEmail   string
 }
 
 func Load() *Config {
@@ -113,19 +98,7 @@ func Load() *Config {
 		RootEmail:    getEnv("ORYCA_API_ROOT_EMAIL", ""),
 		RootPassword: getEnv("ORYCA_API_ROOT_PASSWORD", ""),
 
-		SMTP: &SMTPConfig{
-			Host:          getEnv("ORYCA_API_SMTP_HOST", ""),
-			Port:          getEnv("ORYCA_API_SMTP_PORT", "587"),
-			User:          getEnv("ORYCA_API_SMTP_USER", ""),
-			Password:      getEnv("ORYCA_API_SMTP_PASSWORD", ""),
-			Auth:          getEnvBool("ORYCA_API_SMTP_AUTH", true),
-			TlsSkipVerify: getEnvBool("ORYCA_API_SMTP_TLS_SKIP_VERIFY", false),
-			SenderName:    getEnv("ORYCA_API_SMTP_SENDER_NAME", "Oryca"),
-			SenderEmail:   getEnv("ORYCA_API_SMTP_SENDER_EMAIL", ""),
-		},
-
-		MailVerifyTTLMin: getEnvInt("ORYCA_API_MAIL_VERIFY_TTL_MIN", 1440),
-		MailResetTTLMin:  getEnvInt("ORYCA_API_MAIL_RESET_TTL_MIN", 1440),
+		RegisterAutoVerify: getEnvBool("ORYCA_API_REGISTER_AUTO_VERIFY", false),
 	}
 }
 

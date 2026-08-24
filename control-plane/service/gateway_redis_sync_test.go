@@ -16,6 +16,8 @@ import (
 	"go.mongodb.org/mongo-driver/v2/bson"
 )
 
+func boolPtr(b bool) *bool { return &b }
+
 // --- mocks ---
 
 type mockGatewaySyncPublisher struct{ mock.Mock }

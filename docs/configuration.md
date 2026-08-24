@@ -83,7 +83,7 @@ count, `ORYCA_GW_CB_IDLE_EVICT_MIN` (30) to forget a host.
 
 | Setting | Default | |
 |---|---|---|
-| `ORYCA_API_HOST` | none | Public address, used in the links it emails |
+| `ORYCA_API_HOST` | none | Public address the control plane advertises |
 | `ORYCA_API_PORT` | `9001` | Listen port |
 | `ORYCA_API_DB_URL` | none | MongoDB connection string |
 | `ORYCA_API_DB_NAME` | none | Database name |
@@ -107,27 +107,22 @@ routing data survives without the control plane).
 **Sync.** `ORYCA_CP_SYNC_CHANNEL` (`oryca:sync-events`), which must match the
 gateway's.
 
-**Mail.** SMTP is configured here,in the control plane env, read once at startup — restart the control
-plane after changing any of it. An empty `ORYCA_API_SMTP_HOST` disables mail
-entirely: signup still works, but verify-email and forgot-password links cannot
-be sent, and an administrator has to verify accounts and reset passwords by hand.
+**Registration.** The control plane sends no email, so nothing confirms that a
+new account owns the address it signed up with, and there is no self-service
+password reset.
 
 | Setting | Default | |
 |---|---|---|
-| `ORYCA_API_SMTP_HOST` | empty | Empty = mail disabled |
-| `ORYCA_API_SMTP_PORT` | `587` | SMTP port |
-| `ORYCA_API_SMTP_USER` | empty | Username for SMTP AUTH |
-| `ORYCA_API_SMTP_PASSWORD` | empty | Password for SMTP AUTH |
-| `ORYCA_API_SMTP_AUTH` | `true` | `false` sends without logging in (internal relay) |
-| `ORYCA_API_SMTP_TLS_SKIP_VERIFY` | `false` | Skip TLS certificate verification |
-| `ORYCA_API_SMTP_SENDER_NAME` | `Oryca` | Name in the From header |
-| `ORYCA_API_SMTP_SENDER_EMAIL` | falls back to `SMTP_USER` | Address in the From header |
-| `ORYCA_API_MAIL_VERIFY_TTL_MIN` | `1440` | Lifetime of the verify-email link, in minutes |
-| `ORYCA_API_MAIL_RESET_TTL_MIN` | `1440` | Lifetime of the set-password link, in minutes |
+| `ORYCA_API_REGISTER_AUTO_VERIFY` | `false` | `true` lets a self-registered account sign in at once, with nothing vouching for the address |
 
-The two email templates (verify-email, set-password) are compiled into the
-binary from `control-plane/service/mailtemplates/`. Editing one means editing
-the HTML file and rebuilding.
+Read once at startup — restart the control plane after changing it. On the
+default, whoever signs up cannot log in until an administrator ticks
+**Account Verified** on their account.
+
+Passwords are handed over out of band. An administrator sets one when creating
+the account, and resets it from the same edit form, then passes it to the
+account holder, who changes it from Profile. A user who forgets their password
+asks an administrator for a new one.
 
 ---
 

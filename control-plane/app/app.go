@@ -265,19 +265,15 @@ type appRepos struct {
 }
 
 type appCaches struct {
-	config      *cache.ConfigurationCache
-	apiKey      *cache.ApiKeyCache
-	setPassword *cache.SetPasswordCache
-	session     *cache.SessionCache
-	verifyEmail *cache.VerifyEmailCache
+	config  *cache.ConfigurationCache
+	apiKey  *cache.ApiKeyCache
+	session *cache.SessionCache
 }
 
 type appServices struct {
 	config          *service.ConfigurationService
 	user            *service.UserService
 	auth            *service.AuthService
-	setPassword     *service.SetPasswordService
-	verifyEmail     *service.VerifyEmailService
 	account         *service.AccountService
 	apiKey          *service.ApiKeyService
 	gatewaySync     *service.GatewayRedisSync
@@ -315,29 +311,22 @@ func buildRepos(db interface { /* *mongo.Database */
 
 func buildCaches(rc *redis.Client, ttl time.Duration) appCaches {
 	return appCaches{
-		config:      cache.NewConfigurationCache(rc, ttl),
-		apiKey:      cache.NewApiKeyCache(rc, ttl),
-		setPassword: cache.NewSetPasswordCache(rc),
-		session:     cache.NewSessionCache(rc),
-		verifyEmail: cache.NewVerifyEmailCache(rc),
+		config:  cache.NewConfigurationCache(rc, ttl),
+		apiKey:  cache.NewApiKeyCache(rc, ttl),
+		session: cache.NewSessionCache(rc),
 	}
 }
 
 func buildServices(cfg *config.Config, r appRepos, c appCaches, rc *redis.Client, routingTTL time.Duration, gwPublisher *service.GatewayEventPublisher) appServices {
-	mailSvc := service.NewMailService(cfg.SMTP)
 	configSvc := service.NewConfigurationService(r.config, c.config)
-	setPasswordSvc := service.NewSetPasswordService(c.setPassword, r.user, mailSvc, time.Duration(cfg.MailResetTTLMin)*time.Minute)
-	verifyEmailSvc := service.NewVerifyEmailService(c.verifyEmail, r.user, mailSvc, gwPublisher, time.Duration(cfg.MailVerifyTTLMin)*time.Minute)
 	gatewaySync := service.NewGatewayRedisSync(rc, routingTTL, gwPublisher)
 
 	notificationSvc := service.NewNotificationService(r.notification, rc)
 
 	return appServices{
 		config:          configSvc,
-		user:            service.NewUserService(r.user, setPasswordSvc, gwPublisher),
-		auth:            service.NewAuthService(configSvc, r.user, r.pkg, c.session, r.userSession, c.session, verifyEmailSvc),
-		setPassword:     setPasswordSvc,
-		verifyEmail:     verifyEmailSvc,
+		user:            service.NewUserService(r.user, gwPublisher),
+		auth:            service.NewAuthService(configSvc, r.user, r.pkg, c.session, r.userSession, c.session, cfg.RegisterAutoVerify),
 		account:         service.NewAccountService(r.user, c.session, r.userSession),
 		apiKey:          service.NewApiKeyService(r.apiKey, c.apiKey, r.user, notificationSvc, gwPublisher),
 		gatewaySync:     gatewaySync,
@@ -359,8 +348,6 @@ func buildRouterServices(s appServices) router.Services {
 		Config:                  s.config,
 		User:                    s.user,
 		Auth:                    s.auth,
-		SetPassword:             s.setPassword,
-		VerifyEmail:             s.verifyEmail,
 		Account:                 s.account,
 		ApiKey:                  s.apiKey,
 		GatewaySource:           s.gatewaySource,

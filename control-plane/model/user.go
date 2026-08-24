@@ -54,18 +54,6 @@ type UserCreate struct {
 	Enabled      *bool                  `json:"enabled"`
 	ExpiredAt    *time.Time             `json:"expiredAt"`
 	Properties   map[string]interface{} `json:"properties"`
-	CallbackUrl  string                 `json:"callbackUrl"`
-}
-
-type SetPasswordTokenInfo struct {
-	UserID    bson.ObjectID `json:"userId"`
-	Email     string        `json:"email"`
-	FirstName string        `json:"firstName"`
-}
-
-type SetPasswordRequest struct {
-	Token    string `json:"token"`
-	Password string `json:"password"`
 }
 
 type UserUpdate struct {
