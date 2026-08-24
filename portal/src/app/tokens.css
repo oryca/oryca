@@ -111,6 +111,9 @@
     --shadow-pop:   0 12px 32px oklch(24% 0.02 258 / 0.16);
     --shadow-toast: 0 8px 24px  oklch(24% 0.02 258 / 0.12);
 
+    /* ---- Layout: the desktop sidebar's width, mirrored by anything that must clear it ---- */
+    --rail-width: 16rem;
+
     /* ---- z-index: named scale, never 9999 ---- */
     --z-rail:   10;
     --z-drawer: 40;

@@ -331,10 +331,6 @@ export function GeoMapPreview({
       new maplibregl.NavigationControl({ showCompass: true, showZoom: true }),
       'top-right',
     );
-    map.addControl(
-      new maplibregl.AttributionControl({ compact: true }),
-      'bottom-right',
-    );
 
     // A failed style fetch (blocked host, no network) fires 'error' rather
     // than 'load', so this is the only way the container ever explains why
