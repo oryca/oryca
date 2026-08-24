@@ -749,8 +749,15 @@ func TestBulkDeleteUsers(t *testing.T) {
 		assert.Equal(t, http.StatusForbidden, rec.Code)
 	})
 
+	// every id in the body is read back so the delete rule can be applied per target
+	stubTargets := func(svc *mockUserService, role string) {
+		svc.On("GetByID", mock.Anything, id1).Return(&model.User{ID: id1, Role: role}, nil)
+		svc.On("GetByID", mock.Anything, id2).Return(&model.User{ID: id2, Role: role}, nil)
+	}
+
 	t.Run("ลบหลาย user สำเร็จ ต้องได้ status 204", func(t *testing.T) {
 		svc := new(mockUserService)
+		stubTargets(svc, "user")
 		svc.On("BulkDelete", mock.Anything, mock.Anything, mock.Anything).Return(nil)
 
 		c, rec := newUserBulkDeleteCtx(e, map[string]any{
@@ -779,8 +786,24 @@ func TestBulkDeleteUsers(t *testing.T) {
 		assert.Equal(t, tool.CodeBodyInvalidFormat, resp.Code)
 	})
 
+	t.Run("admin ลบ admin คนอื่นแบบ bulk ไม่ได้ ต้องได้ status 403", func(t *testing.T) {
+		svc := new(mockUserService)
+		stubTargets(svc, "admin")
+
+		c, rec := newUserBulkDeleteCtx(e, map[string]any{
+			"userIds": []string{id1.Hex(), id2.Hex()},
+		})
+		c.Set("user", &model.User{ID: bson.NewObjectID(), Role: "admin"})
+		err := newUserHandler(svc).BulkDeleteUsers(c)
+
+		require.NoError(t, err)
+		assert.Equal(t, http.StatusForbidden, rec.Code)
+		svc.AssertNotCalled(t, "BulkDelete", mock.Anything, mock.Anything, mock.Anything)
+	})
+
 	t.Run("มี userId ของตัวเองอยู่ใน list ต้องได้ status 409 และ error code", func(t *testing.T) {
 		svc := new(mockUserService)
+		stubTargets(svc, "user")
 		svc.On("BulkDelete", mock.Anything, mock.Anything, mock.Anything).Return(service.ErrCannotDeleteSelf)
 
 		c, rec := newUserBulkDeleteCtx(e, map[string]any{
@@ -800,6 +823,7 @@ func TestBulkDeleteUsers(t *testing.T) {
 
 	t.Run(userSubSvcErr, func(t *testing.T) {
 		svc := new(mockUserService)
+		stubTargets(svc, "user")
 		svc.On("BulkDelete", mock.Anything, mock.Anything, mock.Anything).Return(errors.New(userErrDB))
 
 		c, rec := newUserBulkDeleteCtx(e, map[string]any{

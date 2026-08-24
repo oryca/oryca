@@ -43,7 +43,7 @@ func isRootOrAdmin(role string) bool {
 	return role == "root" || role == "admin"
 }
 
-// canSetUserRole reports whether the actor may create or change a user with that role.
+// canSetUserRole reports whether the actor may create a user with that role.
 // root may do any role, admin only user, and nobody else may.
 func canSetUserRole(actorRole, targetRole string) bool {
 	switch actorRole {
@@ -56,18 +56,15 @@ func canSetUserRole(actorRole, targetRole string) bool {
 	}
 }
 
-// canDeleteUser reports whether the actor may delete the target. Nobody deletes themselves, and
-// nobody deletes root; otherwise root may delete anyone and admin may delete a user.
+// canDeleteUser reports whether the actor may delete the target. Nobody deletes themselves and
+// nobody deletes a root; root deletes anyone left, an admin only plain users.
 func canDeleteUser(actor, target *model.User) bool {
 	if actor.ID == target.ID {
 		return false
 	}
-	if target.Role == "root" {
-		return false
-	}
 	switch actor.Role {
 	case "root":
-		return true
+		return target.Role != "root"
 	case "admin":
 		return target.Role == "user"
 	default:
@@ -316,17 +313,34 @@ func userCreateErrResponse(err error) (int, *model.Exception) {
 }
 
 // canUpdateTarget returns false if the actor is not allowed to update the target user.
+// An admin only touches plain users and its own account, never another admin and never a root.
 func canUpdateTarget(ctxUser, target *model.User) bool {
-	// an admin cannot change another admin
-	if ctxUser.Role == "admin" && target.Role == "admin" && target.ID != ctxUser.ID {
+	switch ctxUser.Role {
+	case "root":
+		return true
+	case "admin":
+		return target.Role == "user" || target.ID == ctxUser.ID
+	default:
 		return false
 	}
-	return true
 }
 
-// canSetNewRole returns false if the actor is not allowed to set the given role.
-func canSetNewRole(ctxUser *model.User, newRole string) bool {
-	return canSetUserRole(ctxUser.Role, newRole)
+// canSetNewRole returns false if the actor is not allowed to move the target onto the given role.
+// An admin never hands out a role above user, so the only row it may leave on admin is its own;
+// root may set any role.
+func canSetNewRole(ctxUser, target *model.User, newRole string) bool {
+	switch ctxUser.Role {
+	case "root":
+		return true
+	case "admin":
+		if newRole == "user" {
+			return true
+		}
+		// its own row may stay on the role it already carries, or step down above
+		return target.ID == ctxUser.ID && newRole == target.Role
+	default:
+		return false
+	}
 }
 
 func (h *UserHandler) UpdateUser(c echo.Context) error {
@@ -386,13 +400,15 @@ func (h *UserHandler) UpdateUser(c echo.Context) error {
 	if newRole == "" {
 		newRole = target.Role
 	}
-	if !canSetNewRole(ctxUser, newRole) {
+	if !canSetNewRole(ctxUser, target, newRole) {
 		return c.JSON(http.StatusForbidden, &model.Exception{
 			Code:   tool.CodeUnauthorizedAccess,
 			Status: http.StatusForbidden,
 			Detail: msgNoPermission,
 		})
 	}
+
+	body.Role = newRole
 
 	u, err := h.svc.Update(c.Request().Context(), id, &body)
 	if err != nil {
@@ -482,6 +498,32 @@ func (h *UserHandler) BulkDeleteUsers(c echo.Context) error {
 			Status: http.StatusBadRequest,
 			Detail: "Body 'userIds' must not be empty",
 		})
+	}
+
+	// same rule as the single delete, or a bulk call would be the way around it
+	for _, id := range body.UserIDs {
+		target, err := h.svc.GetByID(c.Request().Context(), id)
+		if err != nil {
+			return c.JSON(http.StatusNotFound, &model.Exception{
+				Code:   tool.CodeUserNotFound,
+				Status: http.StatusNotFound,
+				Detail: msgUserNotFound,
+			})
+		}
+		if !canDeleteUser(ctxUser, target) {
+			if ctxUser.ID == target.ID {
+				return c.JSON(http.StatusConflict, &model.Exception{
+					Code:   tool.CodeCannotDeleteAccount,
+					Status: http.StatusConflict,
+					Detail: msgCannotDeleteSelf,
+				})
+			}
+			return c.JSON(http.StatusForbidden, &model.Exception{
+				Code:   tool.CodeUnauthorizedAccess,
+				Status: http.StatusForbidden,
+				Detail: msgNoPermission,
+			})
+		}
 	}
 
 	if err := h.svc.BulkDelete(c.Request().Context(), &body, ctxUser.ID); err != nil {
