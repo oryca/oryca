@@ -52,18 +52,6 @@ func TestMissingOGCPaths(t *testing.T) {
 		assert.Nil(t, MissingOGCPaths("", nil))
 	})
 
-	t.Run("SensorThings is checked on its entity sets, not /conformance", func(t *testing.T) {
-		// All eight entity sets of Part 1 Sensing, and no /conformance, which
-		// SensorThings advertises from its landing page instead.
-		missing := MissingOGCPaths(TypeOGCAPISensorThings, []string{
-			"/", "/Things", "/Locations", "/HistoricalLocations",
-			"/Datastreams", "/Sensors", "/ObservedProperties",
-			"/Observations", "/FeaturesOfInterest",
-		})
-		assert.Empty(t, missing)
-		assert.NotContains(t, MissingOGCPaths(TypeOGCAPISensorThings, nil), "/conformance")
-	})
-
 	t.Run("an empty service reports every core path", func(t *testing.T) {
 		assert.Len(t, MissingOGCPaths(TypeOGCAPIFeatures, nil), len(features))
 	})

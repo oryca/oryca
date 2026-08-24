@@ -31,9 +31,7 @@ import {
 const SERVICE_TYPE_OPTIONS = [
   { value: 'General', label: 'General API' },
   { value: 'OGC_API_Features', label: 'OGC API Features' },
-  { value: 'OGC_API_STAC', label: 'OGC API STAC' },
   { value: 'OGC_API_Styles', label: 'OGC API Styles' },
-  { value: 'OGC_API_SensorThings', label: 'OGC API SensorThings' },
   { value: 'OGC_API_Tiles', label: 'OGC API Tiles' },
 ];
 
@@ -79,7 +77,7 @@ interface GatewayService {
   id: string;
   name: string;
   description?: string;
-  type: string; // General | OGC_API_Features | OGC_API_STAC | OGC_API_Styles | OGC_API_SensorThings | OGC_API_Tiles
+  type: string; // General | OGC_API_Features | OGC_API_Styles | OGC_API_Tiles
   basePath: string;
   enabled?: boolean;
   isPublic?: boolean;
@@ -560,7 +558,7 @@ function ServicesManager({
                     required
                     value={name}
                     onChange={(e) => setName(e.target.value)}
-                    placeholder="e.g. STAC Features API"
+                    placeholder="e.g. OGC Features API"
                     className="ui-input"
                   />
                 </div>
@@ -587,7 +585,7 @@ function ServicesManager({
                   type="text"
                   value={description}
                   onChange={(e) => setDescription(e.target.value)}
-                  placeholder="Geospatial STAC server description"
+                  placeholder="Geospatial feature server description"
                   className="ui-input"
                 />
               </div>

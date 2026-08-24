@@ -14,8 +14,7 @@ import (
 func TestForType(t *testing.T) {
 	// every service type the product accepts has something to offer
 	for _, t2 := range []string{
-		"OGC_API_Features", "OGC_API_STAC", "OGC_API_Styles",
-		"OGC_API_Tiles", "OGC_API_SensorThings", "General",
+		"OGC_API_Features", "OGC_API_Styles", "OGC_API_Tiles", "General",
 	} {
 		assert.NotEmpty(t, ForType(t2), t2+" has nothing to offer")
 	}
@@ -99,7 +98,7 @@ func TestEveryTemplateStripsTheUpstreamCredential(t *testing.T) {
 	// A link an upstream returns can carry that upstream's key. Rewriting the
 	// address alone would hand it to the caller, so each template that rewrites
 	// links also replaces the credential with the caller's own.
-	for _, name := range []string{"ogc-api-features", "stac", "wmts-xml", "ogc-sensorthings-v2"} {
+	for _, name := range []string{"ogc-api-features", "wmts-xml"} {
 		p, ok := Find(name)
 		require.True(t, ok, name)
 

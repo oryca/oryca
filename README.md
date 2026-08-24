@@ -13,7 +13,7 @@
 
 [Quick Start](#quick-start) · [Configuration](#configuration) · [Docs](docs) · [Contributing](CONTRIBUTING.md)
 
-Put ORYCA in front of any HTTP API, your own REST and JSON service or an OGC API Features, STAC, Tiles, Styles or SensorThings server. It handles four things you would otherwise build yourself.
+Put ORYCA in front of any HTTP API, your own REST and JSON service or an OGC API Features, Tiles or Styles server. It handles four things you would otherwise build yourself.
 
 - **API keys.** Issues them, checks them on every request.
 - **Rate limits.** Per package, per path, so an upstream server is not the thing that fails first.
@@ -121,8 +121,6 @@ ORYCA does not implement these standards. It sits in front of servers that do, a
 | OGC API - Features | Part 1: Core 1.0 | Also published as ISO 19168-1 |
 | OGC API - Tiles | Part 1: Core 1.0 | |
 | OGC API - Styles | Part 1: Core | Still a draft, so the hints may change with it |
-| SensorThings API | 1.0, 1.1 | Advertises conformance on the landing page, not at `/conformance` |
-| STAC API | 1.0 | A community specification, not an OGC standard |
 
 Each service you register records the version its own upstream implements, which is the number that matters to a client.
 
