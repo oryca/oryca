@@ -120,7 +120,7 @@ func (h *AccountHandler) ChangePassword(c echo.Context) error {
 			return c.JSON(http.StatusForbidden, &model.Exception{
 				Code:   tool.CodeCannotChangePassword,
 				Status: http.StatusForbidden,
-				Detail: "This account has no local password; use identity provider or set-password link",
+				Detail: "This account has no local password; sign in with the identity provider, or ask an administrator to set one",
 			})
 		}
 		if errors.Is(err, service.ErrChangePasswordWrongCurrent) {

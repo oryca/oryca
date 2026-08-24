@@ -37,8 +37,6 @@ type Services struct {
 	Config                  *service.ConfigurationService
 	User                    *service.UserService
 	Auth                    *service.AuthService
-	SetPassword             *service.SetPasswordService
-	VerifyEmail             *service.VerifyEmailService
 	Account                 *service.AccountService
 	ApiKey                  *service.ApiKeyService
 	GatewaySource           *service.GatewaySourceService
@@ -148,20 +146,12 @@ func Setup(e *echo.Echo, infra Infra, svcs Services, internalCfg InternalConfig,
 	// Auth. Public
 	authHandler := handler.NewAuthHandler(handler.AuthHandlerDeps{
 		AuthSvc:        svcs.Auth,
-		SetPasswordSvc: svcs.SetPassword,
-		VerifyEmailSvc: svcs.VerifyEmail,
 		AllowedOrigins: allowedOrigins,
 	})
 	auth := v1.Group("/auth")
 	auth.POST("/login", authHandler.Login)
 	auth.POST("/register", authHandler.Register)
 	auth.POST("/token", authHandler.RefreshToken)
-	auth.GET("/verify-email", authHandler.VerifyEmail)
-	auth.POST("/forgot-password", authHandler.ForgotPassword)
-	auth.GET("/set-password", authHandler.VerifySetPasswordToken)
-	auth.POST("/set-password", authHandler.SetPassword)
-	auth.POST("/verify-email", authHandler.ResendVerifyEmail)
-	auth.POST("/setting-password", authHandler.SettingPassword)
 
 	auth.POST("/logout", authHandler.Logout, jwtMW.Authenticate)
 

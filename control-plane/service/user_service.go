@@ -6,7 +6,6 @@ import (
 	"net/url"
 	"time"
 
-	"github.com/oryca/oryca/control-plane/logger"
 	"github.com/oryca/oryca/control-plane/model"
 	"github.com/oryca/oryca/control-plane/tool"
 
@@ -42,23 +41,18 @@ type userRepo interface {
 	BulkHardDelete(ctx context.Context, ids []bson.ObjectID) error
 }
 
-type setPasswordSender interface {
-	Send(ctx context.Context, user *model.User, callbackUrl string) (*model.SendEmailResult, error)
-}
-
 // userGatewayPublisher is the narrow slice of GatewayEventPublisher this service needs.
 type userGatewayPublisher interface {
 	Publish(eventType string, payload any)
 }
 
 type UserService struct {
-	repo           userRepo
-	setPasswordSvc setPasswordSender
-	publisher      userGatewayPublisher
+	repo      userRepo
+	publisher userGatewayPublisher
 }
 
-func NewUserService(repo userRepo, setPasswordSvc setPasswordSender, publisher userGatewayPublisher) *UserService {
-	return &UserService{repo: repo, setPasswordSvc: setPasswordSvc, publisher: publisher}
+func NewUserService(repo userRepo, publisher userGatewayPublisher) *UserService {
+	return &UserService{repo: repo, publisher: publisher}
 }
 
 func (s *UserService) publishUserEvent(u *model.User) {
@@ -104,12 +98,6 @@ func (s *UserService) Create(ctx context.Context, body *model.UserCreate) (*mode
 
 	if err := s.repo.Insert(ctx, doc); err != nil {
 		return nil, err
-	}
-
-	if body.CallbackUrl != "" && s.setPasswordSvc != nil {
-		if _, err := s.setPasswordSvc.Send(ctx, doc, body.CallbackUrl); err != nil {
-			logger.Error("set-password email failed for " + doc.Email + ": " + err.Error())
-		}
 	}
 
 	s.publishUserEvent(doc)

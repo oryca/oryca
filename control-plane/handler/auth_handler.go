@@ -18,20 +18,10 @@ import (
 )
 
 const (
-	msgTokenInvalidOrExpired = "Token is invalid or expired"
-	msgCallbackUrlInvalid    = "callbackUrl is invalid or contains reserved query param 'token'"
-	msgNoPermission          = "No permission"
-	msgNotFound              = "Not found"
-	msgAuthRequired          = "Authentication required"
-	msgMailNotConfigured     = "Mail server is not configured yet"
+	msgNoPermission = "No permission"
+	msgNotFound     = "Not found"
+	msgAuthRequired = "Authentication required"
 )
-
-type authSetPasswordSvc interface {
-	ForgotPassword(ctx context.Context, email, callbackUrl string) (*model.SendEmailResult, error)
-	SendByEmail(ctx context.Context, email, callbackUrl string) (*model.SendEmailResult, error)
-	Verify(ctx context.Context, token string) (*model.SetPasswordTokenInfo, error)
-	SetPassword(ctx context.Context, token, password string) error
-}
 
 type authSvc interface {
 	Login(ctx context.Context, username, password, deviceInfo, ipAddress string) (*model.Auth, error)
@@ -40,31 +30,20 @@ type authSvc interface {
 	Logout(ctx context.Context, sessionID, userID bson.ObjectID) error
 }
 
-type verifyEmailSvc interface {
-	Verify(ctx context.Context, token string) error
-	SendByEmail(ctx context.Context, email, callbackUrl string) (*model.SendEmailResult, error)
-}
-
 type AuthHandler struct {
 	authSvc        authSvc
-	setPasswordSvc authSetPasswordSvc
-	verifyEmailSvc verifyEmailSvc
 	allowedOrigins []string // origin ที่เชื่อได้ ใช้เลือก postMessage targetOrigin ของ IDP popup flow
 }
 
 // AuthHandlerDeps รวม dependencies ของ AuthHandler (ลดจำนวน parameter ของ constructor)
 type AuthHandlerDeps struct {
 	AuthSvc        authSvc
-	SetPasswordSvc authSetPasswordSvc
-	VerifyEmailSvc verifyEmailSvc
 	AllowedOrigins []string // origin ที่เชื่อได้ ใช้เลือก postMessage targetOrigin ของ IDP popup flow
 }
 
 func NewAuthHandler(deps AuthHandlerDeps) *AuthHandler {
 	return &AuthHandler{
 		authSvc:        deps.AuthSvc,
-		setPasswordSvc: deps.SetPasswordSvc,
-		verifyEmailSvc: deps.VerifyEmailSvc,
 		allowedOrigins: deps.AllowedOrigins,
 	}
 }
@@ -278,197 +257,6 @@ func (h *AuthHandler) Logout(c echo.Context) error {
 	return c.NoContent(http.StatusNoContent)
 }
 
-func (h *AuthHandler) ForgotPassword(c echo.Context) error {
-	var body model.ForgotPasswordRequest
-	if err := c.Bind(&body); err != nil {
-		return c.JSON(http.StatusBadRequest, &model.Exception{
-			Code:   tool.CodeBodyInvalidFormat,
-			Status: http.StatusBadRequest,
-			Detail: err.Error(),
-		})
-	}
-
-	if body.Email == "" || body.CallbackUrl == "" {
-		return c.JSON(http.StatusBadRequest, &model.Exception{
-			Code:   tool.CodeBodyIsRequired,
-			Status: http.StatusBadRequest,
-			Detail: "Body 'email' and 'callbackUrl' are required",
-		})
-	}
-
-	result, err := h.setPasswordSvc.ForgotPassword(c.Request().Context(), body.Email, body.CallbackUrl)
-	if err != nil {
-		if errors.Is(err, service.ErrCallbackUrlInvalid) {
-			return c.JSON(http.StatusBadRequest, &model.Exception{
-				Code:   tool.CodeCallbackUrlInvalid,
-				Status: http.StatusBadRequest,
-				Detail: msgCallbackUrlInvalid,
-			})
-		}
-		if errors.Is(err, service.ErrUserNotFound) {
-			return c.JSON(http.StatusNotFound, &model.Exception{
-				Code:   tool.CodeUserNotFound,
-				Status: http.StatusNotFound,
-				Detail: "User not found",
-			})
-		}
-		if errors.Is(err, service.ErrUserNotVerifiedAuth) {
-			return c.JSON(http.StatusForbidden, &model.Exception{
-				Code:   tool.CodeUserNotVerified,
-				Status: http.StatusForbidden,
-				Detail: "User email is not verified",
-			})
-		}
-		if errors.Is(err, service.ErrUserNotEnabledAuth) {
-			return c.JSON(http.StatusForbidden, &model.Exception{
-				Code:   tool.CodeUserNotEnabled,
-				Status: http.StatusForbidden,
-				Detail: "User is not enabled",
-			})
-		}
-		if errors.Is(err, service.ErrMailDisabled) {
-			return c.JSON(http.StatusUnprocessableEntity, &model.Exception{
-				Code:   tool.CodeMailNotConfigured,
-				Status: http.StatusUnprocessableEntity,
-				Detail: msgMailNotConfigured,
-			})
-		}
-		logger.Error("forgot password failed: " + err.Error())
-		return c.JSON(http.StatusUnprocessableEntity, &model.Exception{
-			Code:   tool.CodeOperationFailed,
-			Status: http.StatusUnprocessableEntity,
-			Detail: "Could not send email",
-		})
-	}
-
-	return c.JSON(http.StatusOK, result)
-}
-
-func (h *AuthHandler) ResendVerifyEmail(c echo.Context) error {
-	var body model.SendEmailRequest
-	if err := c.Bind(&body); err != nil {
-		return c.JSON(http.StatusBadRequest, &model.Exception{
-			Code:   tool.CodeBodyInvalidFormat,
-			Status: http.StatusBadRequest,
-			Detail: err.Error(),
-		})
-	}
-
-	if body.Email == "" || body.CallbackUrl == "" {
-		return c.JSON(http.StatusBadRequest, &model.Exception{
-			Code:   tool.CodeBodyIsRequired,
-			Status: http.StatusBadRequest,
-			Detail: "Body 'email' and 'callbackUrl' are required",
-		})
-	}
-
-	result, err := h.verifyEmailSvc.SendByEmail(c.Request().Context(), body.Email, body.CallbackUrl)
-	if err != nil {
-		if errors.Is(err, service.ErrCallbackUrlInvalid) {
-			return c.JSON(http.StatusBadRequest, &model.Exception{
-				Code:   tool.CodeCallbackUrlInvalid,
-				Status: http.StatusBadRequest,
-				Detail: msgCallbackUrlInvalid,
-			})
-		}
-		if errors.Is(err, service.ErrUserNotFound) {
-			return c.JSON(http.StatusNotFound, &model.Exception{
-				Code:   tool.CodeUserNotFound,
-				Status: http.StatusNotFound,
-				Detail: "User not found",
-			})
-		}
-		if errors.Is(err, service.ErrUserAlreadyVerified) {
-			return c.JSON(http.StatusConflict, &model.Exception{
-				Code:   tool.CodeUserAlreadyVerified,
-				Status: http.StatusConflict,
-				Detail: "User is already verified",
-			})
-		}
-		if errors.Is(err, service.ErrUserNotEnabledAuth) {
-			return c.JSON(http.StatusForbidden, &model.Exception{
-				Code:   tool.CodeUserNotEnabled,
-				Status: http.StatusForbidden,
-				Detail: "User is not enabled",
-			})
-		}
-		if errors.Is(err, service.ErrMailDisabled) {
-			return c.JSON(http.StatusUnprocessableEntity, &model.Exception{
-				Code:   tool.CodeMailNotConfigured,
-				Status: http.StatusUnprocessableEntity,
-				Detail: msgMailNotConfigured,
-			})
-		}
-		logger.Error("resend verify email failed: " + err.Error())
-		return c.JSON(http.StatusUnprocessableEntity, &model.Exception{
-			Code:   tool.CodeOperationFailed,
-			Status: http.StatusUnprocessableEntity,
-			Detail: "Could not send email",
-		})
-	}
-
-	return c.JSON(http.StatusOK, result)
-}
-
-func (h *AuthHandler) SettingPassword(c echo.Context) error {
-	var body model.SendEmailRequest
-	if err := c.Bind(&body); err != nil {
-		return c.JSON(http.StatusBadRequest, &model.Exception{
-			Code:   tool.CodeBodyInvalidFormat,
-			Status: http.StatusBadRequest,
-			Detail: err.Error(),
-		})
-	}
-
-	if body.Email == "" || body.CallbackUrl == "" {
-		return c.JSON(http.StatusBadRequest, &model.Exception{
-			Code:   tool.CodeBodyIsRequired,
-			Status: http.StatusBadRequest,
-			Detail: "Body 'email' and 'callbackUrl' are required",
-		})
-	}
-
-	result, err := h.setPasswordSvc.SendByEmail(c.Request().Context(), body.Email, body.CallbackUrl)
-	if err != nil {
-		if errors.Is(err, service.ErrCallbackUrlInvalid) {
-			return c.JSON(http.StatusBadRequest, &model.Exception{
-				Code:   tool.CodeCallbackUrlInvalid,
-				Status: http.StatusBadRequest,
-				Detail: msgCallbackUrlInvalid,
-			})
-		}
-		if errors.Is(err, service.ErrUserNotFound) {
-			return c.JSON(http.StatusNotFound, &model.Exception{
-				Code:   tool.CodeUserNotFound,
-				Status: http.StatusNotFound,
-				Detail: "User not found",
-			})
-		}
-		if errors.Is(err, service.ErrUserNotEnabledAuth) {
-			return c.JSON(http.StatusForbidden, &model.Exception{
-				Code:   tool.CodeUserNotEnabled,
-				Status: http.StatusForbidden,
-				Detail: "User is not enabled",
-			})
-		}
-		if errors.Is(err, service.ErrMailDisabled) {
-			return c.JSON(http.StatusUnprocessableEntity, &model.Exception{
-				Code:   tool.CodeMailNotConfigured,
-				Status: http.StatusUnprocessableEntity,
-				Detail: msgMailNotConfigured,
-			})
-		}
-		logger.Error("setting password failed: " + err.Error())
-		return c.JSON(http.StatusUnprocessableEntity, &model.Exception{
-			Code:   tool.CodeOperationFailed,
-			Status: http.StatusUnprocessableEntity,
-			Detail: "Could not send email",
-		})
-	}
-
-	return c.JSON(http.StatusOK, result)
-}
-
 // originFromRequest ดึง origin ของหน้าที่ยิง request มา. ใช้ header Origin ก่อน
 // ตกมาที่ Referer ถ้า Origin ไม่มี (บาง browser ไม่ส่ง Origin บน GET navigation ปกติ)
 func originFromRequest(c echo.Context) string {
@@ -481,97 +269,4 @@ func originFromRequest(c echo.Context) string {
 		}
 	}
 	return ""
-}
-
-func (h *AuthHandler) VerifyEmail(c echo.Context) error {
-	token := c.QueryParam("token")
-	if token == "" {
-		return c.JSON(http.StatusBadRequest, &model.Exception{
-			Code:   tool.CodeQueryParamRequired,
-			Status: http.StatusBadRequest,
-			Detail: "Query param 'token' is required",
-		})
-	}
-
-	if err := h.verifyEmailSvc.Verify(c.Request().Context(), token); err != nil {
-		if errors.Is(err, service.ErrTokenInvalidOrExpired) {
-			return c.JSON(http.StatusBadRequest, &model.Exception{
-				Code:   tool.CodeTokenInvalidOrExpired,
-				Status: http.StatusBadRequest,
-				Detail: msgTokenInvalidOrExpired,
-			})
-		}
-		return c.JSON(http.StatusUnprocessableEntity, &model.Exception{
-			Code:   tool.CodeOperationFailed,
-			Status: http.StatusUnprocessableEntity,
-			Detail: "Could not verify email",
-		})
-	}
-
-	return c.NoContent(http.StatusNoContent)
-}
-
-func (h *AuthHandler) VerifySetPasswordToken(c echo.Context) error {
-	token := c.QueryParam("token")
-	if token == "" {
-		return c.JSON(http.StatusBadRequest, &model.Exception{
-			Code:   tool.CodeQueryParamRequired,
-			Status: http.StatusBadRequest,
-			Detail: "Query param 'token' is required",
-		})
-	}
-
-	info, err := h.setPasswordSvc.Verify(c.Request().Context(), token)
-	if err != nil {
-		if errors.Is(err, service.ErrTokenInvalidOrExpired) {
-			return c.JSON(http.StatusBadRequest, &model.Exception{
-				Code:   tool.CodeTokenInvalidOrExpired,
-				Status: http.StatusBadRequest,
-				Detail: msgTokenInvalidOrExpired,
-			})
-		}
-		return c.JSON(http.StatusNotFound, &model.Exception{
-			Code:   tool.CodeUserNotFound,
-			Status: http.StatusNotFound,
-			Detail: "Not found",
-		})
-	}
-
-	return c.JSON(http.StatusOK, info)
-}
-
-func (h *AuthHandler) SetPassword(c echo.Context) error {
-	var body model.SetPasswordRequest
-	if err := c.Bind(&body); err != nil {
-		return c.JSON(http.StatusBadRequest, &model.Exception{
-			Code:   tool.CodeBodyInvalidFormat,
-			Status: http.StatusBadRequest,
-			Detail: err.Error(),
-		})
-	}
-
-	if body.Token == "" || body.Password == "" {
-		return c.JSON(http.StatusBadRequest, &model.Exception{
-			Code:   tool.CodeBodyInvalidFormat,
-			Status: http.StatusBadRequest,
-			Detail: "Body 'token' and 'password' are required",
-		})
-	}
-
-	if err := h.setPasswordSvc.SetPassword(c.Request().Context(), body.Token, body.Password); err != nil {
-		if errors.Is(err, service.ErrTokenInvalidOrExpired) {
-			return c.JSON(http.StatusBadRequest, &model.Exception{
-				Code:   tool.CodeTokenInvalidOrExpired,
-				Status: http.StatusBadRequest,
-				Detail: msgTokenInvalidOrExpired,
-			})
-		}
-		return c.JSON(http.StatusUnprocessableEntity, &model.Exception{
-			Code:   tool.CodeOperationFailed,
-			Status: http.StatusUnprocessableEntity,
-			Detail: "Could not set password",
-		})
-	}
-
-	return c.NoContent(http.StatusNoContent)
 }

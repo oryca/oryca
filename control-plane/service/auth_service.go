@@ -61,24 +61,25 @@ type authPackageFinder interface {
 }
 
 type AuthService struct {
-	configSvc      authConfigSvc
-	packageRepo    authPackageFinder
-	userRepo       authUserRepo
-	sessionCache   authSessionCache
-	sessionRepo    authUserSessionRepo
-	userCache      authUserCache
-	verifyEmailSvc *VerifyEmailService
+	configSvc    authConfigSvc
+	packageRepo  authPackageFinder
+	userRepo     authUserRepo
+	sessionCache authSessionCache
+	sessionRepo  authUserSessionRepo
+	userCache    authUserCache
+	// false holds new sign-ups unverified until an administrator approves them
+	autoVerify bool
 }
 
-func NewAuthService(configSvc authConfigSvc, userRepo authUserRepo, packageRepo authPackageFinder, sessionCache authSessionCache, sessionRepo authUserSessionRepo, userCache authUserCache, verifyEmailSvc *VerifyEmailService) *AuthService {
+func NewAuthService(configSvc authConfigSvc, userRepo authUserRepo, packageRepo authPackageFinder, sessionCache authSessionCache, sessionRepo authUserSessionRepo, userCache authUserCache, autoVerify bool) *AuthService {
 	return &AuthService{
-		configSvc:      configSvc,
-		packageRepo:    packageRepo,
-		userRepo:       userRepo,
-		sessionCache:   sessionCache,
-		sessionRepo:    sessionRepo,
-		userCache:      userCache,
-		verifyEmailSvc: verifyEmailSvc,
+		configSvc:    configSvc,
+		packageRepo:  packageRepo,
+		userRepo:     userRepo,
+		sessionCache: sessionCache,
+		sessionRepo:  sessionRepo,
+		userCache:    userCache,
+		autoVerify:   autoVerify,
 	}
 }
 
@@ -147,6 +148,7 @@ func (s *AuthService) Register(ctx context.Context, body *model.RegisterRequest)
 		}
 	}
 
+	verified := s.autoVerify
 	createBody := &model.UserCreate{
 		AccountType: "email",
 		Email:       body.Email,
@@ -158,6 +160,7 @@ func (s *AuthService) Register(ctx context.Context, body *model.RegisterRequest)
 		LastName:    body.LastName,
 		DisplayName: body.DisplayName,
 		Role:        "user", // force role on self-register
+		Verified:    &verified,
 	}
 
 	// package ตั้งต้นของคนสมัครเอง. หาไม่เจอก็ปล่อยว่าง (admin ผูกให้ทีหลังได้) ไม่ block การสมัคร
@@ -182,15 +185,6 @@ func (s *AuthService) Register(ctx context.Context, body *model.RegisterRequest)
 
 	if err := s.userRepo.Insert(ctx, doc); err != nil {
 		return nil, err
-	}
-
-	// ส่ง verify email best-effort (non-blocking)
-	if body.CallbackUrl != "" && s.verifyEmailSvc != nil {
-		go func() {
-			if _, err := s.verifyEmailSvc.Send(context.WithoutCancel(ctx), doc, body.CallbackUrl); err != nil {
-				logger.Error("verify-email send failed for " + doc.Email + ": " + err.Error())
-			}
-		}()
 	}
 
 	return doc, nil
