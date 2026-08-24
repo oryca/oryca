@@ -29,6 +29,7 @@ interface NavItem {
   name: string;
   href: string;
   icon: React.ComponentType<{ className?: string }>;
+  roles?: Role[];
 }
 
 interface NavGroup {
@@ -43,8 +44,8 @@ const navGroups: NavGroup[] = [
     roles: ['user', 'admin', 'root'],
     items: [
       { name: 'Dashboard', href: '/dashboard', icon: LayoutDashboard },
-      { name: 'Services & Keys', href: '/services', icon: Key },
-      { name: 'Sandbox', href: '/sandbox', icon: TerminalSquare },
+      { name: 'Services & Keys', href: '/services', icon: Key, roles: ['user', 'admin'] },
+      { name: 'Sandbox', href: '/sandbox', icon: TerminalSquare, roles: ['user', 'admin'] },
     ],
   },
   {
@@ -65,6 +66,17 @@ const navGroups: NavGroup[] = [
     ],
   },
 ];
+
+function allowedRoles(pathname: string): Role[] | null {
+  for (const group of navGroups) {
+    for (const item of group.items) {
+      if (pathname === item.href || pathname.startsWith(`${item.href}/`)) {
+        return item.roles ?? group.roles;
+      }
+    }
+  }
+  return null;
+}
 
 function NavLink({
   item,
@@ -200,6 +212,11 @@ export default function NavigationShell({ children }: { children: React.ReactNod
     }
   }, [isLoading, isAuthenticated, router]);
 
+  const deniedRoute = !!user && !(allowedRoles(pathname)?.includes(user.role) ?? true);
+  useEffect(() => {
+    if (deniedRoute) router.replace('/dashboard');
+  }, [deniedRoute, router]);
+
   useEffect(() => {
     if (!isAuthenticated) return;
 
@@ -247,7 +264,18 @@ export default function NavigationShell({ children }: { children: React.ReactNod
     );
   }
 
-  const visibleGroups = navGroups.filter((g) => g.roles.includes(user.role));
+  if (deniedRoute) {
+    return (
+      <output className="flex min-h-screen items-center justify-center bg-paper-2 text-sm text-muted">
+        That page is not yours to open. Taking you back to the dashboard…
+      </output>
+    );
+  }
+
+  const visibleGroups = navGroups
+    .filter((g) => g.roles.includes(user.role))
+    .map((g) => ({ ...g, items: g.items.filter((i) => !i.roles || i.roles.includes(user.role)) }))
+    .filter((g) => g.items.length > 0);
   const accountName = user.displayName || user.email.split('@')[0];
 
   return (
@@ -261,7 +289,7 @@ export default function NavigationShell({ children }: { children: React.ReactNod
       </a>
 
       {/* Sidebar — desktop */}
-      <aside className="fixed inset-y-0 left-0 z-30 hidden w-64 flex-col border-r border-rule bg-paper md:flex">
+      <aside className="fixed inset-y-0 left-0 z-30 hidden w-[var(--rail-width)] flex-col border-r border-rule bg-paper md:flex">
         <div className="flex items-center gap-2 border-b border-rule px-5 py-4">
           <Wordmark />
           <span className="rounded-chip border border-accent-edge bg-accent-wash px-1.5 py-0.5 text-[10px] font-semibold uppercase tracking-wide text-accent">
@@ -278,7 +306,7 @@ export default function NavigationShell({ children }: { children: React.ReactNod
         </div>
       </aside>
 
-      <div className="relative flex min-h-screen w-full flex-1 flex-col overflow-hidden md:pl-64">
+      <div className="relative flex min-h-screen w-full flex-1 flex-col overflow-hidden md:pl-[var(--rail-width)]">
         {/* Crisp Origami Facet Background for Portal Pages */}
         <svg
           aria-hidden="true"
@@ -364,7 +392,7 @@ export default function NavigationShell({ children }: { children: React.ReactNod
           </dialog>
         )}
 
-        <main id="main" className="relative z-10 mx-auto w-full max-w-7xl flex-grow p-4 md:p-8">
+        <main id="main" className="relative mx-auto w-full max-w-7xl flex-grow p-4 md:p-8">
           {children}
         </main>
       </div>

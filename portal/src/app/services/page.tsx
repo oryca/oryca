@@ -3,7 +3,7 @@
  */
 'use client';
 
-import React, { useMemo, useRef, useState } from 'react';
+import React, { useEffect, useMemo, useRef, useState } from 'react';
 import {
   useQuery,
   useMutation,
@@ -14,6 +14,7 @@ import axios from 'axios';
 import { api, fetchAll, GATEWAY_URL } from '@/lib/api';
 import { useInfiniteList } from '@/lib/useInfiniteList';
 import { useDebounced } from '@/lib/useDebounced';
+import { usePackageServiceScope } from '@/lib/usePackageServiceScope';
 import NavigationShell from '@/components/NavigationShell';
 import {
   Button,
@@ -21,6 +22,7 @@ import {
   PageHeader,
   SectionCard,
   EmptyState,
+  Notice,
   SkeletonLine,
   Loading,
   Select,
@@ -180,7 +182,7 @@ export default function ServicesAndKeysPage() {
   // Search runs server-side — the catalog is paged, so filtering here would only
   // ever look at the rows already scrolled into view.
   const {
-    items: services,
+    items: catalogServices,
     isLoading: isLoadingServices,
     hasNextPage: hasMoreServices,
     isFetchingNextPage: isFetchingMoreServices,
@@ -190,6 +192,35 @@ export default function ServicesAndKeysPage() {
     '/services',
     debouncedServiceSearch ? { search: debouncedServiceSearch } : undefined
   );
+
+  const {
+    isScoped: isPackageScoped,
+    isLoadingScope,
+    isScopeReady,
+    isScopeError,
+    hasNoPackage,
+    retryScope,
+    filterServices,
+  } = usePackageServiceScope();
+  const services = useMemo(() => filterServices(catalogServices), [filterServices, catalogServices]);
+
+  useEffect(() => {
+    if (!isPackageScoped || !isScopeReady) return;
+    if (!hasMoreServices || isFetchingMoreServices) return;
+    if (services.length === 0 && catalogServices.length > 0) fetchMoreServices();
+  }, [
+    isPackageScoped,
+    isScopeReady,
+    hasMoreServices,
+    isFetchingMoreServices,
+    services.length,
+    catalogServices.length,
+    fetchMoreServices,
+  ]);
+
+  const isCatalogLoading = isLoadingServices || isLoadingScope;
+  // The catalog itself is fine, we just cannot tell which parts of it are yours.
+  const showScopeError = !isCatalogLoading && isScopeError;
 
   // Feeds the Try-It key dropdown and seeds the first selection, so it needs every key.
   const { data: apiKeys, isLoading: isLoadingKeys } = useQuery<ApiKey[]>({
@@ -458,7 +489,7 @@ export default function ServicesAndKeysPage() {
                   </div>
               </div>
 
-              {isLoadingServices && (
+              {isCatalogLoading && (
                 <Loading label="Loading services">
                   <div className="space-y-3 p-4">
                     {[0, 1, 2].map((i) => (
@@ -471,21 +502,51 @@ export default function ServicesAndKeysPage() {
                 </Loading>
               )}
 
-              {!isLoadingServices && services.length === 0 && !debouncedServiceSearch && (
+              {showScopeError && (
+                <div className="p-4">
+                  <Notice tone="danger" title="Could not load your package">
+                    <p>
+                      The list of services your package may call did not come back, so none are
+                      shown here.
+                    </p>
+                    <button
+                      type="button"
+                      onClick={() => retryScope()}
+                      className="mt-2 font-medium text-ink underline underline-offset-2"
+                    >
+                      Try again
+                    </button>
+                  </Notice>
+                </div>
+              )}
+
+              {!isCatalogLoading && !showScopeError && services.length === 0 && !debouncedServiceSearch && (
                 <EmptyState
                   icon={<Server className="h-5 w-5" />}
-                  title="No services published yet"
-                  description="An administrator adds them under Manage Services."
+                  title={
+                    hasNoPackage
+                      ? 'No package assigned'
+                      : isPackageScoped
+                        ? 'No services in your package'
+                        : 'No services published yet'
+                  }
+                  description={
+                    hasNoPackage
+                      ? 'Your account is not on a package yet, so no service is yours to call. An administrator assigns one.'
+                      : isPackageScoped
+                        ? 'Ask an administrator to grant your package access to a service.'
+                        : 'An administrator adds them under Manage Services.'
+                  }
                 />
               )}
 
-              {!isLoadingServices && services.length === 0 && !!debouncedServiceSearch && (
+              {!isCatalogLoading && !showScopeError && services.length === 0 && !!debouncedServiceSearch && (
                 <div className="p-6 text-center text-xs text-muted">
                   No services match &quot;{serviceSearchTerm}&quot;
                 </div>
               )}
 
-              {!isLoadingServices && services.length > 0 && (
+              {!isCatalogLoading && services.length > 0 && (
                 <ul
                   ref={catalogScrollRef}
                   className="divide-y divide-rule max-h-[min(640px,70vh)] overflow-y-auto"

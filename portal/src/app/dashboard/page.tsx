@@ -7,6 +7,7 @@ import React, { useMemo, useState } from 'react';
 import { useQuery } from '@tanstack/react-query';
 import { api, fetchAll } from '@/lib/api';
 import { useAuth } from '@/app/providers';
+import { usePackageServiceScope } from '@/lib/usePackageServiceScope';
 import NavigationShell from '@/components/NavigationShell';
 import { LatencyChart, LatencyLegend, type LatencyLabelFormat } from '@/components/LatencyChart';
 import { TrafficChart, type TrafficBucket } from '@/components/TrafficChart';
@@ -93,6 +94,7 @@ interface ServiceOption {
   id: string;
   name: string;
   basePath: string;
+  isPublic?: boolean;
 }
 
 interface UserOption {
@@ -241,10 +243,14 @@ export default function DashboardPage() {
     return params;
   }, [fromTime, toTime, selectedServiceId, selectedUserId, isAdmin]);
 
-  const { data: services } = useQuery<ServiceOption[]>({
+  const { data: allServices } = useQuery<ServiceOption[]>({
     queryKey: ['services-list'],
     queryFn: () => fetchAll<ServiceOption>('/services'),
   });
+
+  // The service filter should only offer what this user can actually have traffic on.
+  const { filterServices } = usePackageServiceScope();
+  const services = useMemo(() => filterServices(allServices), [filterServices, allServices]);
 
   const { data: users } = useQuery<UserOption[]>({
     queryKey: ['users-list'],
