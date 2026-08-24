@@ -319,10 +319,8 @@ export default function SandboxPage() {
         cleanPath = pathname.split(baseSegment)[1] || '/';
       } else if (serviceBase && pathname.includes(`/${serviceBase}`)) {
         cleanPath = pathname.split(`/${serviceBase}`)[1] || '/';
-      } else if (pathname.includes('stac-landuse')) {
-        cleanPath = pathname.split('stac-landuse')[1] || '/';
       } else {
-        // Strip upstream path prefixes (e.g. /core/api/features/1.1 or /core/api/stac/1.0)
+        // Strip upstream path prefixes (e.g. /core/api/features/1.1)
         const knownRoots = [
           '/collections',
           '/conformance',
@@ -869,9 +867,7 @@ export default function SandboxPage() {
                 <div className="flex items-center justify-between border-b border-rule pb-2">
                   <span className="text-xs font-semibold text-ink flex items-center gap-1.5">
                     <Link2 className="h-4 w-4 text-accent" />
-                    {service?.type === 'OGC_API_STAC'
-                      ? `STAC Catalog Navigation (${responseLinks.length})`
-                      : service?.type === 'OGC_API_Features'
+                    {service?.type === 'OGC_API_Features'
                       ? `Features & Resource Links (${responseLinks.length})`
                       : service?.type === 'OGC_API_Tiles'
                       ? `Tile & Metadata Links (${responseLinks.length})`

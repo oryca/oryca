@@ -10,7 +10,7 @@ type GatewayService struct {
 	ID            bson.ObjectID   `json:"id" bson:"_id,omitempty"`
 	Name          string          `json:"name" bson:"name"`
 	Description   string          `json:"description,omitempty" bson:"description,omitempty"`
-	Type          string          `json:"type" bson:"type"` // General | OGC_API_Features | OGC_API_STAC | OGC_API_Styles | OGC_API_SensorThings | OGC_API_Tiles
+	Type          string          `json:"type" bson:"type"` // General | OGC_API_Features | OGC_API_Styles | OGC_API_Tiles
 	BasePath      string          `json:"basePath" bson:"basePath"`
 	Enabled       *bool           `json:"enabled,omitempty" bson:"enabled,omitempty"`
 	IsPublic      *bool           `json:"isPublic,omitempty" bson:"isPublic,omitempty"`

@@ -139,12 +139,10 @@ func (h *GatewayServiceHandler) GetService(c echo.Context) error {
 }
 
 var validServiceTypes = map[string]bool{
-	"General":              true,
-	"OGC_API_Features":     true,
-	"OGC_API_STAC":         true,
-	"OGC_API_Styles":       true,
-	"OGC_API_SensorThings": true,
-	"OGC_API_Tiles":        true,
+	"General":          true,
+	"OGC_API_Features": true,
+	"OGC_API_Styles":   true,
+	"OGC_API_Tiles":    true,
 }
 
 func validateServiceBodyFields(name, svcType, basePath string) string {
@@ -154,7 +152,7 @@ func validateServiceBodyFields(name, svcType, basePath string) string {
 	case svcType == "":
 		return "Body 'type' is required"
 	case !validServiceTypes[svcType]:
-		return "Body 'type' must be one of [General, OGC_API_Features, OGC_API_STAC, OGC_API_Styles, OGC_API_SensorThings, OGC_API_Tiles]"
+		return "Body 'type' must be one of [General, OGC_API_Features, OGC_API_Styles, OGC_API_Tiles]"
 	case basePath == "":
 		return msgBasePathRequired
 	}

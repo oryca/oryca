@@ -7,12 +7,10 @@ import (
 
 // Service types. Anything other than TypeGeneral names an OGC API standard.
 const (
-	TypeGeneral            = "General"
-	TypeOGCAPIFeatures     = "OGC_API_Features"
-	TypeOGCAPISTAC         = "OGC_API_STAC"
-	TypeOGCAPIStyles       = "OGC_API_Styles"
-	TypeOGCAPISensorThings = "OGC_API_SensorThings"
-	TypeOGCAPITiles        = "OGC_API_Tiles"
+	TypeGeneral        = "General"
+	TypeOGCAPIFeatures = "OGC_API_Features"
+	TypeOGCAPIStyles   = "OGC_API_Styles"
+	TypeOGCAPITiles    = "OGC_API_Tiles"
 )
 
 // OGCInfo records which version of the standard the upstream implements and which
@@ -42,16 +40,6 @@ var ogcCorePaths = map[string][]string{
 		"/collections/{collectionId}/items",
 		"/collections/{collectionId}/items/{featureId}",
 	},
-	// STAC API 1.0. A community specification, not an OGC standard, though its
-	// item access follows OGC API - Features closely, which is where the
-	// collection and item paths come from.
-	TypeOGCAPISTAC: {
-		"/", "/conformance", "/collections",
-		"/collections/{collectionId}",
-		"/collections/{collectionId}/items",
-		"/collections/{collectionId}/items/{featureId}",
-		"/search",
-	},
 	// OGC API - Styles - Part 1: Core, still a draft at the time of writing, so
 	// these paths can change before it is adopted.
 	TypeOGCAPIStyles: {
@@ -72,14 +60,6 @@ var ogcCorePaths = map[string][]string{
 		"/tiles/{tileMatrixSetId}",
 		"/tiles/{tileMatrixSetId}/{tileMatrix}/{tileRow}/{tileCol}",
 		"/collections/{collectionId}/tiles",
-	},
-	// SensorThings API 1.0 and 1.1 (OGC 18-088). All eight entity sets of Part 1
-	// Sensing. It advertises conformance from its landing page rather than a
-	// /conformance endpoint, so that path is not listed.
-	TypeOGCAPISensorThings: {
-		"/", "/Things", "/Locations", "/HistoricalLocations",
-		"/Datastreams", "/Sensors", "/ObservedProperties",
-		"/Observations", "/FeaturesOfInterest",
 	},
 }
 
