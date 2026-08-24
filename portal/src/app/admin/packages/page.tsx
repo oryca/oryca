@@ -185,6 +185,7 @@ export default function AdminPackagesPage() {
   const [userPackageId, setUserPackageId] = useState('');
   const [userVerified, setUserVerified] = useState(false);
   const [userEnabled, setUserEnabled] = useState(true);
+  const [userPassword, setUserPassword] = useState('');
 
   const [formError, setFormError] = useState<string | null>(null);
 
@@ -274,6 +275,8 @@ export default function AdminPackagesPage() {
     setUserPackageId(u.packageId || '');
     setUserVerified(u.verified === true);
     setUserEnabled(u.enabled !== false);
+    setUserPassword('');
+    setFormError(null);
     setIsUserModalOpen(true);
   }
 
@@ -389,14 +392,21 @@ export default function AdminPackagesPage() {
         packageId: userPackageId || undefined,
         verified: userVerified,
         enabled: userEnabled,
+        // only sent when the admin typed one, so a blank field leaves the password alone
+        ...(userPassword ? { password: userPassword } : {}),
       };
       await api.put(`/users/${editingUser.id}`, payload);
     },
     onSuccess: () => {
+      const passwordChanged = !!userPassword;
       queryClient.invalidateQueries({ queryKey: ['admin-users'] });
       setIsUserModalOpen(false);
       setEditingUser(null);
-      toast({ tone: 'ok', message: 'User updated' });
+      setUserPassword('');
+      toast({
+        tone: 'ok',
+        message: passwordChanged ? 'User updated, password changed' : 'User updated',
+      });
     },
     onError: (err: unknown) => {
       setFormError(err instanceof Error && err.message ? err.message : 'Failed to update user.');
@@ -1211,6 +1221,26 @@ export default function AdminPackagesPage() {
                       />
                     </div>
 
+                    {!editingSelf && (
+                      <div className="pt-2 border-t border-rule">
+                        <label
+                          htmlFor="usr-password"
+                          className="text-xs font-semibold text-muted uppercase tracking-wider block mb-1"
+                        >
+                          Set New Password
+                        </label>
+                        <input
+                          id="usr-password"
+                          type="text"
+                          value={userPassword}
+                          onChange={(e) => setUserPassword(e.target.value)}
+                          placeholder="Leave blank to keep the current one"
+                          autoComplete="off"
+                          className="ui-input font-mono"
+                        />
+                      </div>
+                    )}
+
                     <div className="flex flex-col gap-2 pt-2 border-t border-rule">
                       <div className="flex items-center gap-2">
                         <input
@@ -1222,7 +1252,7 @@ export default function AdminPackagesPage() {
                           className="w-4 h-4 accent-accent"
                         />
                         <label htmlFor="usr-verified" className="text-xs font-semibold text-ink-2 select-none cursor-pointer">
-                          Account Verified (Email confirm)
+                          Account Verified (Can sign in)
                         </label>
                       </div>
 
@@ -1247,6 +1277,7 @@ export default function AdminPackagesPage() {
                         onClick={() => {
                           setIsUserModalOpen(false);
                           setEditingUser(null);
+                          setUserPassword('');
                         }}
                         className="px-4 py-2 border border-rule hover:border-faint rounded-control text-ink-2 hover:bg-paper-2 transition"
                       >

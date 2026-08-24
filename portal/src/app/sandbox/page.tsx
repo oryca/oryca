@@ -82,6 +82,8 @@ const RATE_LIMIT_HEADERS = [
   'ratelimit-reset',
   'retry-after',
 ];
+// Sits above the gateway's 30s upstream budget so its 502 arrives before the browser gives up.
+const REQUEST_TIMEOUT_MS = 35000;
 
 
 /** จัดรูป JSON ให้อ่านง่าย ถ้าไม่ใช่ JSON ก็ปล่อยตามเดิม */
@@ -92,6 +94,24 @@ function pretty(raw: unknown): string {
   } catch {
     return raw;
   }
+}
+
+/** Turns a fetch failure into copy that names who dropped the call. */
+function transportMessage(err: unknown): string {
+  if (!(err instanceof Error)) return 'The request never got a reply.';
+  const seconds = Math.round(REQUEST_TIMEOUT_MS / 1000);
+  // Browsers spell a timed-out signal several ways, including a bare "aborted without reason".
+  if (
+    err.name === 'TimeoutError' ||
+    err.name === 'AbortError' ||
+    /abort|timed? ?out/i.test(err.message)
+  ) {
+    return `The service did not answer within ${seconds} seconds, so the request was dropped. That is the upstream being slow or down, not your request - try again, or check the service with its owner.`;
+  }
+  if (err.name === 'TypeError') {
+    return 'The request could not reach the gateway. Check that it is running and reachable from this browser.';
+  }
+  return err.message;
 }
 
 /** สถานะตอบกลับสื่อด้วยสี + ตัวเลข ไม่ใช่สีอย่างเดียว */
@@ -407,17 +427,15 @@ export default function SandboxPage() {
         method,
         headers: sent,
         body: body && method !== 'GET' ? body : undefined,
-        signal: AbortSignal.timeout(15000),  
-        cache: 'no-store',                    
+        signal: AbortSignal.timeout(REQUEST_TIMEOUT_MS),
+        cache: 'no-store',
       });
       setStatus(res.status);
       setResponseBody(pretty(await res.text()));                        
       setResponseHeaders(Object.fromEntries(res.headers.entries()));
     } catch (err) {
-        setStatus(null);
-        setTransportError(
-          err instanceof Error ? err.message : 'The request never got a reply.',
-        );
+      setStatus(null);
+      setTransportError(transportMessage(err));
     } finally {
       setElapsedMs(Math.round(performance.now() - startedAt));
       setIsSending(false);

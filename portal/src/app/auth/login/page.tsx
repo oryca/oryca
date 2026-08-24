@@ -14,11 +14,11 @@ import { Shield } from 'lucide-react';
 /** ข้อความที่พามาจากหน้าอื่นผ่าน query string */
 const HANDOFF: Record<string, { tone: 'ok' | 'info'; text: string }> = {
   expired: { tone: 'info', text: 'Your session expired. Sign in again.' },
-  registered: {
-    tone: 'ok',
-    text: 'Account created. Check your email for a verification link before you sign in. If email is not configured on this site, ask an administrator to verify your account.',
+  registered: { tone: 'ok', text: 'Account created. You can sign in now.' },
+  registered_pending: {
+    tone: 'info',
+    text: 'Account created. An administrator has to verify it before you can sign in.',
   },
-  reset_success: { tone: 'ok', text: 'Your password is set. You can sign in now.' },
 };
 
 function LoginForm() {
@@ -57,9 +57,7 @@ function LoginForm() {
 
       if (notVerified) {
         setIsNotVerified(true);
-        setError(
-          'This account is not verified yet. Check your inbox for the verification link, or ask an administrator to verify your account.',
-        );
+        setError('This account is not verified yet. Ask an administrator to verify it.');
       } else {
         setError(
           err instanceof Error && err.message
@@ -105,9 +103,9 @@ function LoginForm() {
             autoComplete="current-password"
             required
           />
-          <div className="-mt-1 text-right">
-            <AuthLink href="/auth/forgot-password">Forgot password?</AuthLink>
-          </div>
+          <p className="-mt-1 text-right text-xs text-muted">
+            Forgot your password? Ask an administrator to set a new one.
+          </p>
         </div>
 
         <Button type="submit" variant="primary" block loading={isLoading}>
