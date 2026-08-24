@@ -8,7 +8,6 @@ const (
 	CodeParamInvalidFormat      = "PARAM_INVALID_FORMAT"
 	CodeQueryParamRequired      = "QUERY_PARAM_REQUIRED"
 	CodeQueryParamInvalidFormat = "QUERY_PARAM_INVALID_FORMAT"
-	CodeCallbackUrlInvalid      = "CALLBACK_URL_INVALID"
 
 	// === Auth - General ===
 	CodeIncorrectPassword  = "INCORRECT_PASSWORD"
@@ -41,10 +40,9 @@ const (
 	CodeAuthMethodAlreadyLinked = "AUTH_METHOD_ALREADY_LINKED"
 
 	// === User - Status ===
-	CodeUserNotFound        = "USER_NOT_FOUND"
-	CodeUserNotVerified     = "USER_NOT_VERIFIED"
-	CodeUserNotEnabled      = "USER_NOT_ENABLED"
-	CodeUserAlreadyVerified = "USER_ALREADY_VERIFIED"
+	CodeUserNotFound    = "USER_NOT_FOUND"
+	CodeUserNotVerified = "USER_NOT_VERIFIED"
+	CodeUserNotEnabled  = "USER_NOT_ENABLED"
 
 	// === User - Duplicate ===
 	CodeEmailDuplicate    = "EMAIL_DUPLICATE"
@@ -61,9 +59,6 @@ const (
 	// === Configuration ===
 	CodeConfigNotFound    = "CONFIG_NOT_FOUND"
 	CodeConfigUpdateError = "CONFIG_UPDATE_ERROR"
-
-	// === Mail ===
-	CodeMailNotConfigured = "MAIL_NOT_CONFIGURED"
 
 	// === API Key ===
 	CodeApiKeyNotFound    = "API_KEY_NOT_FOUND"

@@ -86,20 +86,6 @@ func (m *mockUserRepo) BulkHardDelete(ctx context.Context, ids []bson.ObjectID) 
 	return m.Called(ctx, ids).Error(0)
 }
 
-// --- mock setPasswordSender ---
-
-type mockSetPasswordSender struct {
-	mock.Mock
-}
-
-func (m *mockSetPasswordSender) Send(ctx context.Context, user *model.User, callbackUrl string) (*model.SendEmailResult, error) {
-	args := m.Called(ctx, user, callbackUrl)
-	if v := args.Get(0); v != nil {
-		return v.(*model.SendEmailResult), args.Error(1)
-	}
-	return nil, args.Error(1)
-}
-
 // --- mock gateway publisher ---
 
 type mockUserGatewayPublisher struct {
@@ -112,15 +98,12 @@ func (m *mockUserGatewayPublisher) Publish(eventType string, payload any) {
 
 // --- helpers ---
 
-func newUserService(repo *mockUserRepo, spSvc *mockSetPasswordSender) *UserService {
-	if spSvc != nil {
-		return NewUserService(repo, spSvc, nil)
-	}
-	return NewUserService(repo, nil, nil)
+func newUserService(repo *mockUserRepo) *UserService {
+	return NewUserService(repo, nil)
 }
 
 func newUserServiceWithPublisher(repo *mockUserRepo, pub *mockUserGatewayPublisher) *UserService {
-	return NewUserService(repo, nil, pub)
+	return NewUserService(repo, pub)
 }
 
 // --- List ---
@@ -133,7 +116,7 @@ func TestUserServiceList(t *testing.T) {
 		list := []*model.User{{FirstName: "John"}, {FirstName: "Jane"}}
 		repo.On("FindAll", ctx, mock.Anything, false).Return(list, int64(2), nil)
 
-		svc := newUserService(repo, nil)
+		svc := newUserService(repo)
 		result, total, err := svc.List(ctx, url.Values{}, false)
 
 		require.NoError(t, err)
@@ -145,7 +128,7 @@ func TestUserServiceList(t *testing.T) {
 		repo := new(mockUserRepo)
 		repo.On("FindAll", ctx, mock.Anything, false).Return(nil, int64(0), errors.New("db error"))
 
-		svc := newUserService(repo, nil)
+		svc := newUserService(repo)
 		result, _, err := svc.List(ctx, url.Values{}, false)
 
 		assert.Error(t, err)
@@ -163,7 +146,7 @@ func TestUserServiceGetByID(t *testing.T) {
 		repo := new(mockUserRepo)
 		repo.On("FindByID", ctx, id).Return(&model.User{ID: id, FirstName: "John"}, nil)
 
-		svc := newUserService(repo, nil)
+		svc := newUserService(repo)
 		u, err := svc.GetByID(ctx, id)
 
 		require.NoError(t, err)
@@ -174,7 +157,7 @@ func TestUserServiceGetByID(t *testing.T) {
 		repo := new(mockUserRepo)
 		repo.On("FindByID", ctx, id).Return(nil, errors.New("not found"))
 
-		svc := newUserService(repo, nil)
+		svc := newUserService(repo)
 		_, err := svc.GetByID(ctx, id)
 
 		assert.ErrorIs(t, err, ErrUserNotFound)
@@ -191,7 +174,7 @@ func TestUserServiceCreate(t *testing.T) {
 		repo.On("FindByEmail", ctx, "john@example.com").Return(nil, errors.New("not found"))
 		repo.On("Insert", ctx, mock.Anything).Return(nil)
 
-		svc := newUserService(repo, nil)
+		svc := newUserService(repo)
 		u, err := svc.Create(ctx, &model.UserCreate{
 			Email:     "john@example.com",
 			FirstName: "John",
@@ -204,7 +187,7 @@ func TestUserServiceCreate(t *testing.T) {
 	t.Run("role ไม่ถูกต้อง คืน ErrInvalidRole", func(t *testing.T) {
 		repo := new(mockUserRepo)
 
-		svc := newUserService(repo, nil)
+		svc := newUserService(repo)
 		_, err := svc.Create(ctx, &model.UserCreate{Role: "root"})
 
 		assert.ErrorIs(t, err, ErrInvalidRole)
@@ -214,7 +197,7 @@ func TestUserServiceCreate(t *testing.T) {
 		repo := new(mockUserRepo)
 		repo.On("FindByEmail", ctx, "dup@example.com").Return(&model.User{}, nil)
 
-		svc := newUserService(repo, nil)
+		svc := newUserService(repo)
 		_, err := svc.Create(ctx, &model.UserCreate{Email: "dup@example.com"})
 
 		assert.ErrorIs(t, err, ErrEmailDuplicate)
@@ -225,7 +208,7 @@ func TestUserServiceCreate(t *testing.T) {
 		repo.On("FindByEmail", ctx, "new@example.com").Return(nil, errors.New("not found"))
 		repo.On("FindByUsernameExact", ctx, "dupuser").Return(&model.User{}, nil)
 
-		svc := newUserService(repo, nil)
+		svc := newUserService(repo)
 		_, err := svc.Create(ctx, &model.UserCreate{Email: "new@example.com", Username: "dupuser"})
 
 		assert.ErrorIs(t, err, ErrUsernameDuplicate)
@@ -237,46 +220,10 @@ func TestUserServiceCreate(t *testing.T) {
 		repo.On("FindByUsernameExact", ctx, "newuser").Return(nil, errors.New("not found"))
 		repo.On("FindByPhone", ctx, "0891234567").Return(&model.User{}, nil)
 
-		svc := newUserService(repo, nil)
+		svc := newUserService(repo)
 		_, err := svc.Create(ctx, &model.UserCreate{Email: "new@example.com", Username: "newuser", Phone: "0891234567"})
 
 		assert.ErrorIs(t, err, ErrPhoneDuplicate)
-	})
-
-	t.Run("มี callbackUrl ส่ง email สำเร็จ", func(t *testing.T) {
-		repo := new(mockUserRepo)
-		repo.On("FindByEmail", ctx, "john@example.com").Return(nil, errors.New("not found"))
-		repo.On("Insert", ctx, mock.Anything).Return(nil)
-
-		spSvc := new(mockSetPasswordSender)
-		spSvc.On("Send", ctx, mock.Anything, "https://app.example.com/set-password").Return(nil, nil)
-
-		svc := newUserService(repo, spSvc)
-		_, err := svc.Create(ctx, &model.UserCreate{
-			Email:       "john@example.com",
-			CallbackUrl: "https://app.example.com/set-password",
-		})
-
-		require.NoError(t, err)
-		spSvc.AssertCalled(t, "Send", ctx, mock.Anything, "https://app.example.com/set-password")
-	})
-
-	t.Run("ส่ง email fail ไม่ทำให้ create fail", func(t *testing.T) {
-		repo := new(mockUserRepo)
-		repo.On("FindByEmail", ctx, "john@example.com").Return(nil, errors.New("not found"))
-		repo.On("Insert", ctx, mock.Anything).Return(nil)
-
-		spSvc := new(mockSetPasswordSender)
-		spSvc.On("Send", ctx, mock.Anything, "https://app.example.com/set-password").Return(nil, errors.New("smtp error"))
-
-		svc := newUserService(repo, spSvc)
-		u, err := svc.Create(ctx, &model.UserCreate{
-			Email:       "john@example.com",
-			CallbackUrl: "https://app.example.com/set-password",
-		})
-
-		require.NoError(t, err)
-		assert.NotNil(t, u)
 	})
 
 }
@@ -294,7 +241,7 @@ func TestUserServiceUpdate(t *testing.T) {
 		repo.On("Update", ctx, id, mock.Anything).Return(nil)
 		repo.On("FindByID", ctx, id).Return(updated, nil).Once()
 
-		svc := newUserService(repo, nil)
+		svc := newUserService(repo)
 		u, err := svc.Update(ctx, id, &model.UserUpdate{FirstName: "Updated"})
 
 		require.NoError(t, err)
@@ -305,7 +252,7 @@ func TestUserServiceUpdate(t *testing.T) {
 		repo := new(mockUserRepo)
 		repo.On("FindByID", ctx, id).Return(nil, errors.New("not found"))
 
-		svc := newUserService(repo, nil)
+		svc := newUserService(repo)
 		_, err := svc.Update(ctx, id, &model.UserUpdate{})
 
 		assert.ErrorIs(t, err, ErrUserNotFound)
@@ -315,7 +262,7 @@ func TestUserServiceUpdate(t *testing.T) {
 		repo := new(mockUserRepo)
 		repo.On("FindByID", ctx, id).Return(&model.User{ID: id}, nil)
 
-		svc := newUserService(repo, nil)
+		svc := newUserService(repo)
 		_, err := svc.Update(ctx, id, &model.UserUpdate{Role: "superadmin"})
 
 		assert.ErrorIs(t, err, ErrInvalidRole)
@@ -329,7 +276,7 @@ func TestUserServiceUpdate(t *testing.T) {
 		})).Return(nil)
 		repo.On("FindByID", ctx, id).Return(&model.User{ID: id}, nil).Once()
 
-		svc := newUserService(repo, nil)
+		svc := newUserService(repo)
 		_, err := svc.Update(ctx, id, &model.UserUpdate{})
 
 		require.NoError(t, err)
@@ -344,7 +291,7 @@ func TestUserServiceUpdate(t *testing.T) {
 		})).Return(nil)
 		repo.On("FindByID", ctx, id).Return(&model.User{ID: id}, nil).Once()
 
-		svc := newUserService(repo, nil)
+		svc := newUserService(repo)
 		_, err := svc.Update(ctx, id, &model.UserUpdate{})
 
 		require.NoError(t, err)
@@ -363,7 +310,7 @@ func TestUserServiceUpdate(t *testing.T) {
 		})).Return(nil)
 		repo.On("FindByID", ctx, id).Return(&model.User{ID: id}, nil).Once()
 
-		svc := newUserService(repo, nil)
+		svc := newUserService(repo)
 		_, err := svc.Update(ctx, id, &model.UserUpdate{})
 
 		require.NoError(t, err)
@@ -383,7 +330,7 @@ func TestUserServiceDelete(t *testing.T) {
 		repo.On("FindByID", ctx, id).Return(&model.User{ID: id}, nil)
 		repo.On("SoftDelete", ctx, id, mock.Anything).Return(nil)
 
-		svc := newUserService(repo, nil)
+		svc := newUserService(repo)
 		err := svc.Delete(ctx, id, false, ctxUserID)
 
 		require.NoError(t, err)
@@ -395,7 +342,7 @@ func TestUserServiceDelete(t *testing.T) {
 		repo.On("FindByID", ctx, id).Return(&model.User{ID: id}, nil)
 		repo.On("HardDelete", ctx, id).Return(nil)
 
-		svc := newUserService(repo, nil)
+		svc := newUserService(repo)
 		err := svc.Delete(ctx, id, true, ctxUserID)
 
 		require.NoError(t, err)
@@ -406,7 +353,7 @@ func TestUserServiceDelete(t *testing.T) {
 		repo := new(mockUserRepo)
 		repo.On("FindByID", ctx, id).Return(nil, errors.New("not found"))
 
-		svc := newUserService(repo, nil)
+		svc := newUserService(repo)
 		err := svc.Delete(ctx, id, false, ctxUserID)
 
 		assert.ErrorIs(t, err, ErrUserNotFound)
@@ -416,7 +363,7 @@ func TestUserServiceDelete(t *testing.T) {
 		repo := new(mockUserRepo)
 		repo.On("FindByID", ctx, id).Return(&model.User{ID: id}, nil)
 
-		svc := newUserService(repo, nil)
+		svc := newUserService(repo)
 		err := svc.Delete(ctx, id, false, id) // ctxUserID == id
 
 		assert.ErrorIs(t, err, ErrCannotDeleteSelf)
@@ -435,7 +382,7 @@ func TestUserServiceBulkDelete(t *testing.T) {
 		repo := new(mockUserRepo)
 		repo.On("BulkSoftDelete", ctx, []bson.ObjectID{id1, id2}, mock.Anything).Return(nil)
 
-		svc := newUserService(repo, nil)
+		svc := newUserService(repo)
 		err := svc.BulkDelete(ctx, &model.UserBulkDelete{
 			UserIDs: []bson.ObjectID{id1, id2},
 			Forever: false,
@@ -448,7 +395,7 @@ func TestUserServiceBulkDelete(t *testing.T) {
 		repo := new(mockUserRepo)
 		repo.On("BulkHardDelete", ctx, []bson.ObjectID{id1, id2}).Return(nil)
 
-		svc := newUserService(repo, nil)
+		svc := newUserService(repo)
 		err := svc.BulkDelete(ctx, &model.UserBulkDelete{
 			UserIDs: []bson.ObjectID{id1, id2},
 			Forever: true,
@@ -460,7 +407,7 @@ func TestUserServiceBulkDelete(t *testing.T) {
 	t.Run("มี ctxUserID อยู่ใน list คืน ErrCannotDeleteSelf", func(t *testing.T) {
 		repo := new(mockUserRepo)
 
-		svc := newUserService(repo, nil)
+		svc := newUserService(repo)
 		err := svc.BulkDelete(ctx, &model.UserBulkDelete{
 			UserIDs: []bson.ObjectID{id1, ctxUserID},
 		}, ctxUserID)

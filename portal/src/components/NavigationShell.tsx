@@ -53,7 +53,7 @@ const navGroups: NavGroup[] = [
     roles: ['user', 'admin', 'root'],
     items: [
       { name: 'Profile & Sessions', href: '/profile', icon: User },
-      { name: 'Notifications', href: '/notifications', icon: Bell },
+      { name: 'Notifications', href: '/notifications', icon: Bell, roles: ['admin', 'root'] },
     ],
   },
   {
@@ -217,8 +217,9 @@ export default function NavigationShell({ children }: { children: React.ReactNod
     if (deniedRoute) router.replace('/dashboard');
   }, [deniedRoute, router]);
 
+  const wantsUnreadCount = isAuthenticated && user?.role !== 'user';
   useEffect(() => {
-    if (!isAuthenticated) return;
+    if (!wantsUnreadCount) return;
 
     let cancelled = false;
     async function getUnread() {
@@ -235,7 +236,7 @@ export default function NavigationShell({ children }: { children: React.ReactNod
       cancelled = true;
       clearInterval(interval);
     };
-  }, [isAuthenticated]);
+  }, [wantsUnreadCount]);
 
   const closeDrawer = useCallback(() => {
     drawerRef.current?.close();

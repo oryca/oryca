@@ -25,26 +25,10 @@ type RegisterRequest struct {
 	FirstName   string `json:"firstName"`
 	LastName    string `json:"lastName"`
 	DisplayName string `json:"displayName"` // optional — ไม่บังคับ, ไม่ตั้งก็ fallback เป็น FirstName+LastName ตอนแสดงผล
-	CallbackUrl string `json:"callbackUrl"`
 }
 
 type RefreshTokenRequest struct {
 	RefreshToken string `json:"refreshToken" form:"refresh_token"`
-}
-
-type ForgotPasswordRequest struct {
-	Email       string `json:"email"`
-	CallbackUrl string `json:"callbackUrl"`
-}
-
-type SendEmailRequest struct {
-	Email       string `json:"email"`
-	CallbackUrl string `json:"callbackUrl"`
-}
-
-type SendEmailResult struct {
-	Email     string    `json:"email"`
-	ExpiredAt time.Time `json:"expiredAt"`
 }
 
 // --- IDP OAuth Flow ---

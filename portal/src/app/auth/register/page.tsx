@@ -31,14 +31,10 @@ export default function RegisterPage() {
     setIsLoading(true);
 
     try {
-      await api.post('/auth/register', {
-        email,
-        password,
-        firstName,
-        lastName,
-        callbackUrl: `${window.location.origin}/auth/verify-email`,
-      });
-      router.push('/auth/login?registered=true');
+      const res = await api.post('/auth/register', { email, password, firstName, lastName });
+      // an unverified account waits for an administrator, so say so instead of "sign in now"
+      const handoff = res.data?.verified ? 'registered' : 'registered_pending';
+      router.push(`/auth/login?${handoff}=true`);
     } catch (err) {
       setError(
         err instanceof Error && err.message ? err.message : 'Could not create the account. Try again.',
