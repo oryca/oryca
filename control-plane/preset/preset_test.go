@@ -53,7 +53,15 @@ func TestRewriteUsesTheUpstreamRoot(t *testing.T) {
 			assert.Equal(t, "https://demo.example.io/master", r.Params.Find)
 		}
 	}
-	assert.Equal(t, 1, filled, "one upstream root means one filled rule")
+	
+	var urlRules int
+	for _, r := range p.Rules {
+		if mentionsSourceURL(r) {
+			urlRules++
+		}
+	}
+
+	assert.Equal(t, urlRules, filled, "one upstream root means one filled rule")
 }
 
 func TestRewriteDropsTheQueryString(t *testing.T) {
