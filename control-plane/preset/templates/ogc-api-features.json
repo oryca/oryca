@@ -3,7 +3,7 @@
   "label": "OGC API Features links",
   "reference": "https://ogcapi.ogc.org/features/",
   "referenceNote": "OGC API - Features Part 1: Core, v1.0 (OGC 17-069r4)",
-  "description": "Rewrites links[].href on the landing page, collections and items to route through the gateway, then strips the original api_key",
+  "description": "Rewrites links[].href, servers[].url and $id to route through the gateway,  then strips the original api_key",
   "types": [
     "OGC_API_Features"
   ],
@@ -40,6 +40,42 @@
         "regex": "api_key=[^&]*",
         "replace": "{{oryca_auth}}"
       }
+    },
+      {
+    "type": "json",
+    "target": "body",
+    "action": "replace",
+    "path": "$",
+    "conditions": [],
+    "params": {
+      "find": "{{sourceUrl}}",
+      "replace": "{{oryca_gateway_url}}",
+      "field": "$id"
     }
+  },
+    {
+    "type": "json",
+    "target": "body",
+    "action": "replace",
+    "path": "$",
+    "conditions": [],
+    "params": {
+      "regex": "api_key=[^&]*",
+      "replace": "{{oryca_auth}}",
+      "field": "$id"
+    }
+  },
+  {
+    "type": "json",
+    "target": "body",
+    "action": "replace",
+    "path": "$.servers[*].url",
+    "conditions": [],
+    "params": {
+      "find": "{{sourceUrl}}",
+      "replace": "{{oryca_gateway_url}}",
+      "field": "url"
+    }
+  }
   ]
 }
