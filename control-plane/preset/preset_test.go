@@ -53,7 +53,6 @@ func TestRewriteUsesTheUpstreamRoot(t *testing.T) {
 			assert.Equal(t, "https://demo.example.io/master", r.Params.Find)
 		}
 	}
-	
 	var urlRules int
 	for _, r := range p.Rules {
 		if mentionsSourceURL(r) {
