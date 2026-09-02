@@ -1,0 +1,49 @@
+name: Bug report
+description: Something does not work the way it should
+labels: [bug]
+body:
+  - type: textarea
+    id: what
+    attributes:
+      label: What happened
+      description: And what you expected instead.
+    validations:
+      required: true
+
+  - type: textarea
+    id: steps
+    attributes:
+      label: How to reproduce
+      placeholder: |
+        1. Create a service with ...
+        2. Call it with ...
+        3. Get 500 instead of 200
+    validations:
+      required: true
+
+  - type: input
+    id: version
+    attributes:
+      label: Version
+      description: Release tag or commit.
+    validations:
+      required: true
+
+  - type: dropdown
+    id: setup
+    attributes:
+      label: How are you running it
+      options:
+        - The bundled docker compose
+        - My own containers
+        - Built from source
+        - Something else
+    validations:
+      required: true
+
+  - type: textarea
+    id: logs
+    attributes:
+      label: Logs
+      description: "`docker compose logs --tail 100` is usually enough. Remove any secrets first."
+      render: shell

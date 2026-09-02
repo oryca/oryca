@@ -1,0 +1,4 @@
+# Force LF on shell scripts: Windows checkouts with core.autocrlf=true
+# otherwise rewrite the shebang line to CRLF, and /bin/sh fails to resolve
+# it inside the Linux containers (WSL, Docker) that run them.
+*.sh text eol=lf

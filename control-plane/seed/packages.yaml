@@ -1,0 +1,27 @@
+# Packages — the rate-limit groups users are assigned to.
+#
+# Seeded ONCE, per alias, on the first boot against an empty database. An alias
+# that already exists is left untouched, so edits made through the portal or the
+# API survive restarts — and adding a new entry here later still seeds that one.
+#
+# The package new self-registered users are assigned to is named in
+# configuration.yaml under `register.defaultPackageAlias`.
+#
+# A package's rate limit applies per user, and a request is rejected as soon as
+# any one tier is exceeded — the two tiers below mean "20 requests/second, and no
+# more than 5,000 in an hour". A per-service limit set on a package-service link
+# overrides this default for that service.
+
+packages:
+  - alias: free
+    name: Free
+    description: Default package for self-registered users.
+    enabled: true
+    policies:
+      rateLimit:
+        enabled: true
+        tiers:
+          - limit: 20
+            windowSec: 1
+          - limit: 5000
+            windowSec: 3600

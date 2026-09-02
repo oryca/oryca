@@ -1,0 +1,81 @@
+{
+  "key": "ogc-api-features",
+  "label": "OGC API Features links",
+  "reference": "https://ogcapi.ogc.org/features/",
+  "referenceNote": "OGC API - Features Part 1: Core, v1.0 (OGC 17-069r4)",
+  "description": "Rewrites links[].href, servers[].url and $id to route through the gateway,  then strips the original api_key",
+  "types": [
+    "OGC_API_Features"
+  ],
+  "match": {
+    "path": "/*",
+    "methods": [
+      "GET"
+    ]
+  },
+  "notes": [
+    "find should only match the domain + version prefix. not the collection path",
+    "replace should be just {{oryca_gateway_url}}",
+    "To exclude specific link types (e.g. rel=alternate), add a condition on the rel field"
+  ],
+  "rules": [
+    {
+      "type": "json",
+      "target": "body",
+      "action": "replace",
+      "path": "$..links[*].href",
+      "conditions": [],
+      "params": {
+        "find": "{{sourceUrl}}",
+        "replace": "{{oryca_gateway_url}}"
+      }
+    },
+    {
+      "type": "json",
+      "target": "body",
+      "action": "replace",
+      "path": "$..links[*].href",
+      "conditions": [],
+      "params": {
+        "regex": "api_key=[^&]*",
+        "replace": "{{oryca_auth}}"
+      }
+    },
+      {
+    "type": "json",
+    "target": "body",
+    "action": "replace",
+    "path": "$",
+    "conditions": [],
+    "params": {
+      "find": "{{sourceUrl}}",
+      "replace": "{{oryca_gateway_url}}",
+      "field": "$id"
+    }
+  },
+    {
+    "type": "json",
+    "target": "body",
+    "action": "replace",
+    "path": "$",
+    "conditions": [],
+    "params": {
+      "regex": "api_key=[^&]*",
+      "replace": "{{oryca_auth}}",
+      "field": "$id"
+    }
+  },
+  {
+    "type": "json",
+    "target": "body",
+    "action": "replace",
+    "path": "$.servers[*].url",
+    "conditions": [],
+    "params": {
+      "find": "{{sourceUrl}}",
+      "replace": "{{oryca_gateway_url}}",
+      "field": "url"
+    }
+  }
+  ]
+}

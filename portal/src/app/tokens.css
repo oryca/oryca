@@ -1,0 +1,123 @@
+/* Hallmark · tokens · theme: Cobalt (Thai-adapted) · genre: modern-minimal
+ * Portable design system extracted from mockup-oidc-clients-v2.html.
+ * Axes — paper band: cool light (L 98.5%) · display: grotesk-sans · accent hue: electric cobalt (256°)
+ *
+ * NOTE: the Tailwind CDN config in the page mirrors these same var() references.
+ * This file is the single source of truth — edit here, not in the config.
+ */
+
+:root {
+    /* ---- Paper: cool engineered near-white. Never #fff. ---- */
+    --color-paper:        oklch(98.5% 0.004 250);
+    --color-paper-2:      oklch(96.8% 0.005 251);
+    --color-paper-3:      oklch(94.2% 0.006 252);
+
+    /* ---- Rules: hairlines carry the structure, not shadows ---- */
+    --color-rule:         oklch(90.5% 0.007 252);
+    --color-rule-2:       oklch(83%   0.009 253);
+
+    /* ---- Ink: cool charcoal. Never #000. ---- */
+    --color-ink:          oklch(24%   0.020 258);
+    --color-ink-2:        oklch(34%   0.018 257);
+    --color-ink-3:        oklch(44%   0.016 257);
+    /* muted แบกข้อความรองทั้งแอป (238 จุด) — L52% ให้ contrast 4.03:1 บนกระดาษ
+     * ต่ำกว่าเกณฑ์ 4.5:1 ของข้อความขนาดปกติ ลดเป็น 47% ได้ 4.8:1 */
+    --color-muted:        oklch(47%   0.014 256);
+    /* faint ไม่ใช่สีข้อความ — ใช้กับเส้น scrollbar และของประดับเท่านั้น */
+    --color-faint:        oklch(63%   0.011 255);
+
+    /* ---- The one signal. Target < 5% of any viewport. ---- */
+    --color-accent:       oklch(58%   0.200 256);
+    --color-accent-deep:  oklch(48%   0.180 257);
+    --color-accent-ink:   oklch(99%   0.002 250);
+    --color-accent-edge:  oklch(88%   0.045 254);
+    --color-accent-wash:  oklch(96.2% 0.018 253);
+
+    /* ---- Dark band: the code surfaces in the docs tab ---- */
+    --color-graphite:     oklch(22%   0.016 260);
+    --color-graphite-2:   oklch(17%   0.014 261);
+    --color-graphite-ink: oklch(88%   0.010 253);
+    --color-graphite-rule:oklch(30%   0.014 259);
+
+    /* syntax: 3 บทบาทเท่านั้น — endpoint / identifier / comment */
+    --color-tok-url:      oklch(74%   0.130 160);
+    --color-tok-key:      oklch(76%   0.140 256);
+    --color-tok-muted:    oklch(60%   0.014 256);
+
+    /* ---- Chart series: accent leads, teal answers. Legend-labelled, never colour alone.
+     * Equal weight, neither above the other — close in L, ~90° apart in hue. ---- */
+    --color-series-1:     var(--color-accent);
+    --color-series-2:     oklch(54%   0.115 165);
+
+    /* ---- Functional state. Text-labelled, never colour-alone. ---- */
+    --color-ok:           oklch(52%   0.130 158);
+    --color-ok-edge:      oklch(86%   0.055 158);
+    --color-ok-wash:      oklch(96%   0.025 158);
+    --color-warn:         oklch(56%   0.120 75);
+    --color-warn-edge:    oklch(86%   0.060 75);
+    --color-warn-wash:    oklch(96.5% 0.030 78);
+    --color-danger:       oklch(53%   0.190 20);
+    --color-danger-deep:  oklch(47%   0.190 20);
+    --color-danger-edge:  oklch(86%   0.060 20);
+    --color-danger-wash:  oklch(96%   0.025 20);
+
+    /* ---- Focus ring: ≥3:1 against paper, never animated ---- */
+    --color-focus:        oklch(52%   0.210 256);
+
+    /* ---- Overlay scrim: alpha as a modifier, not a palette entry ---- */
+    --color-scrim:        oklch(24% 0.02 258 / 0.28);
+
+    /* ---- Type: 3 families. Sarabun carries Thai in every stack. ---- */
+    --font-display: "Space Grotesk", "Sarabun", ui-sans-serif, sans-serif;
+    --font-body:    "Sarabun", ui-sans-serif, system-ui, sans-serif;
+    --font-mono:    "JetBrains Mono", ui-monospace, monospace;
+
+    /* ---- 4pt spacing scale ---- */
+    --space-3xs: 0.25rem;
+    --space-2xs: 0.5rem;
+    --space-xs:  0.75rem;
+    --space-sm:  1rem;
+    --space-md:  1.5rem;
+    --space-lg:  2rem;
+    --space-xl:  3rem;
+    --space-2xl: 4.5rem;
+
+    /* ---- Type scale (1.25 major third off 16px) ---- */
+    --text-2xs:  0.6875rem;
+    --text-xs:   0.8125rem;
+    --text-sm:   0.875rem;
+    --text-base: 1rem;
+    --text-md:   1.125rem;
+    --text-lg:   1.375rem;
+    --text-xl:   1.75rem;
+    --text-2xl:  2.125rem;
+
+    /* ---- Ruler-drawn radii. Tight, technical. ---- */
+    --radius-chip:    3px;
+    --radius-control: 6px;
+    --radius-surface: 8px;
+
+    /* ---- Motion ---- */
+    --ease-out:    cubic-bezier(0.16, 1, 0.3, 1);
+    --ease-in:     cubic-bezier(0.7, 0, 0.84, 0);
+    --ease-in-out: cubic-bezier(0.65, 0, 0.35, 1);
+    --dur-micro:   120ms;
+    --dur-short:   200ms;
+    --dur-long:    300ms;
+
+    /* ---- Elevation: one barely-there lift. Depth comes from hairlines. ---- */
+    --lift: 0 1px 2px oklch(24% 0.02 258 / 0.05);
+    /* ชั้นที่ลอยจริงมีสองอันเท่านั้น: dialog กับ toast */
+    --shadow-pop:   0 12px 32px oklch(24% 0.02 258 / 0.16);
+    --shadow-toast: 0 8px 24px  oklch(24% 0.02 258 / 0.12);
+
+    /* ---- Layout: the desktop sidebar's width, mirrored by anything that must clear it ---- */
+    --rail-width: 16rem;
+
+    /* ---- z-index: named scale, never 9999 ---- */
+    --z-rail:   10;
+    --z-drawer: 40;
+    --z-modal:  50;
+    --z-toast:  60;
+    --z-auth:   100;
+}

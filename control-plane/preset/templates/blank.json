@@ -1,0 +1,22 @@
+{
+  "key": "blank",
+  "label": "Blank rule to start from",
+  "description": "Starts with a single empty rule",
+  "types": [],
+  "match": {
+    "path": "/*",
+    "methods": [
+      "GET"
+    ]
+  },
+  "rules": [
+    {
+      "type": "json",
+      "target": "body",
+      "action": "replace",
+      "path": "",
+      "conditions": [],
+      "params": {}
+    }
+  ]
+}

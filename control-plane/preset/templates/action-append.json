@@ -1,0 +1,51 @@
+{
+  "key": "action-append",
+  "label": "Append to a value",
+  "description": "Appends text to an existing value",
+  "types": [],
+  "match": {
+    "path": "/*",
+    "methods": [
+      "GET"
+    ]
+  },
+  "notes": [
+    "Unlike add, this requires an existing value to append to",
+    "Don't append an auth query on a field that already has an api_key regex-replace rule"
+  ],
+  "rules": [
+    {
+      "type": "json",
+      "target": "body",
+      "action": "append",
+      "path": "$['$id']",
+      "conditions": [],
+      "params": {
+        "value": "?{{oryca_auth}}",
+        "separator": ""
+      }
+    },
+    {
+      "type": "json",
+      "target": "body",
+      "action": "append",
+      "path": "$.description",
+      "conditions": [],
+      "params": {
+        "value": "(served via Oryca Gateway)",
+        "separator": " "
+      }
+    },
+    {
+      "type": "json",
+      "target": "headers",
+      "action": "append",
+      "headerName": "Vary",
+      "conditions": [],
+      "params": {
+        "value": "X-Api-Key",
+        "separator": ", "
+      }
+    }
+  ]
+}

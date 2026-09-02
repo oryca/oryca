@@ -1,0 +1,113 @@
+services:
+  mongo:
+    image: mongo:7
+    restart: unless-stopped
+    volumes:
+      - mongo-data:/data/db
+    healthcheck:
+      test: ["CMD", "mongosh", "--quiet", "--eval", "db.adminCommand('ping')"]
+      interval: 10s
+      timeout: 5s
+      retries: 12
+      start_period: 20s
+
+  redis:
+    image: redis:7-alpine
+    restart: unless-stopped
+    command: ["redis-server", "--appendonly", "yes"]
+    volumes:
+      - redis-data:/data
+    healthcheck:
+      test: ["CMD", "redis-cli", "ping"]
+      interval: 10s
+      timeout: 5s
+      retries: 12
+
+  control-plane:
+    build:
+      # The repo is one Go module, so the build context is the root where go.mod lives.
+      context: .
+      dockerfile: control-plane/Dockerfile
+    restart: unless-stopped
+    depends_on:
+      mongo:
+        condition: service_healthy
+      redis:
+        condition: service_healthy
+    ports:
+      - "${ORYCA_CONTROL_PLANE_PORT:-9001}:9001"
+    volumes:
+      - control-plane-keys:/data
+    environment:
+      ORYCA_API_HOST: http://localhost
+      ORYCA_API_PORT: 9001
+      ORYCA_API_DB_URL: mongodb://mongo:27017
+      ORYCA_API_DB_NAME: oryca
+      ORYCA_API_REDIS_ADDRESS: redis:6379
+      # Must match ORYCA_GW_REDIS_DB below: the two services share routing data
+      # and the request-log stream through this database.
+      ORYCA_API_REDIS_DB: 0
+      ORYCA_API_ALLOW_ORIGIN: "*"
+      ORYCA_API_JWT_PRIVATE_KEY: /data/auth-private.key
+      ORYCA_API_JWT_PUBLIC_KEY: /data/auth-public.key
+      ORYCA_INTERNAL_SECRET: ${ORYCA_INTERNAL_SECRET:?set this in .env, see README Quick Start}
+      ORYCA_API_ROOT_EMAIL: ${ORYCA_API_ROOT_EMAIL:-admin@localhost}
+      ORYCA_API_ROOT_PASSWORD: ${ORYCA_API_ROOT_PASSWORD:-}
+      ORYCA_API_LOG_RETENTION_DAYS: ${ORYCA_API_LOG_RETENTION_DAYS:-14}
+      # false holds new sign-ups unverified until an administrator approves them.
+      ORYCA_API_REGISTER_AUTO_VERIFY: ${ORYCA_API_REGISTER_AUTO_VERIFY:-false}
+      LOG_FORMAT: console
+    healthcheck:
+      test: ["CMD", "curl", "-fsS", "http://localhost:9001/control-plane/api/v1/health"]
+      interval: 15s
+      timeout: 5s
+      retries: 10
+      start_period: 30s
+
+  gateway:
+    build:
+      context: .
+      dockerfile: gateway/Dockerfile
+    restart: unless-stopped
+    depends_on:
+      redis:
+        condition: service_healthy
+      control-plane:
+        condition: service_started
+    ports:
+      - "${ORYCA_GATEWAY_PORT:-9002}:9002"
+    environment:
+      ORYCA_GW_HOST: 0.0.0.0
+      ORYCA_GW_PORT: 9002
+      ORYCA_GW_REDIS_ADDRESS: redis:6379
+      ORYCA_GW_REDIS_DB: 0
+      ORYCA_GW_ALLOW_ORIGIN: "*"
+      ORYCA_GW_CP_BASE_URL: http://control-plane:9001/control-plane/api/v1
+      ORYCA_GW_INTERNAL_SECRET: ${ORYCA_INTERNAL_SECRET:?set this in .env, see README Quick Start}
+      LOG_FORMAT: console
+    healthcheck:
+      test: ["CMD", "curl", "-fsS", "http://localhost:9002/gateway/api/health"]
+      interval: 15s
+      timeout: 5s
+      retries: 10
+      start_period: 20s
+
+  # The developer portal.
+  portal:
+    build:
+      context: ./portal
+      dockerfile: Dockerfile
+    restart: unless-stopped
+    ports:
+      - "${ORYCA_PORTAL_PORT:-3000}:3000"
+    # The portal reaches both services from the visitor's browser, so these are
+    # the addresses your users type, not the names of the containers. They are
+    # read when a page is served, so a restart is enough to change them.
+    environment:
+      ORYCA_PORTAL_API_URL: ${ORYCA_PORTAL_API_URL:-http://localhost:9001/control-plane/api/v1}
+      ORYCA_PORTAL_GATEWAY_URL: ${ORYCA_PORTAL_GATEWAY_URL:-http://localhost:9002/gateway/api}
+
+volumes:
+  mongo-data:
+  redis-data:
+  control-plane-keys:
